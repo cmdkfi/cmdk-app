@@ -1,6 +1,6 @@
 # Corrections from the contracts
 
-Checked on 2 November 2026: this prototype at `0719847` against `cmdkfi/app` at `840ecbc`
+Checked on 2 November 2026: this prototype at `0719847` against `cmdkfi/app` at `519ede4`
 (`executor/src/Executor.sol`, `vault/src/lib.rs`, `vault/src/owner.rs`, `vault/factory/src/lib.rs`)
 and `design/app-screens.md`.
 
@@ -16,14 +16,15 @@ something the contracts do not do, and the steps the app needs that are not ther
   signs the Base transaction, and it lands on Base. No gas for the user, no network switch.
   Every message expires in 10 minutes.
 
-Owner methods (`vault/src/lib.rs:252`): `setup`, `set_corridor`, `open`, `repay`, `close`,
+Owner methods (`vault/src/lib.rs:272`): `setup`, `set_corridor`, `open`, `repay`, `close`,
 `withdraw`, `approve_measurement`, `revoke_agent` (plus `cancel`, `sweep_eth`, `set_executor`,
 which the app does not need on screen).
 Agent methods (`vault/src/lib.rs:46`): `reduce`, `migrate`, `exit`. The owner cannot call them.
 
 Create vault is one signed message: `setup`, carrying the token approvals, the rules for the
-live and backup markets, and the agent version. Later changes use the single methods
-(`set_corridor`, `approve_measurement`, …).
+live and backup markets, and the agent version. Later changes:
+- Editing the rules on both markets is also one `setup` signature (corridors only).
+- Approving a newer agent version is its own signature (`approve_measurement`).
 
 ## Corrections
 
@@ -73,9 +74,9 @@ Change: remove the option from Repay.
 
 ### 7. The owner approves an agent version, not a "7-day session"
 Prototype: "Agent access approved · You approved a 7-day session".
-Contracts: the owner approves a measurement (`vault/src/lib.rs:364`): only code with this
+Contracts: the owner approves a measurement (`vault/src/lib.rs:397`): only code with this
 fingerprint can get the agent's key. The agent then registers itself (`register_agent`,
-`lib.rs:421`); its key is valid for 7 days and renews by itself.
+`lib.rs:452`); its key is valid for 7 days and renews by itself.
 Change: the activity entry reads "Agent version approved"; the 7 days appear as
 "Agent key valid until <date>".
 
@@ -91,7 +92,7 @@ Approving a newer agent version later is its own signature: "Approve this agent 
 
 ### 9. Take the USDC (last step of Create vault, and in Withdraw)
 Contracts: `open` borrows to the position address (`Executor.sol:528`), not to the wallet.
-Moving it out is a signed `withdraw` (`vault/src/lib.rs:309`).
+Moving it out is a signed `withdraw` (`vault/src/lib.rs:342`).
 - After "Loan opened": "2,500 USDC available at your position address", a destination field
   (default: the connected wallet), one signature: "Withdraw to my wallet".
 - Explain once: this is the only way money leaves, and only your signature can do it.
@@ -127,7 +128,7 @@ and a "check it yourself" link (`design/app-screens.md` §9):
    5. Signed `open`.
    6. Signed `withdraw` for the USDC.
 
-   In total, 1 transaction and 3 signatures. (`setup` in this form is vault item V7, in progress.)
+   In total, 1 transaction and 3 signatures. (`setup` in this form: vault commit `519ede4`.)
 2. **USDC reaches the wallet** by a separate signed `withdraw` after `open` (item 9).
 4. **Editable settings and ranges:**
    - Floor < target; act at least 0.1 percentage point above target; act below 86%
