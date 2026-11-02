@@ -13,3 +13,5 @@ python3 -m http.server 8765
 Open <http://127.0.0.1:8765/>. The app is a static HTML prototype; no build or package installation is needed.
 
 The screens use local demo data. There is no live market feed, connected wallet, real signature, or on-chain transaction. Lightweight Charts is bundled in `vendor/`; its license is included there.
+
+The English [Design Plan](docs/design-plan.md) records the proposed screens and user journeys. It is a planning snapshot, so check the app and current product documentation for implemented behavior.
