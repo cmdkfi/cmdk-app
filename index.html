@@ -351,7 +351,7 @@ body{font-size:16px}
 @media(max-width:650px){.setup-intro p,.setup-card>p,.settings-head p,.settings-card>p,.ap-description,.verify-header p,.verify-card>p,.dialog-copy,.setup-note,.ap-note,.repay-state small{font-size:16px}}
 
 .agent-chart-guides{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
-.agent-chart-guide{position:absolute;top:10px;bottom:26px;width:0;border-left:2px dashed var(--risk-warning);transform:translateX(-50%)}
+.agent-chart-guide{position:absolute;width:0;border-left:2px dashed var(--risk-warning);transform:translateX(-50%)}
 .agent-chart-icon{position:absolute;left:50%;top:-4px;transform:translate(-50%,-12%);display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--surface);font-size:18px;line-height:1;box-shadow:0 1px 4px #0002}
 .agent-chart-label{position:absolute;top:26px;left:50%;transform:translateX(-50%);padding:2px 5px;border-radius:5px;background:var(--surface);color:var(--ink);font-size:10px;white-space:nowrap}
 .agent-chart-guide.up .agent-chart-icon{top:auto;bottom:-8px;transform:translate(-50%,0)}
@@ -434,8 +434,9 @@ function updateAgentGuides(){
  const root=$('#chart-canvas');if(!root||!mainChart)return;
  let overlay=root.querySelector('.agent-chart-guides');if(!overlay){overlay=document.createElement('div');overlay.className='agent-chart-guides';overlay.setAttribute('aria-hidden','true');root.append(overlay)}
  if(openedLoan||manualRepayment){overlay.replaceChildren();return}
- const events=[{tick:stageTicks[2],label:'Reduce',direction:'down'},{tick:stageTicks[3],label:'Result',direction:'up'}];
- overlay.innerHTML=events.filter(event=>chartCursor>=event.tick).map(event=>{const x=mainChart.chart.timeScale().timeToCoordinate(chartTimes[event.tick]);if(x===null)return '';return '<span class="agent-chart-guide '+event.direction+'" style="left:'+x+'px"><span class="agent-chart-icon">🤖</span><span class="agent-chart-label">'+event.label+'</span></span>'}).join('');
+ const events=[{tick:stageTicks[2],label:'Reduce',icon:'🤖',direction:'down'},{tick:stageTicks[3],label:'Result',icon:'🎯',direction:'up'}];
+ const values=chartValues(chartMetric);
+ overlay.innerHTML=events.filter(event=>chartCursor>=event.tick).map(event=>{const x=mainChart.chart.timeScale().timeToCoordinate(chartTimes[event.tick]),y=mainChart.active.priceToCoordinate(values[event.tick]);if(x===null||y===null)return '';const top=event.direction==='down'?10:Math.max(10,y),bottom=event.direction==='down'?Math.max(0,root.clientHeight-y):26;return '<span class="agent-chart-guide '+event.direction+'" style="left:'+x+'px;top:'+top+'px;bottom:'+bottom+'px"><span class="agent-chart-icon">'+event.icon+'</span><span class="agent-chart-label">'+event.label+'</span></span>'}).join('');
 }
 function setStaticChart(entry,value){if(!entry)return;const data=[{time:chartTimes[0],value},{time:chartTimes[1],value}],c=chartPalette();entry.preview.setData([]);entry.active.applyOptions({color:c.ink});entry.active.setData(data);entry.markers.setMarkers([{time:chartTimes[1],position:'inBar',color:c.ink,shape:'circle'}]);entry.chart.timeScale().fitContent();if(entry===mainChart)requestAnimationFrame(updateAgentGuides)}
 function renderPositionChart(animate=false){
