@@ -367,10 +367,10 @@ body{font-size:16px}
 .demo-panel .actions .market-preview-toggle[aria-pressed=true]{background:var(--selected)}
 .market-split[hidden]{display:none}.market-split .market-split-content{padding:0}
 .market-split-heading{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:12px}
-.market-split-heading h2{margin:0;font-size:16px;font-weight:600}.market-split-heading h2 span{margin-left:5px;color:var(--muted);font-size:13px;font-weight:400}
+.market-split-heading h2{display:flex;align-items:center;gap:8px;margin:0;font-size:16px;font-weight:600}.market-split-heading h2 span{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border:1px solid color-mix(in srgb,var(--ink) 28%,transparent);border-radius:7px;color:var(--ink);font-size:12px;font-weight:500;line-height:1}
 .market-split-heading p{margin:4px 0 0;color:var(--muted);font-size:12px}.market-split-heading>span{color:var(--muted);font-size:12px;white-space:nowrap}
-.market-split .market-metrics{border-top:1px solid var(--line)}.market-split .market-metrics>summary:after{display:none}
-.market-split .market-metrics[open]{margin:4px -10px;border-radius:10px;background:var(--selected)}
+.market-split .market-metrics{margin-top:8px}.market-split .market-metrics>summary:after{display:none}
+.market-split .market-metrics[open]{margin:8px -10px;border-radius:10px;background:var(--selected)}
 .market-split .market-metrics>summary{display:grid;grid-template-columns:minmax(160px,1.4fr) minmax(0,2.4fr) auto auto;align-items:center;gap:16px;min-height:88px;margin:4px -10px;padding:14px 10px;border-radius:10px;transition:background-color 150ms ease;cursor:pointer;list-style:none}
 .market-split .market-metrics>summary::-webkit-details-marker{display:none}.market-split .market-metrics>summary:focus-visible{border-radius:10px;outline-offset:2px}
 .market-split .market-metrics>summary:active{background:var(--selected)}.market-split .market-metrics[open]>summary{margin:0;background:transparent}
@@ -378,8 +378,8 @@ body{font-size:16px}
 .market-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;font-variant-numeric:tabular-nums}.market-facts>span{display:flex;flex-direction:column;gap:4px;min-width:0}.market-facts small{color:var(--muted);font-size:11px}.market-facts strong{font-size:13px;font-weight:500;white-space:nowrap}
 .market-risk{font-size:11px;color:var(--muted);white-space:nowrap}.market-risk[data-level=medium]{color:var(--warn)}.market-risk[data-level=high]{color:var(--bad)}
 .market-chevron{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--ink);transition:transform 130ms ease}.market-chevron svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;transition:transform 130ms ease}.market-metrics[open] .market-chevron svg{transform:rotate(180deg)}
-.market-details{display:grid;gap:0;margin:0;padding:0 12px 10px}.market-metric{display:flex;align-items:baseline;justify-content:space-between;gap:20px;padding:11px 0;border-top:1px solid var(--line);font-size:12px}.market-metric span{color:var(--muted)}.market-metric strong{font-weight:550;font-variant-numeric:tabular-nums;white-space:nowrap}
-.market-split .market-split-note{margin:10px 0 0;padding:13px 0 0;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.5}
+.market-details{display:grid;gap:0;margin:0;padding:0 12px 10px}.market-metric{display:flex;align-items:baseline;justify-content:space-between;gap:20px;padding:9px 0;font-size:12px}.market-metric span{color:var(--muted)}.market-metric strong{font-weight:550;font-variant-numeric:tabular-nums;white-space:nowrap}
+.market-split .market-split-note{margin:16px 0 0;font-size:12px;color:var(--muted);line-height:1.5}
 @media(hover:hover) and (pointer:fine){.market-split .market-metrics>summary:hover{background:var(--hover)}.market-split .market-metrics[open]>summary:hover{background:transparent}.market-split .market-metrics>summary:hover .market-chevron{background:var(--selected)}}
 @media(max-width:900px){.market-split{margin:0 0 16px;padding:16px 18px}.market-split .market-metrics>summary{grid-template-columns:1fr auto;gap:12px;min-height:0;padding:14px 10px}.market-name{grid-column:1}.market-risk{grid-column:1;grid-row:2}.market-facts{grid-column:1/-1;grid-row:3;gap:8px}.market-facts strong{font-size:12px}.market-chevron{grid-column:2;grid-row:1}.market-details{padding:0 10px}.demo-panel .actions .market-preview-toggle{margin-left:0}}
 @media(max-width:390px){.market-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.market-facts>span:last-child{grid-column:1/-1}}
