@@ -15,7 +15,7 @@ export function VaultDiscovery() {
           <span><strong>Vault {vault.number}</strong><small>{vault.accountId}</small></span><span className="vault-option__meta">{vault.marketCount} {vault.marketCount === 1 ? 'market' : 'markets'}<span aria-hidden="true">{state.selected?.accountId === vault.accountId ? ' ✓' : ' →'}</span></span>
         </button>)}
       </div>}
-      {state.selected && <p className="vault-selection" role="status">Selected: {state.selected.accountId}. <a href="#dashboard">View on My loan</a>. Position balances are not connected yet.</p>}
+      {state.selected && <p className="vault-selection" role="status">Selected: {state.selected.accountId}. <a href="#dashboard">View its position on My loan</a>.</p>}
     </>}
   </section>
 }

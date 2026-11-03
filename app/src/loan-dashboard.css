@@ -3,3 +3,19 @@
 @media(max-width:900px){.loan-list-item{grid-template-columns:minmax(145px,1.5fr) repeat(2,minmax(85px,1fr)) 20px}.loan-list-item>span:nth-child(4){display:none}.loan-facts{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:620px){.loan-connected-vault{grid-template-columns:1fr}.loan-connected-vault__details{justify-items:start}.loan-dashboard{gap:16px}.loan-section-head{flex-wrap:wrap}.loan-list-item{grid-template-columns:1fr 1fr 20px;gap:12px}.loan-list-name{grid-column:1/-1}.loan-list-item>span:nth-child(4){display:grid}.loan-list-item>span:nth-child(3){display:none}.loan-select-icon{grid-column:3;grid-row:2}.loan-balance-row{align-items:start;flex-direction:column;gap:20px}.loan-balance-row>div:last-child{border-left:0;border-top:1px solid var(--line);padding:14px 0 0;width:100%}.loan-balance{font-size:42px}.loan-facts{grid-template-columns:repeat(2,1fr)}.loan-assets,.loan-health-facts,.loan-mini-grid{grid-template-columns:1fr}.loan-actions{flex-wrap:wrap}.loan-actions .loan-text-action:last-child{margin-left:0}.loan-chart-controls{width:100%}.loan-segmented{width:100%;justify-content:space-around}.loan-graph-readout small{width:100%;margin-left:0}.loan-graph svg{height:160px}.loan-graph-steps{gap:4px}.loan-graph-steps>div{padding:7px 5px;font-size:10px}.loan-risk-markers{font-size:9px}}
 @media(prefers-reduced-motion:reduce){.loan-list-item{transition:none}}
+.loan-live-content{grid-column:1/-1;display:grid;gap:14px;padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.loan-live-content__head{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.loan-live-content__head h3{margin:0 0 4px;font-size:16px}
+.loan-live-content__head p{max-width:520px}
+.live-market{display:grid;gap:14px;padding:16px;border-radius:12px;background:var(--raised)}
+.live-market__head{display:flex;justify-content:space-between;gap:12px}
+.live-market__head strong{font-size:14px}
+.live-market__head span,.live-market__limits,.live-market__id,.loan-live-content__stamp{color:var(--muted);font-size:12px}
+.live-market__values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.live-market__values>div{display:grid;gap:5px}
+.live-market__values small{color:var(--muted);font-size:11px}
+.live-market__values strong{font-size:14px;font-weight:550}
+.live-market__limits{display:flex;flex-wrap:wrap;gap:8px 20px}
+.live-market__id,.loan-live-content__stamp{overflow-wrap:anywhere}
+.loan-live-content .button:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+@media(max-width:620px){.live-market__values{grid-template-columns:repeat(2,minmax(0,1fr))}.loan-live-content__head{flex-wrap:wrap}}

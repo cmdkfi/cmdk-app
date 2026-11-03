@@ -2,6 +2,7 @@
   "baseChainId": 84532,
   "nearNetwork": "testnet",
   "nearRpcUrl": "https://rpc.testnet.near.org",
+  "baseRpcUrl": "https://base-sepolia-rpc.publicnode.com",
   "relayerUrl": "https://relayer.cmdk.fi",
   "relayerUrlFallback": "https://cmdk-relayer.fffilimonov.workers.dev"
 }
