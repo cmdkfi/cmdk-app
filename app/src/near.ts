@@ -1,6 +1,10 @@
 export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null } }
 export type Vault = { accountId: string; number: number; owner: string; baseAddress?: string; marketCount: number }
 
+export function selectedOwnedVault(vaults: Vault[], savedAccountId: string | null): Vault | null {
+  return vaults.find(vault => vault.accountId === savedAccountId) ?? vaults[0] ?? null
+}
+
 export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConfig> {
   const response = await fetcher('/config.json', { cache: 'no-store' })
   if (!response.ok) throw new Error('App configuration could not be loaded.')

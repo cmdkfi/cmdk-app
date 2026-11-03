@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useDemo } from './DemoContext.tsx'
 import { demoLtv } from './demo.ts'
+import { useVaultSelection } from './VaultSelectionContext.tsx'
 import './loan-dashboard.css'
 
 type LoanId = 'primary' | 'second'
@@ -48,6 +49,7 @@ function PositionGraph({ metric, stage, price, collateral, debt, target }: { met
 
 export function LoanDashboard() {
   const { state, dispatch } = useDemo()
+  const vaultSelection = useVaultSelection()
   const [selected, setSelected] = useState<LoanId>('primary')
   const [tab, setTab] = useState<'ongoing' | 'assets'>('ongoing')
   const [metric, setMetric] = useState<ChartMetric>('asset')
@@ -67,6 +69,10 @@ export function LoanDashboard() {
   ]
   return <div className="loan-dashboard">
     <div className="intro"><span className="eyebrow">06 / Position · local demo</span><h1>My loan</h1><p>Review each position separately. Live balances will appear here after vault and market reads are connected.</p></div>
+    {vaultSelection.selected && <section className="card loan-connected-vault" aria-labelledby="connected-vault-title"><div><span className="eyebrow">Connected wallet · selected vault</span><h2 id="connected-vault-title">Vault {vaultSelection.selected.number}</h2><p>{vaultSelection.selected.accountId}</p></div><div className="loan-connected-vault__details"><span>{vaultSelection.selected.marketCount} {vaultSelection.selected.marketCount === 1 ? 'market' : 'markets'}</span><a href="#connect">Change vault ↗</a></div><p className="loan-connected-vault__note">Position balances are not connected yet. The loans below are separate examples and do not represent this vault.</p></section>}
+    {vaultSelection.kind === 'loading' && <p className="loan-vault-notice" role="status">Checking your connected wallet for vaults…</p>}
+    {vaultSelection.kind === 'pending' && <p className="loan-vault-notice" role="status">Your wallet is connected. Vault discovery is waiting for the published testnet factory.</p>}
+    {vaultSelection.kind === 'error' && <p className="loan-vault-notice" role="status">Vault search could not finish. <a href="#connect">Retry on Connect</a>.</p>}
     <section className="card loan-list-card" aria-labelledby="loans-title"><div className="loan-section-head"><div><h2 id="loans-title">Your loans</h2><p>Two example vault positions · select one to view</p></div><span className="loan-muted">2 demo loans</span></div>
       <div className="loan-list">{loans.map(loan => <button key={loan.id} className={`loan-list-item ${selected === loan.id ? 'is-selected' : ''}`} aria-pressed={selected === loan.id} onClick={() => { setSelected(loan.id); setTab('ongoing') }}><span className="loan-list-name"><TokenPair /><span><strong>WETH / USDC</strong><small>Morpho · Base Sepolia · Testnet</small><em>{loan.label}</em></span></span><span><small>Debt</small><strong>{money(loan.debt)} USDC</strong></span><span><small>Collateral</small><strong>{loan.collateral.toFixed(3)} WETH</strong></span><span><small>Risk · LTV</small><strong>{loan.ltv.toFixed(1)}%</strong><em>{loan.ltv >= trigger ? 'Above agent trigger' : 'Below agent trigger'}</em></span><span className="loan-select-icon" aria-hidden="true">{selected === loan.id ? '✓' : '→'}</span></button>)}</div>
     </section>

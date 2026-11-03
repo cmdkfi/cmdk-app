@@ -53,7 +53,7 @@ export function WalletConnect() {
       {kind === 'contract' && <p className="inline-error" role="alert">Smart contract wallets are planned for a later release. This address cannot sign owner actions in cmdk.</p>}
       {kind === 'unavailable' && <p className="inline-error" role="alert">Base Sepolia did not answer the account check. Owner actions will stay unavailable until it can be verified.</p>}
       {kind === 'delegated' && <p className="wallet-message">This delegated EOA can continue. Its signature will be checked against the owner address before any future action.</p>}
-      {kind !== 'contract' && <VaultDiscovery address={address!} />}
+      {kind !== 'contract' && <VaultDiscovery />}
     </>}
   </section>
 }

@@ -8,6 +8,7 @@ import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
 import { LoanDashboard } from './LoanDashboard.tsx'
+import { VaultSelectionProvider } from './VaultSelectionContext.tsx'
 import './styles.css'
 
 type Page = 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
@@ -240,4 +241,4 @@ function App() {
 }
 
 const queryClient = new QueryClient()
-createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={queryClient}><DemoProvider><App /></DemoProvider></QueryClientProvider></WagmiProvider>)
+createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={queryClient}><VaultSelectionProvider><DemoProvider><App /></DemoProvider></VaultSelectionProvider></QueryClientProvider></WagmiProvider>)
