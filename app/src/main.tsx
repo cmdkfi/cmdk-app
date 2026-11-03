@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
 import { RelayerReadiness } from './RelayerReadiness.tsx'
+import { CreateVaultJob } from './CreateVaultJob.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
@@ -98,7 +99,8 @@ function Create() {
   const rules = { floor, target, act, budget, migrate, exit }
   const valid = validRules(rules)
   return <>
-    <Intro eyebrow="02 / Set limits" title="Create your vault">Choose the limits the agent must follow. The 86% liquidation threshold belongs to the Morpho market and cannot be changed here.</Intro>
+    <Intro eyebrow="02 / Set limits" title="Create your vault">Create a testnet vault when deployment is ready, or explore the rule setup in the local demo. The Morpho liquidation threshold is fixed by the market.</Intro>
+    <CreateVaultJob />
     <div className="two-col"><Card title="Your LTV corridor" subtitle="Move each line to preview the rules. No values are being saved yet.">
       <Band value={target} floor={floor} target={target} act={act} />
       <div className="form-list">
@@ -115,7 +117,7 @@ function Create() {
       <p className="explain">Above the action line, a sale back to Target can exceed the daily sell budget. An exit repays the entire loan and can sell much more collateral.</p>
     </Card></div>
     <div className="page-actions"><button className="button" disabled={!valid} onClick={() => { dispatch({ type: 'create', rules }); navigate('agent') }}>Create demo vault <span aria-hidden="true">→</span></button></div>
-    <Placeholder>Creates a local example only. A real vault requires the published factory and relayer setup.</Placeholder>
+    <Placeholder>The rule form above creates a local example only. It does not submit these values to the testnet relayer.</Placeholder>
   </>
 }
 
@@ -236,7 +238,7 @@ function App() {
   const Screen = screen[page]
   return <div className="layout">
     <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
-    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>Runs on NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Interface preview · no live actions</span></footer></div>
+    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Vault creation uses testnet; loan actions remain a local demo</span></footer></div>
   </div>
 }
 

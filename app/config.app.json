@@ -4,5 +4,6 @@
   "nearRpcUrl": "https://rpc.testnet.near.org",
   "baseRpcUrl": "https://base-sepolia-rpc.publicnode.com",
   "relayerUrl": "https://relayer.cmdk.fi",
-  "relayerUrlFallback": "https://cmdk-relayer.fffilimonov.workers.dev"
+  "relayerUrlFallback": "https://cmdk-relayer.fffilimonov.workers.dev",
+  "policy": { "cooldownSecs": 120, "sliceMax": "1000000000", "depositNear": "2", "markets": ["live", "backup"] }
 }
