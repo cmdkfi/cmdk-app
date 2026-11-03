@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { discoverVaults, loadConfig } from './near.ts'
+import { discoverVaults, loadConfig, selectedOwnedVault } from './near.ts'
 
 const config = { baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: 'https://rpc.testnet.near.org', near: { factory: 'factory.testnet' } }
 const response = value => ({ ok: true, json: async () => ({ result: { result: [...new TextEncoder().encode(JSON.stringify(value))] } }) })
@@ -31,6 +31,12 @@ test('does not treat an unreadable vault as an empty result', async () => {
   const result = await discoverVaults(config, '0xabc', fetcher)
   assert.equal(result.failed, 1)
   assert.equal(result.vaults.length, 1)
+})
+
+test('ignores a saved vault that does not belong to the discovered owner', () => {
+  const owned = [{ accountId: 'v3.factory.testnet', number: 3, owner: '0xabc', marketCount: 1 }]
+  assert.equal(selectedOwnedVault(owned, 'v2.factory.testnet')?.accountId, 'v3.factory.testnet')
+  assert.equal(selectedOwnedVault([], 'v2.factory.testnet'), null)
 })
 
 test('requires the expected network configuration', async () => {
