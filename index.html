@@ -421,6 +421,16 @@ body{font-size:16px}
 .hero[data-active-tab="assets"]>.label-line,.hero[data-active-tab="assets"]>.balance,.hero[data-active-tab="assets"]>.collateral-inline,.hero[data-active-tab="assets"]>.active-loan-facts,.hero[data-active-tab="assets"]>.actions{display:none}
 @media(hover:hover) and (pointer:fine){.loan-tabs button:hover{color:var(--ink)}}
 @media(max-width:700px){.hero{grid-template-areas:"head" "label" "balance" "collateral" "facts" "actions" "overview"}.active-loan-head{margin-bottom:18px}.active-loan-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px}.active-loan-facts>div:last-child{grid-column:1/-1}.loan-overview-totals{grid-template-columns:1fr}.loan-asset-row{font-size:12px}}
+/* One vertical rhythm for page sections and their major cards. */
+.page{--section-gap:24px;display:grid;align-content:start;gap:var(--section-gap)}
+#loan-view,#verify,#autopilot,#autopilot-settings,#setup-view{display:grid;align-content:start;gap:var(--section-gap)}
+#loan-view>*,.demo-panel,.foot{margin-block:0}
+.verify-header,.settings-head,.ap-header{padding-bottom:0}
+.ap-grid{margin-top:0}
+.ap-back{margin-bottom:0}
+.recorded-evidence,.settings-summary,.setup-intro,.setup-progress{margin-block:0}
+.verify-main,.verify-side,.settings-column{gap:var(--section-gap)}
+@media(max-width:650px){.page{--section-gap:20px}}
 </style></head><body>
 <svg style="display:none" aria-hidden="true"><symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/></symbol><symbol id="shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></symbol><symbol id="play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8Z"/></symbol><symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol><symbol id="down" viewBox="0 0 24 24"><path d="M12 4v16m-6-6 6 6 6-6"/></symbol><symbol id="up" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6"/></symbol><symbol id="eth" viewBox="0 0 24 24"><path d="m12 2 6 10-6 4-6-4Zm-6 12 6 8 6-8"/></symbol><symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/></symbol><symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol><symbol id="moon" viewBox="0 0 24 24"><path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/></symbol><symbol id="check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol><symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol></svg>
 <aside class="sidebar"><div class="brand" aria-label="cmdk"><span class="command-logo" aria-hidden="true">⌘ K</span></div><nav aria-label="Main navigation"><button data-page="loan" aria-current="page"><svg><use href="#home"/></svg>My loan</button><button data-page="autopilot"><svg><use href="#shield"/></svg>Autopilot</button><button data-page="verify"><svg><use href="#check"/></svg>Verify</button><button data-page="demo"><svg><use href="#play"/></svg>Demo</button><button data-page="setup"><svg><use href="#plus"/></svg>Create vault</button></nav><div class="sidebar-bottom"><button class="theme" id="theme"><svg><use href="#moon"/></svg><span>Dark appearance</span></button><div class="testnet"><span class="dot"></span>Testnet prototype</div></div></aside>
