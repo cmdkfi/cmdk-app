@@ -2,7 +2,7 @@
 
 The new application foundation lives in [`app/`](app/). It uses React, Vite, and strict TypeScript. Its ten screens follow the product flow in `fffilimonov/prime/docs/04-app-requirements.md`: connect, configure a vault, approve an agent version, deposit, withdraw the borrowed USDC, monitor, change rules, repay and leave, verify, and explore demo scenes.
 
-The app is still an interface preview beyond its Connect screen. Position reads, signatures, relayer jobs, and live transactions are not connected. Values marked as examples are local calculations. The existing interactive prototype remains available at `/prototype/index.html` when running the new app.
+The app has a connected, read-only wallet and readiness screen, plus a separate local loan demo. Position reads, signatures, relayer jobs, and live transactions are not connected. The existing interactive prototype remains available at `/prototype/index.html` when running the new app.
 
 The Connect screen supports injected EVM wallets (including MetaMask and Rabby) and Coinbase Wallet in EOA mode. It checks the connected address's code on Base Sepolia and identifies standard, delegated, and contract accounts. After connection, it reads the NEAR factory and finds vaults owned by that EVM address. If several exist, the owner can select one; the choice is saved in this browser. Selection does not yet populate the other screens or enable signatures or transactions.
 
@@ -21,6 +21,10 @@ pnpm dev
 ```
 
 Open <http://localhost:5173/>. `pnpm build` checks TypeScript and creates a static build in `app/dist/`. The build copies the legacy prototype and its bundled chart library into `app/dist/prototype/`.
+
+### Try the local loan journey
+
+On Connect, choose **Start local demo**. Set rules, create a demo vault, continue past the agent version explanation, and open a demo loan. Withdraw the example USDC, then use **Simulate ETH price drop** and **Run demo Reduce** on My loan. Open **Repay & leave** to repay the remaining debt and return the WETH. Each step updates the same local position across screens. The demo state persists in this browser; **Reset local demo** on Connect starts over. All amounts, events, and agent actions are local examples, with no wallet signing or network transaction.
 
 ## Existing interactive prototype
 
