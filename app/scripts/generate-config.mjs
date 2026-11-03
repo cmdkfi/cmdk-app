@@ -24,9 +24,26 @@ const config = {
   relayerUrl: appValues.relayerUrl,
   relayerUrlFallback: appValues.relayerUrlFallback,
   near: { factory },
+  createVault: factory && deployment?.base?.executor && deployment?.base?.markets && deployment?.base?.tokens
+    ? {
+        cooldownSecs: appValues.policy.cooldownSecs,
+        depositNear: appValues.policy.depositNear,
+        markets: appValues.policy.markets.map(name => ({
+          id: deployment.base.markets[name]?.id,
+          loan_token: deployment.base.markets[name]?.loanToken,
+          collateral_token: deployment.base.markets[name]?.collateralToken,
+          executor: deployment.base.executor,
+          slice_max: appValues.policy.sliceMax,
+        })),
+      }
+    : null,
 }
 const output = resolve(root, 'app/public/config.json')
 if (config.baseChainId !== 84532 || config.nearNetwork !== 'testnet') throw new Error('Deployment manifest does not match the supported testnet')
+if (factory && (!config.createVault || config.createVault.markets.some(market =>
+  !/^0x[0-9a-fA-F]{64}$/.test(market.id ?? '') ||
+  ![market.loan_token, market.collateral_token, market.executor].every(address => /^0x[0-9a-fA-F]{40}$/.test(address ?? ''))
+))) throw new Error('Published deployment manifest is incomplete for vault creation')
 await mkdir(resolve(root, 'app/public'), { recursive: true })
 await writeFile(output, `${JSON.stringify(config, null, 2)}\n`)
 console.log(factory ? 'Generated app config from deployment manifest' : 'Generated app config; NEAR factory deployment pending')

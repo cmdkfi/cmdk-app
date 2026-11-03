@@ -1,4 +1,5 @@
-export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; baseRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null } }
+export type CreateVaultPolicy = { cooldownSecs: number; depositNear: string; markets: { id: string; loan_token: string; collateral_token: string; executor: string; slice_max: string }[] }
+export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; baseRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null }; createVault: CreateVaultPolicy | null }
 export type Vault = { accountId: string; number: number; owner: string; baseAddress?: string; marketCount: number }
 
 export function selectedOwnedVault(vaults: Vault[], savedAccountId: string | null): Vault | null {
@@ -14,7 +15,8 @@ export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConf
   if (value.baseChainId !== 84532 || value.nearNetwork !== 'testnet' || typeof value.nearRpcUrl !== 'string' ||
     typeof value.baseRpcUrl !== 'string' || !/^https:\/\//.test(value.baseRpcUrl) ||
     typeof value.relayerUrl !== 'string' || typeof value.relayerUrlFallback !== 'string' ||
-    !value.near || (value.near.factory !== null && typeof value.near.factory !== 'string')) {
+    !value.near || (value.near.factory !== null && typeof value.near.factory !== 'string') ||
+    !('createVault' in value) || (value.createVault !== null && (typeof value.createVault !== 'object' || !Array.isArray(value.createVault.markets)))) {
     throw new Error('App configuration does not match the supported testnet.')
   }
   return value

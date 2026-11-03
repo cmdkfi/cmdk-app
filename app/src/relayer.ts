@@ -37,7 +37,7 @@ export function assessRelayer(config: AppConfig, health: RelayerHealth): Readine
   if (!config.near.factory) return { kind: 'pending', message: 'Waiting for the published factory address in the deployment manifest.' }
   if (health.factory !== config.near.factory) return { kind: 'failed', message: 'Relayer factory does not match the published deployment.' }
   if (health.factory_exists !== true) return { kind: 'pending', message: 'The factory is not available on NEAR testnet yet.' }
-  if (health.eth_float_wei !== '0' && health.wallet && health.wallet.floats_left === 0) {
+  if (health.eth_float_wei !== '0' && (!health.wallet || !health.wallet.floats_left)) {
     return { kind: 'pending', message: 'Vault creation is waiting for relayer funding.' }
   }
   return { kind: 'ready', message: 'Relayer and testnet factory are available.' }
