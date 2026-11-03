@@ -1,4 +1,4 @@
-export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; near: { factory: string | null } }
+export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null } }
 export type Vault = { accountId: string; number: number; owner: string; baseAddress?: string; marketCount: number }
 
 export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConfig> {
@@ -8,6 +8,7 @@ export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConf
   if (!config || typeof config !== 'object') throw new Error('App configuration is invalid.')
   const value = config as AppConfig
   if (value.baseChainId !== 84532 || value.nearNetwork !== 'testnet' || typeof value.nearRpcUrl !== 'string' ||
+    typeof value.relayerUrl !== 'string' || typeof value.relayerUrlFallback !== 'string' ||
     !value.near || (value.near.factory !== null && typeof value.near.factory !== 'string')) {
     throw new Error('App configuration does not match the supported testnet.')
   }

@@ -6,7 +6,9 @@ The app is still an interface preview beyond its Connect screen. Position reads,
 
 The Connect screen supports injected EVM wallets (including MetaMask and Rabby) and Coinbase Wallet in EOA mode. It checks the connected address's code on Base Sepolia and identifies standard, delegated, and contract accounts. After connection, it reads the NEAR factory and finds vaults owned by that EVM address. If several exist, the owner can select one; the choice is saved in this browser. Selection does not yet populate the other screens or enable signatures or transactions.
 
-Vault discovery needs `deployments/testnet.json` with `near.factory` (or top-level `factory`). The dev and build scripts generate `app/public/config.json` from that manifest. If the manifest is absent, the app clearly reports that factory deployment data is pending. Do not enter a planned address by hand. When the published deployment manifest becomes available, add it to this repository at `deployments/testnet.json` and rebuild.
+Vault discovery needs `deployments/testnet.json` with `near.factory`. The dev and build scripts generate `app/public/config.json` from that manifest. If the manifest is absent, the app clearly reports that factory deployment data is pending. Do not enter a planned address by hand. When the published deployment manifest becomes available, add it to this repository at `deployments/testnet.json` and rebuild.
+
+The Connect screen also reads relayer `/health`, using the documented fallback URL only when the primary endpoint does not answer. It compares the relayer's chain, network, and factory with the generated config and reports deployment or funding delays. This is a read-only readiness check; it does not create a vault or authorize signing.
 
 ## Run the new app
 
@@ -18,7 +20,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open <http://127.0.0.1:5173/>. `pnpm build` checks TypeScript and creates a static build in `app/dist/`. The build copies the legacy prototype and its bundled chart library into `app/dist/prototype/`.
+Open <http://localhost:5173/>. `pnpm build` checks TypeScript and creates a static build in `app/dist/`. The build copies the legacy prototype and its bundled chart library into `app/dist/prototype/`.
 
 ## Existing interactive prototype
 
