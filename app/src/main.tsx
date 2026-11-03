@@ -76,7 +76,7 @@ function Connect() {
       <Card title="See what happened"><p>Review the loan, agent status and recorded evidence in one place.</p></Card>
     </div>
     <div className="page-actions"><ButtonLink to="create">Preview vault setup</ButtonLink><ButtonLink to="scenes" secondary>Explore demo scenes</ButtonLink></div>
-    <Placeholder>Vault discovery and signing will be added in separate steps. The remaining screens still show example values and cannot submit transactions.</Placeholder>
+    <Placeholder>Vault search starts after wallet connection. The remaining screens still show example values and cannot submit transactions.</Placeholder>
   </>
 }
 
