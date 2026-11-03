@@ -5,6 +5,8 @@ import { WagmiProvider } from 'wagmi'
 import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
 import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { walletConfig } from './wallet.ts'
+import { DemoProvider, useDemo } from './DemoContext.tsx'
+import { demoLtv, validRules } from './demo.ts'
 import './styles.css'
 
 type Page = 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
@@ -68,6 +70,7 @@ function Intro({ eyebrow, title, children }: { eyebrow: string; title: string; c
 }
 
 function Connect() {
+  const { state, dispatch } = useDemo()
   return <>
     <Intro eyebrow="01 / Start" title="Your loan, under your rules">Connect the wallet that will own your vault. You can explore the interface without connecting; no action is signed in this stage.</Intro>
     <WalletConnect />
@@ -77,19 +80,21 @@ function Connect() {
       <Card title="Your rules are on-chain"><p>Set a target and an action line before opening a loan. Check the stored values on Base Sepolia.</p></Card>
       <Card title="See what happened"><p>Review the loan, agent status and recorded evidence in one place.</p></Card>
     </div>
-    <div className="page-actions"><ButtonLink to="create">Preview vault setup</ButtonLink><ButtonLink to="scenes" secondary>Explore demo scenes</ButtonLink></div>
-    <Placeholder>Vault search starts after wallet connection. The remaining screens still show example values and cannot submit transactions.</Placeholder>
+    <div className="page-actions"><ButtonLink to="create">{state.phase === 'empty' ? 'Start local demo' : 'Continue local demo'}</ButtonLink><ButtonLink to="scenes" secondary>Explore demo scenes</ButtonLink>{state.phase !== 'empty' && <button className="button button--secondary" onClick={() => dispatch({ type: 'reset' })}>Reset local demo</button>}</div>
+    <Placeholder>The local demo runs without a wallet or transactions. Vault search starts after wallet connection; live actions remain unavailable.</Placeholder>
   </>
 }
 
 function Create() {
-  const [floor, setFloor] = useState(30)
-  const [target, setTarget] = useState(50)
-  const [act, setAct] = useState(70)
-  const [budget, setBudget] = useState(20)
-  const [migrate, setMigrate] = useState(true)
-  const [exit, setExit] = useState(true)
-  const valid = floor < target && target + 0.1 < act && act < 86 && budget >= 0 && budget <= 100
+  const { state, dispatch } = useDemo()
+  const [floor, setFloor] = useState(state.rules.floor)
+  const [target, setTarget] = useState(state.rules.target)
+  const [act, setAct] = useState(state.rules.act)
+  const [budget, setBudget] = useState(state.rules.budget)
+  const [migrate, setMigrate] = useState(state.rules.migrate)
+  const [exit, setExit] = useState(state.rules.exit)
+  const rules = { floor, target, act, budget, migrate, exit }
+  const valid = validRules(rules)
   return <>
     <Intro eyebrow="02 / Set limits" title="Create your vault">Choose the limits the agent must follow. The 86% liquidation threshold belongs to the Morpho market and cannot be changed here.</Intro>
     <div className="two-col"><Card title="Your LTV corridor" subtitle="Move each line to preview the rules. No values are being saved yet.">
@@ -107,12 +112,13 @@ function Create() {
       <label className="switch-row"><span>Exit when needed <small>The agent tries a move first.</small></span><input type="checkbox" checked={exit} onChange={event => setExit(event.target.checked)} /></label>
       <p className="explain">Above the action line, a sale back to Target can exceed the daily sell budget. An exit repays the entire loan and can sell much more collateral.</p>
     </Card></div>
-    <div className="page-actions"><ButtonLink to="agent" disabled={!valid}>Review agent version</ButtonLink></div>
-    <Placeholder>Creating a vault will be enabled after wallet, config and relayer integration. This form currently previews the rules only.</Placeholder>
+    <div className="page-actions"><button className="button" disabled={!valid} onClick={() => { dispatch({ type: 'create', rules }); navigate('agent') }}>Create demo vault <span aria-hidden="true">→</span></button></div>
+    <Placeholder>Creates a local example only. A real vault requires the published factory and relayer setup.</Placeholder>
   </>
 }
 
 function Agent() {
+  const { state } = useDemo()
   return <>
     <Intro eyebrow="03 / Review the agent" title="Approve the code that may act">Only an agent build with the approved fingerprint can register the limited key. A new version needs your approval again.</Intro>
     <Card title="Agent version" subtitle="The approved measurement and source commit have not been published to this app yet.">
@@ -123,61 +129,75 @@ function Agent() {
       <Row label="Registration" value={<Pill>Not connected</Pill>} />
       <p className="explain">During onboarding, the agent approval is included in the vault setup message. There is no separate approval signature here.</p>
     </Card>
-    <div className="page-actions"><ButtonLink to="deposit">Preview deposit & open</ButtonLink></div>
+    <div className="page-actions"><ButtonLink to={state.phase === 'empty' ? 'create' : 'deposit'}>{state.phase === 'empty' ? 'Create demo vault first' : 'Continue to deposit'}</ButtonLink></div>
   </>
 }
 
 function Deposit() {
+  const { state, dispatch } = useDemo()
   const [collateral, setCollateral] = useState(2)
-  const [ltv, setLtv] = useState(50)
+  const [ltv, setLtv] = useState(Math.min(50, state.rules.target))
+  const maxLtv = Math.min(50, state.rules.act)
   const debt = collateral * 2500 * ltv / 100
   const liquidationPrice = collateral > 0 ? debt / (collateral * .86) : 0
   return <>
-    <Intro eyebrow="04 / Open a position" title="Deposit & open loan">Send WETH to your position address, then choose the loan size. Example values below use ETH at $2,500; the connected app will use the market oracle and available liquidity.</Intro>
-    <div className="two-col"><Card title="1 · Send WETH" subtitle="The deposit is an ordinary wallet transfer on Base Sepolia.">
-      <Row label="Your position address" value="Not created" />
+    <Intro eyebrow="04 / Open a position" title="Deposit & open loan">Choose collateral and a starting loan size for this local demo. A real position will use the market oracle and available liquidity.</Intro>
+    <div className="two-col"><Card title="1 · Supply WETH" subtitle="Local example; no wallet transfer is sent.">
+      <Row label="Demo vault" value={state.phase === 'vault' ? 'Ready to open' : 'Create vault first'} />
       <label className="field"><span>WETH to deposit</span><input type="number" min="0" step="0.001" value={collateral} onChange={event => setCollateral(Math.max(0, Number(event.target.value)))} /><span>WETH</span></label>
-      <Placeholder>Waiting for a connected wallet and a created vault. No deposit is being watched yet.</Placeholder>
+      <Placeholder>Opening a demo loan updates the local position. No deposit is watched on-chain.</Placeholder>
     </Card><Card title="2 · Choose the loan" subtitle="Preview the debt before signing Open.">
-      <label className="range-field"><span>Starting LTV <strong>{ltv}%</strong></span><input type="range" min="1" max="50" value={ltv} onChange={event => setLtv(Number(event.target.value))} /></label>
+      <label className="range-field"><span>Starting LTV <strong>{ltv}%</strong></span><input type="range" min="1" max={maxLtv} value={ltv} onChange={event => setLtv(Number(event.target.value))} /></label>
       <Row label="Borrow" value={`${debt.toLocaleString('en-US')} USDC`} />
       <Row label="Liquidation price" value={`$${liquidationPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH`} />
       <Row label="Market liquidity" value={<Pill>Feed not connected</Pill>} />
       <p className="explain">The actual borrow is capped by available market liquidity. Opening above that cap will be blocked before signing.</p>
     </Card></div>
-    <div className="page-actions"><ButtonLink to="take">Preview withdrawal</ButtonLink></div>
+    <div className="page-actions"><button className="button" disabled={state.phase !== 'vault' || collateral <= 0 || debt <= 0 || ltv > maxLtv} onClick={() => { dispatch({ type: 'open', collateral, ltv }); navigate('take') }}>Open demo loan <span aria-hidden="true">→</span></button>{state.phase !== 'vault' && <ButtonLink to="create" secondary>Create demo vault first</ButtonLink>}</div>
   </>
 }
 
 function Take() {
+  const { state, dispatch } = useDemo()
   return <>
-    <Intro eyebrow="05 / Receive the loan" title="Take the USDC">Borrowed USDC first arrives at your position address. Only your owner-signed message can move it to your wallet.</Intro>
-    <Card title="Withdraw USDC"><Row label="Available at position" value="Not connected" /><Row label="Destination" value="Connected wallet" /><Placeholder>Wallet address and token balance will appear here after opening a real testnet loan. The withdraw action is not enabled in this preview.</Placeholder></Card>
-    <div className="page-actions"><ButtonLink to="dashboard">View example loan</ButtonLink></div>
+    <Intro eyebrow="05 / Receive the loan" title="Take the USDC">Borrowed USDC arrives at the position first. In the live app, moving it to your wallet requires your signature.</Intro>
+    <Card title="Withdraw demo USDC"><Row label="Available at demo position" value={`${state.positionUsdc.toLocaleString('en-US')} USDC`} /><Row label="Demo wallet balance" value={`${state.walletUsdc.toLocaleString('en-US')} USDC`} /><Placeholder>This local action moves example balances only. No wallet message or transaction is sent.</Placeholder></Card>
+    <div className="page-actions">{state.phase === 'opened' && <button className="button" onClick={() => { dispatch({ type: 'withdraw' }); navigate('dashboard') }}>Withdraw demo USDC <span aria-hidden="true">→</span></button>}{state.phase === 'empty' || state.phase === 'vault' ? <ButtonLink to="deposit">Open a demo loan first</ButtonLink> : <ButtonLink to="dashboard" secondary>View my loan</ButtonLink>}</div>
   </>
 }
 
 function Dashboard() {
+  const { state, dispatch } = useDemo()
+  const hasLoan = !['empty', 'vault', 'closed'].includes(state.phase)
+  const ltv = demoLtv(state)
+  const liquidationPrice = state.collateral > 0 ? state.debt / (state.collateral * .86) : 0
+  const healthFactor = state.debt > 0 ? .86 * state.collateral * state.price / state.debt : null
   return <>
-    <Intro eyebrow="06 / Position" title="My loan">A sample WETH / USDC position. Live values will come from Morpho, the executor and the market oracle.</Intro>
-    <div className="hero-grid"><Card title="Loan balance" subtitle="Morpho · WETH / USDC · Base Sepolia"><div className="hero-number">2,500 <span>USDC</span></div><Row label="Collateral" value="2.000 WETH · $5,000" /><Row label="Liquidation price" value="$1,453 / ETH" /></Card><Card title="Position health" subtitle="At $2,500 per ETH"><div className="hero-number">50.0<span>% LTV</span></div><Band /><p className="explain">Agent acts at 70% LTV. Morpho can liquidate at 86% LTV. These are example values.</p></Card></div>
-    <Card title="Autopilot" subtitle="Registration and watching are separate states."><Row label="Agent key" value={<Pill>Not connected</Pill>} /><Row label="Last check" value="No live check" /><Row label="Today's budget" value="Sold 0% of 20% · Moves 0 of 2" /><div className="card-actions"><ButtonLink to="change" secondary>View rules</ButtonLink></div></Card>
-    <Card title="Decision feed" subtitle="Newest actions will appear first."><Placeholder>No chain events connected. The interactive demo shows an example price drop and Reduce action.</Placeholder><div className="card-actions"><a className="button button--secondary" href="/prototype/index.html?demo=markets">Open interactive prototype <span aria-hidden="true">↗</span></a></div></Card>
+    <Intro eyebrow="06 / Position" title="My loan">{hasLoan ? 'Your local demo position. Values change as you withdraw, respond to risk and repay.' : state.phase === 'closed' ? 'The local loan is closed and the remaining collateral has been returned.' : 'No open demo loan yet. Create a vault and open one to explore the full journey.'}</Intro>
+    {!hasLoan ? <Card title={state.phase === 'closed' ? 'Loan closed' : 'No open loan'}><Placeholder>{state.phase === 'closed' ? `${state.returnedWeth.toFixed(3)} WETH returned to the demo wallet.` : 'Your dashboard will appear after opening a demo loan.'}</Placeholder><div className="card-actions"><ButtonLink to="create">{state.phase === 'closed' ? 'Start another demo' : 'Create demo vault'}</ButtonLink></div></Card> : <>
+      <div className="hero-grid"><Card title="Loan balance" subtitle="Morpho · WETH / USDC · local demo"><div className="hero-number">{Math.round(state.debt).toLocaleString('en-US')} <span>USDC</span></div><Row label="Collateral" value={`${state.collateral.toFixed(3)} WETH · $${Math.round(state.collateral * state.price).toLocaleString('en-US')}`} /><Row label="Liquidation price" value={state.debt > 0 ? `$${Math.round(liquidationPrice).toLocaleString('en-US')} / ETH` : 'No debt'} /></Card><Card title="Position health" subtitle={`At $${state.price.toLocaleString('en-US')} per ETH`}><div className="hero-number">{ltv.toFixed(1)}<span>% LTV</span></div><Band value={ltv} floor={state.rules.floor} target={state.rules.target} act={state.rules.act} /><Row label="Health Factor" value={healthFactor === null ? 'No debt' : healthFactor.toFixed(2)} /><p className="explain">Agent acts at {state.rules.act}% LTV. Morpho may liquidate at 86% LTV. Demo calculations exclude fees and interest.</p></Card></div>
+      <Card title="Autopilot" subtitle="Local scenario; no agent key or live market feed is connected."><Row label="State" value={<Pill tone={state.phase === 'risk' ? 'warn' : 'muted'}>{state.phase === 'risk' ? 'Risk detected' : state.phase === 'protected' ? 'Reduce complete' : state.phase === 'repaid' ? 'Debt repaid' : 'Monitoring example'}</Pill>} /><Row label="Agent trigger" value={`${state.rules.act}% LTV`} /><Row label="Agent key" value="Not connected" /><div className="card-actions"><ButtonLink to="change" secondary>View rules</ButtonLink></div></Card>
+      <Card title="Decision feed" subtitle="Local demo events, newest first.">{state.events.map((event, index) => <Row key={`${index}-${event}`} label={event} value={index === 0 ? 'Latest' : 'Demo'} />)}<div className="card-actions">{state.phase === 'withdrawn' && <button className="button" onClick={() => dispatch({ type: 'price-drop' })}>Simulate ETH price drop</button>}{state.phase === 'risk' && <button className="button" disabled={ltv < state.rules.act} onClick={() => dispatch({ type: 'reduce' })}>Run demo Reduce</button>}<ButtonLink to="leave" secondary>Repay & leave</ButtonLink></div></Card>
+    </>}
   </>
 }
 
 function Change() {
+  const { state } = useDemo()
   return <><Intro eyebrow="07 / Manage" title="Change your rules">Review your corridor, agent version and access before signing a change.</Intro>
-    <Card title="Corridor"><Row label="Floor · Target · Agent acts" value="30% · 50% · 70%" /><Row label="Markets" value="Live and backup" /><Placeholder>Editing and signing a corridor change will be enabled after the live vault is connected.</Placeholder></Card>
+    <Card title="Corridor"><Row label="Floor · Target · Agent acts" value={`${state.rules.floor}% · ${state.rules.target}% · ${state.rules.act}%`} /><Row label="Daily sell budget" value={`${state.rules.budget}%`} /><Row label="Migrate · Exit" value={`${state.rules.migrate ? 'Allowed' : 'Off'} · ${state.rules.exit ? 'Allowed' : 'Off'}`} /><Placeholder>These are local demo rules. Editing and signing a live change requires a connected vault.</Placeholder></Card>
     <Card title="Agent access"><Row label="Approved version" value={<Pill>Not connected</Pill>} /><Row label="Watching" value="Unknown" /><p className="explain">Revoking access deletes the agent key. Previously signed calls may remain valid for up to 10 minutes. Your loan stays open.</p></Card>
     <div className="page-actions"><ButtonLink to="verify" secondary>Review verification</ButtonLink></div>
   </>
 }
 
 function Leave() {
+  const { state, dispatch } = useDemo()
+  const canRepay = ['withdrawn', 'risk', 'protected'].includes(state.phase) && state.walletUsdc >= state.debt
   return <><Intro eyebrow="08 / Leave" title="Repay and leave">Repay debt in each market, then withdraw the remaining WETH and USDC to your wallet.</Intro>
-    <Card title="1 · Repay"><Row label="Market" value="Choose the market with higher LTV first" /><Row label="USDC needed" value="Debt plus 1% headroom" /><p className="explain">If your position address has too little USDC, transfer the missing amount from your wallet first. A split position needs one owner message per market.</p></Card>
-    <Card title="2 · Withdraw"><Row label="WETH" value="Returned to your position address" /><Row label="Unused USDC" value="Withdraw separately" /><Placeholder>No live balances or signatures are connected in this preview.</Placeholder></Card>
+    <Card title="1 · Repay"><Row label="Remaining demo debt" value={`${Math.round(state.debt).toLocaleString('en-US')} USDC`} /><Row label="Available in demo wallet" value={`${Math.round(state.walletUsdc).toLocaleString('en-US')} USDC`} /><p className="explain">A live repayment also needs gas and may include accrued interest. This local calculation excludes both.</p>{canRepay && <div className="card-actions"><button className="button" onClick={() => dispatch({ type: 'repay' })}>Repay remaining demo debt</button></div>}{state.debt > state.walletUsdc && <Placeholder>Not enough demo USDC to repay. A live app would show the amount to transfer from your wallet.</Placeholder>}</Card>
+    <Card title="2 · Withdraw collateral"><Row label="Remaining WETH" value={`${state.collateral.toFixed(3)} WETH`} /><Row label="Returned to demo wallet" value={`${state.returnedWeth.toFixed(3)} WETH`} /><Placeholder>{state.phase === 'closed' ? 'The local loan is closed. No signature or transaction was sent.' : 'Repay the full demo debt before withdrawing WETH.'}</Placeholder>{state.phase === 'repaid' && <div className="card-actions"><button className="button" onClick={() => dispatch({ type: 'close' })}>Withdraw remaining demo WETH</button></div>}</Card>
+    <div className="page-actions"><ButtonLink to={state.phase === 'empty' || state.phase === 'vault' ? 'create' : 'dashboard'} secondary>{state.phase === 'closed' ? 'View result' : 'Back to my loan'}</ButtonLink></div>
   </>
 }
 
@@ -206,10 +226,10 @@ const scenes = [
 ]
 
 function Scenes() {
-  return <><Intro eyebrow="10 / Demo" title="Demo scenes">The planned scenes compare outcomes on the same price path. Scene data and testnet receipts are not connected to this React app yet.</Intro>
+  return <><Intro eyebrow="10 / Demo" title="Demo scenes">The full local loan journey works in this React app. The scenario comparisons below are still planned and have no testnet receipts.</Intro>
     <Placeholder>The existing interactive prototype remains available. Its values are local examples, with no testnet transactions.</Placeholder>
     <div className="scene-list">{scenes.map(([title, signal, description], index) => <Card key={title} className="scene"><div className="scene__number">0{index + 1}</div><div><h2>{title}</h2><strong>{signal}</strong><p>{description}</p></div><Pill>Planned</Pill></Card>)}</div>
-    <div className="page-actions"><a className="button" href="/prototype/index.html?demo=markets">Open interactive prototype <span aria-hidden="true">↗</span></a></div>
+    <div className="page-actions"><ButtonLink to="dashboard">Open local loan demo</ButtonLink><a className="button button--secondary" href="/prototype/index.html?demo=markets">Open earlier prototype <span aria-hidden="true">↗</span></a></div>
   </>
 }
 
@@ -235,4 +255,4 @@ function App() {
 }
 
 const queryClient = new QueryClient()
-createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={queryClient}><App /></QueryClientProvider></WagmiProvider>)
+createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={queryClient}><DemoProvider><App /></DemoProvider></QueryClientProvider></WagmiProvider>)
