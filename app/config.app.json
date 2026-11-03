@@ -1,0 +1,5 @@
+{
+  "baseChainId": 84532,
+  "nearNetwork": "testnet",
+  "nearRpcUrl": "https://rpc.testnet.near.org"
+}
