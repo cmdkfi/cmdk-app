@@ -6,7 +6,8 @@ import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
 import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
-import { demoLtv, validRules } from './demo.ts'
+import { validRules } from './demo.ts'
+import { LoanDashboard } from './LoanDashboard.tsx'
 import './styles.css'
 
 type Page = 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
@@ -166,22 +167,6 @@ function Take() {
   </>
 }
 
-function Dashboard() {
-  const { state, dispatch } = useDemo()
-  const hasLoan = !['empty', 'vault', 'closed'].includes(state.phase)
-  const ltv = demoLtv(state)
-  const liquidationPrice = state.collateral > 0 ? state.debt / (state.collateral * .86) : 0
-  const healthFactor = state.debt > 0 ? .86 * state.collateral * state.price / state.debt : null
-  return <>
-    <Intro eyebrow="06 / Position" title="My loan">{hasLoan ? 'Your local demo position. Values change as you withdraw, respond to risk and repay.' : state.phase === 'closed' ? 'The local loan is closed and the remaining collateral has been returned.' : 'No open demo loan yet. Create a vault and open one to explore the full journey.'}</Intro>
-    {!hasLoan ? <Card title={state.phase === 'closed' ? 'Loan closed' : 'No open loan'}><Placeholder>{state.phase === 'closed' ? `${state.returnedWeth.toFixed(3)} WETH returned to the demo wallet.` : 'Your dashboard will appear after opening a demo loan.'}</Placeholder><div className="card-actions"><ButtonLink to="create">{state.phase === 'closed' ? 'Start another demo' : 'Create demo vault'}</ButtonLink></div></Card> : <>
-      <div className="hero-grid"><Card title="Loan balance" subtitle="Morpho · WETH / USDC · local demo"><div className="hero-number">{Math.round(state.debt).toLocaleString('en-US')} <span>USDC</span></div><Row label="Collateral" value={`${state.collateral.toFixed(3)} WETH · $${Math.round(state.collateral * state.price).toLocaleString('en-US')}`} /><Row label="Liquidation price" value={state.debt > 0 ? `$${Math.round(liquidationPrice).toLocaleString('en-US')} / ETH` : 'No debt'} /></Card><Card title="Position health" subtitle={`At $${state.price.toLocaleString('en-US')} per ETH`}><div className="hero-number">{ltv.toFixed(1)}<span>% LTV</span></div><Band value={ltv} floor={state.rules.floor} target={state.rules.target} act={state.rules.act} /><Row label="Health Factor" value={healthFactor === null ? 'No debt' : healthFactor.toFixed(2)} /><p className="explain">Agent acts at {state.rules.act}% LTV. Morpho may liquidate at 86% LTV. Demo calculations exclude fees and interest.</p></Card></div>
-      <Card title="Autopilot" subtitle="Local scenario; no agent key or live market feed is connected."><Row label="State" value={<Pill tone={state.phase === 'risk' ? 'warn' : 'muted'}>{state.phase === 'risk' ? 'Risk detected' : state.phase === 'protected' ? 'Reduce complete' : state.phase === 'repaid' ? 'Debt repaid' : 'Monitoring example'}</Pill>} /><Row label="Agent trigger" value={`${state.rules.act}% LTV`} /><Row label="Agent key" value="Not connected" /><div className="card-actions"><ButtonLink to="change" secondary>View rules</ButtonLink></div></Card>
-      <Card title="Decision feed" subtitle="Local demo events, newest first.">{state.events.map((event, index) => <Row key={`${index}-${event}`} label={event} value={index === 0 ? 'Latest' : 'Demo'} />)}<div className="card-actions">{state.phase === 'withdrawn' && <button className="button" onClick={() => dispatch({ type: 'price-drop' })}>Simulate ETH price drop</button>}{state.phase === 'risk' && <button className="button" disabled={ltv < state.rules.act} onClick={() => dispatch({ type: 'reduce' })}>Run demo Reduce</button>}<ButtonLink to="leave" secondary>Repay & leave</ButtonLink></div></Card>
-    </>}
-  </>
-}
-
 function Change() {
   const { state } = useDemo()
   return <><Intro eyebrow="07 / Manage" title="Change your rules">Review your corridor, agent version and access before signing a change.</Intro>
@@ -235,7 +220,7 @@ function Scenes() {
 
 const screen: Record<Page, React.ComponentType> = {
   connect: Connect, create: Create, agent: Agent, deposit: Deposit, take: Take,
-  dashboard: Dashboard, change: Change, leave: Leave, verify: Verify, scenes: Scenes,
+  dashboard: LoanDashboard, change: Change, leave: Leave, verify: Verify, scenes: Scenes,
 }
 
 function App() {
