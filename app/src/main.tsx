@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { WagmiProvider } from 'wagmi'
+import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
+import { walletConfig } from './wallet.ts'
 import './styles.css'
 
 type Page = 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
@@ -64,14 +68,15 @@ function Intro({ eyebrow, title, children }: { eyebrow: string; title: string; c
 
 function Connect() {
   return <>
-    <Intro eyebrow="01 / Start" title="Your loan, under your rules">Set the limits. Your vault checks every action before it reaches your position. This is a UI preview; wallet connection is the next integration step.</Intro>
+    <Intro eyebrow="01 / Start" title="Your loan, under your rules">Connect the wallet that will own your vault. You can explore the interface without connecting; no action is signed in this stage.</Intro>
+    <WalletConnect />
     <div className="feature-grid">
       <Card title="Your money stays yours"><p>The agent can act only within the limits stored in your vault. Only an owner-signed message can send assets out.</p></Card>
       <Card title="Your rules are on-chain"><p>Set a target and an action line before opening a loan. Check the stored values on Base Sepolia.</p></Card>
       <Card title="See what happened"><p>Review the loan, agent status and recorded evidence in one place.</p></Card>
     </div>
     <div className="page-actions"><ButtonLink to="create">Preview vault setup</ButtonLink><ButtonLink to="scenes" secondary>Explore demo scenes</ButtonLink></div>
-    <Placeholder>Wallet not connected. This stage shows the app structure with example values and cannot sign or submit transactions.</Placeholder>
+    <Placeholder>Vault discovery and signing will be added in separate steps. The remaining screens still show example values and cannot submit transactions.</Placeholder>
   </>
 }
 
@@ -223,8 +228,9 @@ function App() {
   const Screen = screen[page]
   return <div className="layout">
     <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
-    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><span className="wallet-state">Wallet not connected</span></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>Runs on NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Interface preview · no live actions</span></footer></div>
+    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>Runs on NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Interface preview · no live actions</span></footer></div>
   </div>
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+const queryClient = new QueryClient()
+createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={queryClient}><App /></QueryClientProvider></WagmiProvider>)
