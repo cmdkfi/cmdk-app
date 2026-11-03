@@ -2,7 +2,9 @@
 
 The new application foundation lives in [`app/`](app/). It uses React, Vite, and strict TypeScript. Its ten screens follow the product flow in `fffilimonov/prime/docs/04-app-requirements.md`: connect, configure a vault, approve an agent version, deposit, withdraw the borrowed USDC, monitor, change rules, repay and leave, verify, and explore demo scenes.
 
-This first stage is an interface preview. Wallet connection, chain reads, signatures, relayer jobs, and live transactions are not connected. Values marked as examples are local calculations. The existing interactive prototype remains available at `/prototype/index.html` when running the new app.
+The app is still an interface preview beyond its Connect screen. Vault discovery, position reads, signatures, relayer jobs, and live transactions are not connected. Values marked as examples are local calculations. The existing interactive prototype remains available at `/prototype/index.html` when running the new app.
+
+The Connect screen now supports injected EVM wallets (including MetaMask and Rabby) and Coinbase Wallet in EOA mode. It checks the connected address's code on Base Sepolia and identifies standard, delegated, and contract accounts. This does not discover a vault or enable signatures or transactions; those integrations remain separate work.
 
 ## Run the new app
 
