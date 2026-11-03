@@ -20,6 +20,8 @@ const config = {
   baseChainId: deployment?.base?.chainId ?? appValues.baseChainId,
   nearNetwork: deployment?.near?.network ?? appValues.nearNetwork,
   nearRpcUrl: appValues.nearRpcUrl,
+  relayerUrl: appValues.relayerUrl,
+  relayerUrlFallback: appValues.relayerUrlFallback,
   near: { factory },
 }
 const output = resolve(root, 'app/public/config.json')

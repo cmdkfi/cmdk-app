@@ -7,7 +7,7 @@
   "scripts": {
     "prepare:prototype": "node scripts/copy-prototype.mjs",
     "prepare:config": "node scripts/generate-config.mjs",
-    "dev": "pnpm run prepare:prototype && pnpm run prepare:config && vite --host 127.0.0.1",
+    "dev": "pnpm run prepare:prototype && pnpm run prepare:config && vite --host localhost --port 5173 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/*.test.mjs",
     "build": "pnpm run prepare:prototype && pnpm run prepare:config && tsc --noEmit && vite build",

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
+import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { walletConfig } from './wallet.ts'
 import './styles.css'
 
@@ -70,6 +71,7 @@ function Connect() {
   return <>
     <Intro eyebrow="01 / Start" title="Your loan, under your rules">Connect the wallet that will own your vault. You can explore the interface without connecting; no action is signed in this stage.</Intro>
     <WalletConnect />
+    <RelayerReadiness />
     <div className="feature-grid">
       <Card title="Your money stays yours"><p>The agent can act only within the limits stored in your vault. Only an owner-signed message can send assets out.</p></Card>
       <Card title="Your rules are on-chain"><p>Set a target and an action line before opening a loan. Check the stored values on Base Sepolia.</p></Card>
