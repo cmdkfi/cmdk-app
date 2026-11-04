@@ -13,6 +13,10 @@ try {
 
 // Deployment values must come from the published manifest, never a guessed address.
 const factory = deployment?.near?.factory ?? null
+const measurement = deployment?.agent?.measurement ?? null
+const hashes = ['mrtd', 'rtmr0', 'rtmr1', 'rtmr2', 'compose_hash', 'os_image_hash']
+const approvedMeasurement = measurement && hashes.every(key => /^[0-9a-f]{64}$/.test(measurement[key] ?? ''))
+  ? Object.fromEntries(hashes.map(key => [key, measurement[key]])) : null
 if (factory !== null && (typeof factory !== 'string' || !/^[a-z0-9._-]+$/.test(factory))) {
   throw new Error('Invalid NEAR factory in deployments/testnet.json')
 }
@@ -24,6 +28,7 @@ const config = {
   relayerUrl: appValues.relayerUrl,
   relayerUrlFallback: appValues.relayerUrlFallback,
   near: { factory },
+  agent: { measurement: approvedMeasurement, version: deployment?.agent?.version ?? null, sourceCommit: deployment?.agent?.sourceCommit ?? null },
   createVault: factory && deployment?.base?.executor && deployment?.base?.markets && deployment?.base?.tokens
     ? {
         cooldownSecs: appValues.policy.cooldownSecs,

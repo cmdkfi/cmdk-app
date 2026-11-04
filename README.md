@@ -12,6 +12,8 @@ Vault discovery needs `deployments/testnet.json` with `near.factory`. The dev an
 
 The Connect screen also reads relayer `/health`, using the documented fallback URL only when the primary endpoint does not answer. It compares the relayer's chain, network, factory, and gas funding with the generated config and reports deployment or funding delays. Create vault performs the same check before one `POST /create-vault`, then polls `GET /job/<id>` for acceptance, vault creation, gas funding, and completion. It keeps the job ID in this browser session so a reload can resume checking. If the POST outcome is unknown or the job record is lost, the app does not automatically retry creation; check the factory for an existing vault first. A vault whose gas funding failed must receive funds before setup can continue. The local demo form remains independent of this testnet action.
 
+Agent version now includes the first owner-signed `setup` flow. It reads the selected vault's current owner and nonce from NEAR, presents the corridor and published agent fingerprint, signs one exact ERC-191 message, verifies the signer locally, and submits one asynchronous `POST /owner-call`. The screen tracks NEAR and Base stages and links to transaction receipts. This first-setup path accepts only a new vault with owner nonce zero; changing rules on an existing vault is a separate flow. Setup stays disabled until the deployment manifest contains a factory, both markets, and all six agent measurement hashes. A lost POST response or job record is treated as uncertain and never retried automatically. No live setup was submitted while these deployment fields are unpublished.
+
 ## Run the new app
 
 Use Node 22 and pnpm 11:
