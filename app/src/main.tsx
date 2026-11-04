@@ -5,6 +5,7 @@ import { WagmiProvider } from 'wagmi'
 import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
 import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
+import { VaultSetup } from './VaultSetup.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
@@ -125,13 +126,10 @@ function Agent() {
   const { state } = useDemo()
   return <>
     <Intro eyebrow="03 / Review the agent" title="Approve the code that may act">Only an agent build with the approved fingerprint can register the limited key. A new version needs your approval again.</Intro>
-    <Card title="Agent version" subtitle="The approved measurement and source commit have not been published to this app yet.">
-      <Row label="Version" value={<Pill>Awaiting config</Pill>} />
-      <Row label="Measurement" value="Not available" />
-      <Row label="Source commit" value="Not available" />
-      <Row label="Key permissions" value="Reduce · Migrate · Exit" />
-      <Row label="Registration" value={<Pill>Not connected</Pill>} />
-      <p className="explain">During onboarding, the agent approval is included in the vault setup message. There is no separate approval signature here.</p>
+    <VaultSetup />
+    <Card title="Local demo path" subtitle="Explore the remaining loan screens without a wallet signature.">
+      <Row label="Key permissions in this example" value="Reduce · Migrate · Exit" />
+      <p className="explain">The demo does not register an agent key. Testnet setup above requires the published fingerprint and your owner signature.</p>
     </Card>
     <div className="page-actions"><ButtonLink to={state.phase === 'empty' ? 'create' : 'deposit'}>{state.phase === 'empty' ? 'Create demo vault first' : 'Continue to deposit'}</ButtonLink></div>
   </>
