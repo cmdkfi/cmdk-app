@@ -15,7 +15,9 @@ try {
 const factory = deployment?.near?.factory ?? null
 const measurement = deployment?.agent?.measurement ?? null
 const hashes = ['mrtd', 'rtmr0', 'rtmr1', 'rtmr2', 'compose_hash', 'os_image_hash']
-const approvedMeasurement = measurement && hashes.every(key => /^[0-9a-f]{64}$/.test(measurement[key] ?? ''))
+// mrtd and rtmr0-2 are SHA-384 (96 hex), compose_hash and os_image_hash SHA-256 (64 hex): agent/MEASUREMENT.md §1
+const hexLen = { mrtd: 96, rtmr0: 96, rtmr1: 96, rtmr2: 96, compose_hash: 64, os_image_hash: 64 }
+const approvedMeasurement = measurement && hashes.every(key => new RegExp(`^[0-9a-f]{${hexLen[key]}}$`).test(measurement[key] ?? ''))
   ? Object.fromEntries(hashes.map(key => [key, measurement[key]])) : null
 if (factory !== null && (typeof factory !== 'string' || !/^[a-z0-9._-]+$/.test(factory))) {
   throw new Error('Invalid NEAR factory in deployments/testnet.json')

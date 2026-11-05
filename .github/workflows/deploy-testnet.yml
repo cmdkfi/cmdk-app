@@ -1,0 +1,36 @@
+# Deploys app/ to https://testnet.cmdk.fi (Cloudflare Workers static assets, the founder's account) on every push to
+# main. Secrets: CLOUDFLARE_API_TOKEN (a token with "Edit Cloudflare Workers" plus Zone:DNS:Edit on cmdk.fi for the
+# custom domain), CLOUDFLARE_ACCOUNT_ID. The deployment manifest (addresses, the agent measurement) is fetched from the
+# public backend repository at build time, so the app always ships the current values.
+name: deploy testnet
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency: { group: deploy-testnet, cancel-in-progress: false }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.7.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: app/pnpm-lock.yaml }
+      - name: Deployment manifest from cmdkfi/app (main)
+        run: |
+          mkdir -p deployments
+          curl -fsSL https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json -o deployments/testnet.json
+          node -e "const d=require('./deployments/testnet.json'); if(!d.near||!d.near.factory) throw new Error('manifest without near.factory'); console.log('factory', d.near.factory, 'agent compose', d.agent && d.agent.measurement && d.agent.measurement.compose_hash)"
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm build
+        working-directory: app
+      - run: pnpm test
+        working-directory: app
+      - name: Deploy to Cloudflare
+        working-directory: app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
