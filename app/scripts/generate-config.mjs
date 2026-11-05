@@ -2,14 +2,13 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
-const source = resolve(root, 'deployments/testnet.json')
+const manifestUrl = 'https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json'
 const appValues = JSON.parse(await readFile(resolve(import.meta.dirname, '../config.app.json'), 'utf8'))
-let deployment = null
-try {
-  deployment = JSON.parse(await readFile(source, 'utf8'))
-} catch (error) {
-  if (error.code !== 'ENOENT') throw error
-}
+// This public manifest is owned by the backend repository. Fail the build if it cannot be read:
+// silently shipping null or stale deployment data would disable live vault actions.
+const response = await fetch(`${manifestUrl}?build=${Date.now()}`, { cache: 'no-store' })
+if (!response.ok) throw new Error(`Could not read the published testnet manifest (HTTP ${response.status})`)
+const deployment = await response.json()
 
 // Deployment values must come from the published manifest, never a guessed address.
 const factory = deployment?.near?.factory ?? null
@@ -20,7 +19,7 @@ const hexLen = { mrtd: 96, rtmr0: 96, rtmr1: 96, rtmr2: 96, compose_hash: 64, os
 const approvedMeasurement = measurement && hashes.every(key => new RegExp(`^[0-9a-f]{${hexLen[key]}}$`).test(measurement[key] ?? ''))
   ? Object.fromEntries(hashes.map(key => [key, measurement[key]])) : null
 if (factory !== null && (typeof factory !== 'string' || !/^[a-z0-9._-]+$/.test(factory))) {
-  throw new Error('Invalid NEAR factory in deployments/testnet.json')
+  throw new Error('Invalid NEAR factory in cmdkfi/app deployments/testnet.json')
 }
 const config = {
   baseChainId: deployment?.base?.chainId ?? appValues.baseChainId,
