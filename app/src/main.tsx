@@ -7,6 +7,7 @@ import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
 import { VaultSetup } from './VaultSetup.tsx'
 import { DepositOpen } from './DepositOpen.tsx'
+import { LiveCorridor } from './LiveCorridor.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
@@ -174,7 +175,8 @@ function Take() {
 function Change() {
   const { state } = useDemo()
   return <><Intro eyebrow="07 / Manage" title="Change your rules">Review your corridor, agent version and access before signing a change.</Intro>
-    <Card title="Corridor"><Row label="Floor · Target · Agent acts" value={`${state.rules.floor}% · ${state.rules.target}% · ${state.rules.act}%`} /><Row label="Daily sell budget" value={`${state.rules.budget}%`} /><Row label="Migrate · Exit" value={`${state.rules.migrate ? 'Allowed' : 'Off'} · ${state.rules.exit ? 'Allowed' : 'Off'}`} /><Placeholder>These are local demo rules. Editing and signing a live change requires a connected vault.</Placeholder></Card>
+    <LiveCorridor />
+    <Card title="Local demo corridor"><Row label="Floor · Target · Agent acts" value={`${state.rules.floor}% · ${state.rules.target}% · ${state.rules.act}%`} /><Row label="Daily sell budget" value={`${state.rules.budget}%`} /><Row label="Migrate · Exit" value={`${state.rules.migrate ? 'Allowed' : 'Off'} · ${state.rules.exit ? 'Allowed' : 'Off'}`} /><Placeholder>These are example values. They are separate from the stored rules above and never change your selected vault.</Placeholder></Card>
     <Card title="Agent access"><Row label="Approved version" value={<Pill>Not connected</Pill>} /><Row label="Watching" value="Unknown" /><p className="explain">Revoking access deletes the agent key. Previously signed calls may remain valid for up to 10 minutes. Your loan stays open.</p></Card>
     <div className="page-actions"><ButtonLink to="verify" secondary>Review verification</ButtonLink></div>
   </>
@@ -239,7 +241,7 @@ function App() {
   const Screen = screen[page]
   return <div className="layout">
     <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
-    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit and Open require a published vault; other loan actions are local examples</span></footer></div>
+    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit, Open and rule changes require a published vault; other loan actions are local examples</span></footer></div>
   </div>
 }
 
