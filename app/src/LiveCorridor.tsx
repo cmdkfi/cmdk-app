@@ -12,10 +12,11 @@ import { accountKind } from './wallet-utils.ts'
 type VaultState = { owner?: string; owner_nonce?: number | string; base_address?: string; markets?: { id?: string; executor?: string; corridor_set?: boolean }[] }
 type Data = { config: AppConfig; position: Address; market: Hex; executor: Address; stored: DemoRules }
 const corridorAbi = [{ type: 'function', name: 'corridors', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'bytes32' }], outputs: [{ type: 'uint64' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'bool' }, { type: 'bool' }, { type: 'bool' }] }] as const
+const setCorridorAbi = [{ type: 'function', name: 'setCorridor', stateMutability: 'nonpayable', inputs: [{ type: 'bytes32' }, { type: 'tuple', components: [{ name: 'target', type: 'uint64' }, { name: 'act', type: 'uint64' }, { name: 'floor', type: 'uint64' }, { name: 'sellBudget', type: 'uint64' }, { name: 'migrateAllowed', type: 'bool' }, { name: 'exitAllowed', type: 'bool' }, { name: 'set', type: 'bool' }] }, { type: 'uint256' }], outputs: [] }] as const
 const initial: DemoRules = { floor: 30, target: 50, act: 70, budget: 20, migrate: false, exit: false }
 
 export function LiveCorridor() {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
   const { selected } = useVaultSelection()
   const client = usePublicClient({ chainId: baseSepolia.id })
   const { signMessageAsync } = useSignMessage()
@@ -78,7 +79,7 @@ export function LiveCorridor() {
   }, [data, jobId, job?.stage])
 
   const changed = !!data && JSON.stringify(rules) !== JSON.stringify(data.stored)
-  const canReview = ready && !!data && changed && validRules(rules) && chainId === baseSepolia.id && !jobId
+  const canReview = ready && !!data && changed && validRules(rules) && !jobId
   async function sign() {
     if (!canReview || !data || !address || !selected || !client || !savedKey) return
     setReady(false); setSigning(true); setStatus('Checking the latest vault and stored rules…')
@@ -92,7 +93,10 @@ export function LiveCorridor() {
       if (JSON.stringify(current) !== JSON.stringify(data.stored)) throw new SetupError('The stored corridor changed. Refresh before signing.')
       const nonce = Number(vault.owner_nonce)
       if (!Number.isSafeInteger(nonce) || nonce < 0) throw new SetupError('The owner nonce is unavailable.')
-      const message = corridorMessage(selected.accountId, nonce + 1, Number((await client.getBlock()).timestamp) + 600, data.config, data.market, rules)
+      const expiry = Number((await client.getBlock()).timestamp) + 600
+      const message = corridorMessage(selected.accountId, nonce + 1, expiry, data.config, data.market, rules)
+      const args = JSON.parse(message).args as { target: string; act: string; floor: string; sell_budget: string }
+      await client.simulateContract({ account: data.position, address: data.executor, abi: setCorridorAbi, functionName: 'setCorridor', args: [data.market, { target: BigInt(args.target), act: BigInt(args.act), floor: BigInt(args.floor), sellBudget: BigInt(args.sell_budget), migrateAllowed: rules.migrate, exitAllowed: rules.exit, set: false }, BigInt(expiry)] })
       setStatus('Review all six rule values in your wallet.')
       const signature = await signMessageAsync({ message })
       await checkSetupSignature(message, signature, address)
@@ -122,7 +126,6 @@ export function LiveCorridor() {
       <label className="switch-row"><span>Exit when needed <small>The agent tries a move first.</small></span><input type="checkbox" checked={rules.exit} onChange={event => setBool('exit', event.target.checked)} /></label>
     </div>
       {!validRules(rules) && <p className="inline-error" role="alert">Use Floor &lt; Target &lt; Agent acts &lt; 86%, with a daily budget from 0 to 100%.</p>}
-      {chainId !== baseSepolia.id && <p className="inline-error" role="alert">Switch your wallet to Base Sepolia before continuing.</p>}
       {review && <div className="setup-live__review"><h3>Review rule change</h3><p>For market {data.market}: Floor {rules.floor}%, Target {rules.target}%, Agent acts {rules.act}%, daily budget {rules.budget}%, Migrate {rules.migrate ? 'on' : 'off'}, Exit {rules.exit ? 'on' : 'off'}. The other market keeps its rules. Signature expires in 10 minutes.</p></div>}
       <div className="card-actions"><button className="button" disabled={!canReview} onClick={() => review ? void sign() : setReview(true)}>{review ? 'Sign rule change' : 'Review rule change'} →</button><button className="button button--secondary" onClick={() => void refresh()}>Refresh rules</button></div>
     </>}
