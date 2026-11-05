@@ -1,6 +1,9 @@
 export type CreateVaultPolicy = { cooldownSecs: number; depositNear: string; markets: { id: string; loan_token: string; collateral_token: string; executor: string; slice_max: string }[] }
 export type AgentMeasurement = { mrtd: string; rtmr0: string; rtmr1: string; rtmr2: string; compose_hash: string; os_image_hash: string }
 export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; baseRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null }; agent: { measurement: AgentMeasurement | null; version: string | null; sourceCommit: string | null }; createVault: CreateVaultPolicy | null }
+
+// mrtd and rtmr0-2 are SHA-384 (96 hex), compose_hash and os_image_hash SHA-256 (64 hex): agent/MEASUREMENT.md §1 in cmdkfi/app.
+const MEASUREMENT_HEX_LENGTH: Record<keyof AgentMeasurement, number> = { mrtd: 96, rtmr0: 96, rtmr1: 96, rtmr2: 96, compose_hash: 64, os_image_hash: 64 }
 export type Vault = { accountId: string; number: number; owner: string; baseAddress?: string; marketCount: number }
 
 export function selectedOwnedVault(vaults: Vault[], savedAccountId: string | null): Vault | null {
@@ -17,7 +20,7 @@ export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConf
     typeof value.baseRpcUrl !== 'string' || !/^https:\/\//.test(value.baseRpcUrl) ||
     typeof value.relayerUrl !== 'string' || typeof value.relayerUrlFallback !== 'string' ||
     !value.near || (value.near.factory !== null && typeof value.near.factory !== 'string') ||
-    !value.agent || (value.agent.measurement !== null && (typeof value.agent.measurement !== 'object' || !['mrtd', 'rtmr0', 'rtmr1', 'rtmr2', 'compose_hash', 'os_image_hash'].every(key => /^[0-9a-f]{64}$/.test(value.agent.measurement?.[key as keyof AgentMeasurement] ?? '')))) ||
+    !value.agent || (value.agent.measurement !== null && (typeof value.agent.measurement !== 'object' || !Object.entries(MEASUREMENT_HEX_LENGTH).every(([key, len]) => new RegExp(`^[0-9a-f]{${len}}$`).test(value.agent.measurement?.[key as keyof AgentMeasurement] ?? '')))) ||
     !('createVault' in value) || (value.createVault !== null && (typeof value.createVault !== 'object' || !Array.isArray(value.createVault.markets)))) {
     throw new Error('App configuration does not match the supported testnet.')
   }
