@@ -7,6 +7,7 @@ import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
 import { VaultSetup } from './VaultSetup.tsx'
 import { DepositOpen } from './DepositOpen.tsx'
+import { LiveWithdraw } from './LiveWithdraw.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
@@ -166,6 +167,7 @@ function Take() {
   const { state, dispatch } = useDemo()
   return <>
     <Intro eyebrow="05 / Receive the loan" title="Take the USDC">Borrowed USDC arrives at the position first. In the live app, moving it to your wallet requires your signature.</Intro>
+    <LiveWithdraw />
     <Card title="Withdraw demo USDC"><Row label="Available at demo position" value={`${state.positionUsdc.toLocaleString('en-US')} USDC`} /><Row label="Demo wallet balance" value={`${state.walletUsdc.toLocaleString('en-US')} USDC`} /><Placeholder>This local action moves example balances only. No wallet message or transaction is sent.</Placeholder></Card>
     <div className="page-actions">{state.phase === 'opened' && <button className="button" onClick={() => { dispatch({ type: 'withdraw' }); navigate('dashboard') }}>Withdraw demo USDC <span aria-hidden="true">→</span></button>}{state.phase === 'empty' || state.phase === 'vault' ? <ButtonLink to="deposit">Open a demo loan first</ButtonLink> : <ButtonLink to="dashboard" secondary>View my loan</ButtonLink>}</div>
   </>
@@ -239,7 +241,7 @@ function App() {
   const Screen = screen[page]
   return <div className="layout">
     <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
-    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit and Open require a published vault; other loan actions are local examples</span></footer></div>
+    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit, Open and USDC withdrawal require a published vault; other loan actions are local examples</span></footer></div>
   </div>
 }
 

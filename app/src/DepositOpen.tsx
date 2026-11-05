@@ -172,6 +172,7 @@ export function DepositOpen() {
     {jobId && <p className="setup-live__detail">Open job: <code>{jobId}</code> · {job?.stage ?? 'Checking'}</p>}
     {job?.near_tx && <p className="setup-live__detail"><a href={`https://testnet.nearblocks.io/txns/${encodeURIComponent(job.near_tx)}`} target="_blank" rel="noreferrer">View NEAR transaction ↗</a></p>}
     {job?.base_sent?.map(hash => <p className="setup-live__detail" key={hash}><a href={`https://sepolia.basescan.org/tx/${hash}`} target="_blank" rel="noreferrer">View Base transaction ↗</a></p>)}
+    {job?.stage === 'done' && <div className="card-actions"><a className="button" href="#take">Continue to USDC withdrawal <span aria-hidden="true">→</span></a></div>}
     <p className="explain">Live actions are disabled until the published factory, a selected owner vault, configured protection rules and market liquidity are available.</p>
   </section>
 }
