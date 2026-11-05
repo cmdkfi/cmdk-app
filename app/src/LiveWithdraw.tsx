@@ -14,7 +14,7 @@ type Data = { config: AppConfig; token: Address; position: Address; balance: big
 type View = { kind: 'checking' | 'blocked' | 'ready' | 'signing' | 'working' | 'done' | 'uncertain'; message: string }
 
 export function LiveWithdraw() {
-  const { address, chainId } = useAccount()
+  const { address } = useAccount()
   const { selected } = useVaultSelection()
   const client = usePublicClient({ chainId: baseSepolia.id })
   const { signMessageAsync } = useSignMessage()
@@ -79,7 +79,7 @@ export function LiveWithdraw() {
   let parsed = 0n
   let inputError = ''
   try { if (amount) parsed = parseUsdcAmount(amount) } catch (error) { inputError = error instanceof Error ? error.message : 'Invalid amount.' }
-  const canReview = !!data && parsed > 0n && parsed <= data.balance && !inputError && chainId === baseSepolia.id && view.kind === 'ready' && !jobId
+  const canReview = !!data && parsed > 0n && parsed <= data.balance && !inputError && view.kind === 'ready' && !jobId
 
   async function signWithdraw() {
     if (!canReview || !data || !address || !selected || !client || !savedKey) return
@@ -120,7 +120,6 @@ export function LiveWithdraw() {
       <p id="live-withdraw-help" className="explain">Destination: {address}. Only USDC already at this position can be withdrawn. This does not repay the loan.</p>
       {inputError && <p className="inline-error" role="alert">{inputError}</p>}
       {parsed > data.balance && <p className="inline-error" role="alert">Amount exceeds the position balance.</p>}
-      {chainId !== baseSepolia.id && <p className="inline-error" role="alert">Switch your wallet to Base Sepolia before continuing.</p>}
       {review && <div className="setup-live__review"><h3>Review withdrawal</h3><p>Send {amount} USDC from position {data.position} to your connected wallet {address}. Your loan and WETH collateral remain at the position. The signature expires in 10 minutes.</p></div>}
       <div className="card-actions"><button className="button" disabled={!canReview} onClick={() => review ? void signWithdraw() : setReview(true)}>{review ? 'Sign withdrawal' : 'Review withdrawal'} <span aria-hidden="true">→</span></button><button className="button button--secondary" onClick={() => void refresh()}>Refresh balances</button></div>
     </>}
