@@ -1,7 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "app",
+  // Static build (Vite → ./dist) served from the asset store, no Worker script. Deployed to the founder's Cloudflare
+  // account at https://testnet.cmdk.fi by .github/workflows/deploy-testnet.yml on every push to main (decided 5 Nov);
+  // https://cmdk.fi stays the landing. The relayer's CORS allows this origin.
+  "name": "cmdk-app-testnet",
   "compatibility_date": "2026-11-01",
+  "routes": [{ "pattern": "testnet.cmdk.fi", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
