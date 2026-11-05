@@ -7,6 +7,7 @@ import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
 import { VaultSetup } from './VaultSetup.tsx'
 import { DepositOpen } from './DepositOpen.tsx'
+import { LiveExitReadiness } from './LiveExitReadiness.tsx'
 import { walletConfig } from './wallet.ts'
 import { DemoProvider, useDemo } from './DemoContext.tsx'
 import { validRules } from './demo.ts'
@@ -184,6 +185,7 @@ function Leave() {
   const { state, dispatch } = useDemo()
   const canRepay = ['withdrawn', 'risk', 'protected'].includes(state.phase) && state.walletUsdc >= state.debt
   return <><Intro eyebrow="08 / Leave" title="Repay and leave">Repay debt in each market, then withdraw the remaining WETH and USDC to your wallet.</Intro>
+    <LiveExitReadiness />
     <Card title="1 · Repay"><Row label="Remaining demo debt" value={`${Math.round(state.debt).toLocaleString('en-US')} USDC`} /><Row label="Available in demo wallet" value={`${Math.round(state.walletUsdc).toLocaleString('en-US')} USDC`} /><p className="explain">A live repayment also needs gas and may include accrued interest. This local calculation excludes both.</p>{canRepay && <div className="card-actions"><button className="button" onClick={() => dispatch({ type: 'repay' })}>Repay remaining demo debt</button></div>}{state.debt > state.walletUsdc && <Placeholder>Not enough demo USDC to repay. A live app would show the amount to transfer from your wallet.</Placeholder>}</Card>
     <Card title="2 · Withdraw collateral"><Row label="Remaining WETH" value={`${state.collateral.toFixed(3)} WETH`} /><Row label="Returned to demo wallet" value={`${state.returnedWeth.toFixed(3)} WETH`} /><Placeholder>{state.phase === 'closed' ? 'The local loan is closed. No signature or transaction was sent.' : 'Repay the full demo debt before withdrawing WETH.'}</Placeholder>{state.phase === 'repaid' && <div className="card-actions"><button className="button" onClick={() => dispatch({ type: 'close' })}>Withdraw remaining demo WETH</button></div>}</Card>
     <div className="page-actions"><ButtonLink to={state.phase === 'empty' || state.phase === 'vault' ? 'create' : 'dashboard'} secondary>{state.phase === 'closed' ? 'View result' : 'Back to my loan'}</ButtonLink></div>
