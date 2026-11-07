@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider } from 'wagmi'
+import { WagmiProvider, useAccount } from 'wagmi'
 import { WalletConnect, WalletStatus } from './WalletConnect.tsx'
 import { RelayerReadiness } from './RelayerReadiness.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
@@ -77,6 +77,7 @@ function Intro({ eyebrow, title, children }: { eyebrow: string; title: string; c
 
 function Connect() {
   const { state, dispatch } = useDemo()
+  const { isConnected } = useAccount()
   return <>
     <Intro eyebrow="01 / Start" title="Your loan, under your rules">Connect the wallet that will own your vault. You can explore the interface without connecting; no action is signed in this stage.</Intro>
     <WalletConnect />
@@ -86,8 +87,8 @@ function Connect() {
       <Card title="Your rules are on-chain"><p>Set a target and an action line before opening a loan. Check the stored values on Base Sepolia.</p></Card>
       <Card title="See what happened"><p>Review the loan, agent status and recorded evidence in one place.</p></Card>
     </div>
-    <div className="page-actions"><ButtonLink to="create">{state.phase === 'empty' ? 'Start local demo' : 'Continue local demo'}</ButtonLink><ButtonLink to="scenes" secondary>Explore demo scenes</ButtonLink>{state.phase !== 'empty' && <button className="button button--secondary" onClick={() => dispatch({ type: 'reset' })}>Reset local demo</button>}</div>
-    <Placeholder>The local demo runs without a wallet or transactions. Vault search starts after wallet connection; live actions remain unavailable.</Placeholder>
+    <div className="page-actions"><ButtonLink to={isConnected ? 'dashboard' : 'create'}>{isConnected ? 'View your vaults' : 'Explore the setup'}</ButtonLink><ButtonLink to="scenes" secondary>Try a demo scene</ButtonLink>{state.phase !== 'empty' && <button className="button button--secondary" onClick={() => dispatch({ type: 'reset' })}>Reset local demo</button>}</div>
+    <Placeholder>{isConnected ? 'Your wallet is connected. Select an existing vault on My loan or create a new testnet vault.' : 'You can explore the setup without connecting. Creating a live vault requires an owner wallet; demo actions do not send transactions.'}</Placeholder>
   </>
 }
 
@@ -102,7 +103,7 @@ function Create() {
   const rules = { floor, target, act, budget, migrate, exit }
   const valid = validRules(rules)
   return <>
-    <Intro eyebrow="02 / Set limits" title="Create your vault">Create a testnet vault when deployment is ready, or explore the rule setup in the local demo. The Morpho liquidation threshold is fixed by the market.</Intro>
+    <Intro eyebrow="02 / Set limits" title="Create your vault">Create a testnet vault for your connected wallet. Review the protection rules before approving an agent version. Morpho sets the liquidation threshold.</Intro>
     <CreateVaultJob />
     <div className="two-col"><Card title="Your LTV corridor" subtitle="Move each line to preview the rules. No values are being saved yet.">
       <Band value={target} floor={floor} target={target} act={act} />
@@ -145,7 +146,7 @@ function Deposit() {
   const debt = collateral * 2500 * ltv / 100
   const liquidationPrice = collateral > 0 ? debt / (collateral * .86) : 0
   return <>
-    <Intro eyebrow="04 / Open a position" title="Deposit & open loan">Transfer WETH and open a testnet loan when your vault and market are ready. You can also try the separate local example below.</Intro>
+    <Intro eyebrow="04 / Open a position" title="Deposit & open loan">Check your WETH balance, available market liquidity and risk before opening a loan. The local example below lets you explore the calculation without a transaction.</Intro>
     <DepositOpen />
     <h2 className="deposit-demo-title">Local example</h2>
     <div className="two-col"><Card title="1 · Supply WETH" subtitle="Local example; no wallet transfer is sent.">
@@ -201,7 +202,7 @@ const checks = [
 ]
 
 function Verify() {
-  return <><Intro eyebrow="09 / Inspect" title="Verify your vault">Each check needs a matching independent record. This preview has no connected vault, so no item is marked verified.</Intro>
+  return <><Intro eyebrow="09 / Inspect" title="Verify your vault">Each check needs a matching independent record. This screen does not yet load those records, so no item is marked verified.</Intro>
     <Card title="Vault checks" subtitle="0 of 6 verified">{checks.map(([name, expected], index) => <div className="check" key={name}><span className="check__index">{index + 1}</span><div><h3>{name}</h3><p>Expected: {expected}</p></div><Pill>Not connected</Pill></div>)}</Card>
     <Card title="Recorded evidence" subtitle="External records and proof links belong here."><Placeholder>Evidence links will be shown only when their records are available and can be checked.</Placeholder></Card>
   </>
