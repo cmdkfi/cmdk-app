@@ -13,21 +13,22 @@ import { validRules } from './demo.ts'
 import { LoanDashboard } from './LoanDashboard.tsx'
 import { VaultSelectionProvider } from './VaultSelectionContext.tsx'
 import './styles.css'
+import './final-design.css'
 
 type Page = 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
 type Theme = 'dark' | 'light'
 
 const pages: { id: Page; name: string; group: string }[] = [
-  { id: 'connect', name: 'Connect', group: 'Start' },
-  { id: 'create', name: 'Create vault', group: 'Start' },
-  { id: 'agent', name: 'Agent version', group: 'Start' },
-  { id: 'deposit', name: 'Deposit & open', group: 'Start' },
-  { id: 'take', name: 'Take the USDC', group: 'Start' },
-  { id: 'dashboard', name: 'My loan', group: 'Manage' },
-  { id: 'change', name: 'Change rules', group: 'Manage' },
-  { id: 'leave', name: 'Repay & leave', group: 'Manage' },
-  { id: 'verify', name: 'Verify', group: 'Explore' },
-  { id: 'scenes', name: 'Demo scenes', group: 'Explore' },
+  { id: 'connect', name: 'Connect wallet', group: 'Get started' },
+  { id: 'create', name: 'Create vault', group: 'Get started' },
+  { id: 'agent', name: 'Agent version', group: 'Get started' },
+  { id: 'deposit', name: 'Deposit & open', group: 'Get started' },
+  { id: 'take', name: 'Take the USDC', group: 'Get started' },
+  { id: 'dashboard', name: 'My loan', group: 'Your position' },
+  { id: 'change', name: 'Change rules', group: 'Your position' },
+  { id: 'leave', name: 'Repay & leave', group: 'Your position' },
+  { id: 'verify', name: 'Verify', group: 'Trust' },
+  { id: 'scenes', name: 'Demo scenes', group: 'Trust' },
 ]
 const pageIds = new Set(pages.map(page => page.id))
 
@@ -238,8 +239,8 @@ function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('cmdk-theme', theme) }, [theme])
   const Screen = screen[page]
   return <div className="layout">
-    <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
-    <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit and Open require a published vault; other loan actions are local examples</span></footer></div>
+    <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home"><span className="brand__symbol">⌘</span><span className="brand__symbol">K</span><span className="brand__word">cmdk</span></a><nav aria-label="App navigation">{['Get started', 'Your position', 'Trust'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map((item) => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}><span className="nav-item__label">{item.name}</span><span className="nav-item__arrow" aria-hidden="true">↗</span></a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span className="environment-label"><i aria-hidden="true" /> Testnet environment</span></div></aside>
+    <div className="workspace"><header className="topbar"><div className="topbar__context"><span className="topbar__section">{pages.find(item => item.id === page)?.group}</span><span className="topbar__divider" aria-hidden="true">/</span><strong>{pages.find(item => item.id === page)?.name}</strong></div><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet · Base Sepolia · Unaudited</span><span>Check each step before signing. Demo figures are examples.</span></footer></div>
   </div>
 }
 
