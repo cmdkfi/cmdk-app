@@ -6,7 +6,7 @@ export const morphoActions = parseAbi([
   'function supplyCollateral((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) marketParams,uint256 assets,address onBehalf,bytes data)',
   'function repay((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv) marketParams,uint256 assets,uint256 shares,address onBehalf,bytes data) returns (uint256,uint256)',
 ])
-export const executorActions = parseAbi(['function open(bytes32,uint256,uint256,uint256)', 'function close(bytes32,uint256)'])
+export const executorActions = parseAbi(['function open(bytes32,uint256,uint256,uint256)', 'function close(bytes32,uint256)', 'function repay(bytes32,uint256,uint256)'])
 export function params(m: MarketPosition) {
   if (!m.oracle || !m.irm) throw new Error('Market parameters unavailable.')
   return { loanToken: m.loanToken, collateralToken: m.collateralToken, oracle: m.oracle, irm: m.irm, lltv: m.liquidationLtv }
@@ -29,7 +29,7 @@ export function borrowTarget(m: MarketPosition, amount: bigint) {
   if (m.agentTrigger === null || target > m.agentTrigger || target >= m.liquidationLtv) throw new Error('Borrow exceeds the configured risk corridor.')
   return target
 }
-export function ownerMessage(vault: string, nonce: number, expiry: number, method: 'open' | 'withdraw' | 'close', args: Record<string, string>) {
+export function ownerMessage(vault: string, nonce: number, expiry: number, method: 'open' | 'withdraw' | 'close' | 'repay', args: Record<string, string>) {
   if (!vault.endsWith('.testnet') || !Number.isSafeInteger(nonce) || nonce < 1) throw new Error('Invalid testnet vault or owner nonce.')
   return JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault,method,args,nonce,expiry})
 }
