@@ -24,6 +24,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const [error,setError] = useState('')
   const [policyError,setPolicyError] = useState('')
   const [copied,setCopied] = useState('')
+  const [copiedValue,setCopiedValue] = useState('')
   const [loading,setLoading] = useState(false)
   const live = useRef(true)
   useEffect(() => { live.current = true; return () => { live.current = false } }, [])
@@ -31,7 +32,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   async function open(refreshEvidence=true) {
     const run=++generation.current;const current=()=>live.current&&generation.current===run
     setAgentActive(true);if(refreshEvidence)setAgentRevision(value=>value+1)
-    if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setPolicyError('');setState(undefined);setPolicy(undefined);setCopied('');setSecurity(undefined);setSecurityError('');setReadAt(undefined);setPublished(null)
+    if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setPolicyError('');setState(undefined);setPolicy(undefined);setCopied('');setCopiedValue('');setSecurity(undefined);setSecurityError('');setReadAt(undefined);setPublished(null)
     try {
       const config = await loadConfig()
       if(!current())return
@@ -49,15 +50,15 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const approved = state?.approved
   const matches = !!approved && !!published && Object.entries(published).every(([key,value]) => approved[key] === value)
   const registered = !!state?.agent?.public_key && (state.agent.expires_at ?? 0) > now
-  async function copy(text:string) { try { await navigator.clipboard.writeText(text); setCopied('Copied') } catch { setCopied('Copy unavailable; select the address to copy.') } }
+  async function copy(text:string) { try { await navigator.clipboard.writeText(text); setCopied('Copied');setCopiedValue(text) } catch { setCopied('Copy unavailable. Open raw data for the full value.');setCopiedValue('') } }
   const short=(value:string)=>value.length>24?`${value.slice(0,12)}…${value.slice(-8)}`:value
-  const field = (label:string,value:string,href?:string) => <div className="verification-field" key={label}><dt>{label}</dt><dd>{href ? <a href={href} target="_blank" rel="noreferrer">{short(value)} ↗</a> : <code title={value}>{short(value)}</code>}<PrototypeButton onClick={() => void copy(value)} aria-label={`Copy ${label}`}>Copy</PrototypeButton></dd></div>
+  const field = (label:string,value:string,href?:string) => <div className="verification-field" key={label}><dt>{label}</dt><dd>{href ? <a title={value} href={href} target="_blank" rel="noreferrer">{short(value)} ↗</a> : <code title={value}>{short(value)}</code>}<PrototypeButton onClick={() => void copy(value)} aria-label={`Copy ${label}`}>{copiedValue===value?'Copied':'Copy'}</PrototypeButton></dd></div>
   return <><PrototypeButton onClick={() => void open()} aria-haspopup="dialog">Verification details</PrototypeButton>
     <dialog ref={dialog} className="connect-dialog verification-dialog" aria-labelledby={headingId} onClose={()=>{generation.current++;setAgentActive(false);setLoading(false)}}>
       <header className="verification-heading">
         <div className="verification-title"><h2 id={headingId}>Verification details</h2><PrototypeIconButton aria-label="Close verification details" onClick={() => dialog.current?.close()}>×</PrototypeIconButton></div>
         <p>Morpho · WETH/USDC{market.label==='backup'?' · backup':''}</p>
-        <div className="verification-address"><a href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer">{short(vault.accountId)} ↗</a><PrototypeButton aria-label="Copy vault address" onClick={()=>void copy(vault.accountId)}>Copy</PrototypeButton></div>
+        <div className="verification-address"><a href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer">{short(vault.accountId)} ↗</a><PrototypeButton aria-label="Copy vault address" onClick={()=>void copy(vault.accountId)}>{copiedValue===vault.accountId?'Copied':'Copy'}</PrototypeButton></div>
         <PrototypeButton disabled={loading} onClick={()=>void open()}>Refresh telemetry</PrototypeButton>
         <span className="verification-feedback" role="status">{copied}</span>
       </header>

@@ -59,3 +59,6 @@
 .verification-field{margin-block:16px}.verification-field dd{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.verification-field dd>a,.verification-field dd>code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.verification-field dd>button{flex:none}
 .verification-dialog .verification-permissions{margin-top:20px;border-bottom:0}.verification-dialog .agent-evidence pre,.verification-dialog pre{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 @media(max-width:700px){.connect-dialog.verification-dialog{max-width:100%;max-height:92dvh}.verification-heading{padding:16px 20px 12px}.verification-body{padding-inline:20px}.verification-overview>div{gap:12px}}
+
+.verification-dialog .verification-feedback{position:absolute;width:1px;height:1px;padding:0;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.verification-address>.prototype-button,.verification-field dd>.prototype-button{min-width:80px}
