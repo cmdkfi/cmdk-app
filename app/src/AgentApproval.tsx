@@ -1,5 +1,6 @@
-import {ownerPendingRecord,verifyOwnerJob} from './owner-recovery.ts'
-import {useRef,useState} from 'react'
+import {clearPendingAction,updatePendingAction} from './transaction-recovery.ts'
+import {ownerPendingRecord,assertFreshOwnerIntent,verifyOwnerJob} from './owner-recovery.ts'
+import {useEffect,useRef,useState} from 'react'
 import {useAccount,useSignMessage} from 'wagmi'
 import {loadConfig,viewNear,type AgentMeasurement,type Vault} from './near.ts'
 import type {VaultState} from './positions.ts'
@@ -9,6 +10,7 @@ import {PrototypeButton} from './ui/PrototypeControls.tsx'
 export function AgentApproval({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>void}) {
  const {address,chainId}=useAccount(),{signMessageAsync}=useSignMessage()
  const [measurement,setMeasurement]=useState<AgentMeasurement|null>(null),[status,setStatus]=useState(''),[busy,setBusy]=useState(false)
+ const alive=useRef(true);useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[])
  const flight=useRef(false),session=useRef('');session.current=`${address}:${vault.accountId}:${chainId}`
  const key=`cmdk-live-action:${vault.accountId}:${address}`
  async function review(){setBusy(true);try{const config=await loadConfig();if(!config.agent.measurement)throw Error('No published agent measurement.');setMeasurement(config.agent.measurement);setStatus('Review the complete published measurement before approving. Existing corridors and token permissions are unchanged.')}catch(e){setStatus((e as Error).message)}finally{setBusy(false)}}
@@ -22,11 +24,12 @@ export function AgentApproval({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>v
  if(!Number.isSafeInteger(nonce)||nonce<1)throw Error('Owner nonce unavailable.')
  const message=JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault:vault.accountId,method:'approve_measurement',args:measurement,nonce,expiry})
  const signature=await signMessageAsync({message});await checkSetupSignature(message,signature,address)
- if(session.current!==expected)throw Error('Wallet changed. Reopen verification.')
+ await assertFreshOwnerIntent(config,vault,message)
+ if(!alive.current||session.current!==expected)throw Error('Wallet changed. Reopen verification.')
  if(localStorage.getItem(key))throw Error('Another vault action started.')
  localStorage.setItem(key,JSON.stringify(ownerPendingRecord(message,{operation:'approve_measurement',measurement})))
  const job=await startSetupJob(config,vault.accountId,message,signature)
- localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key)??'{}'),job}));setStatus('Submitted to NEAR. Check approval status. No Base transaction is required.')
+ updatePendingAction(key,{message},{job});setStatus('Submitted to NEAR. Check approval status. No Base transaction is required.')
  }catch(e){setStatus((e as Error).message)}finally{flight.current=false;setBusy(false)}}
  async function check(){if(flight.current)return;flight.current=true;setBusy(true);try{
  const record=JSON.parse(localStorage.getItem(key)??'{}');if(record.operation!=='approve_measurement'||!record.job||!record.measurement)throw Error('No measurement approval job. Inspect activity before retrying.')
@@ -35,7 +38,7 @@ export function AgentApproval({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>v
  await verifyOwnerJob(config,vault,record,job)
  const state=await viewNear<VaultState>(config.nearRpcUrl,vault.accountId,'get_state')
  if(!state.approved||Object.entries(record.measurement).some(([k,v])=>state.approved![k]!==v))throw Error('Stored measurement does not match the approval. Inspect NEAR before retrying.')
- localStorage.removeItem(key);setMeasurement(null);setStatus('Measurement confirmed on NEAR. Agent registration is separate and must be observed before protection is active.');onConfirmed()
+ clearPendingAction(key,record);setMeasurement(null);setStatus('Measurement confirmed on NEAR. Agent registration is separate and must be observed before protection is active.');onConfirmed()
  }catch(e){setStatus((e as Error).message)}finally{flight.current=false;setBusy(false)}}
  return <section><h3>Approve agent measurement</h3><p>Restore measurement approval after revocation or review a newly published agent version. Approval allows that version to register; it does not confirm registration or execution health.</p><PrototypeButton disabled={busy} onClick={()=>void review()}>Review published measurement</PrototypeButton>{measurement&&<><pre>{JSON.stringify(measurement,null,2)}</pre><PrototypeButton disabled={busy||!address||address.toLowerCase()!==vault.owner.toLowerCase()||chainId!==84532} onClick={()=>void approve()}>Sign measurement approval</PrototypeButton><PrototypeButton disabled={busy} onClick={()=>setMeasurement(null)}>Cancel review</PrototypeButton></>}<PrototypeButton disabled={busy} onClick={()=>void check()}>Check approval status</PrototypeButton><p role="status">{status}</p></section>
 }

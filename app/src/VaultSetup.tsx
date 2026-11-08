@@ -1,10 +1,11 @@
-import {ownerPendingRecord,verifyOwnerJob} from './owner-recovery.ts'
+import {clearPendingAction,updatePendingAction} from './transaction-recovery.ts'
+import {ownerPendingRecord,assertFreshOwnerIntent,verifyOwnerJob} from './owner-recovery.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import {parseAbi} from 'viem'
 import { baseSepolia } from 'wagmi/chains'
 import { loadConfig, viewNear, type AppConfig } from './near.ts'
-import {readLivePosition} from './positions.ts'
+import {readLivePosition,type MarketPosition} from './positions.ts'
 import type { Vault } from './near.ts'
 import { accountKind } from './wallet-utils.ts'
 import { checkSetupSignature, readSetupJob, setupMessage, repairSetupArgs, needsSetupApproval, startSetupJob, type SetupJob, SetupError } from './vault-setup.ts'
@@ -14,10 +15,11 @@ type VaultState = { owner: string; owner_nonce: number | string; approved?:Recor
 const stages = ['accepted', 'vault_checked', 'base_sent', 'done'] as const
 const labels = ['Wallet signed', 'Vault checked on NEAR', 'Sent on Base', 'Setup complete']
 
-export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onComplete: () => void }) {
+export function VaultSetup({ vault: selected, onComplete, applySame=true, liveMarket, backupMarket }: { vault: Vault; onComplete: () => void; applySame?:boolean;liveMarket?:MarketPosition;backupMarket?:MarketPosition }) {
   const { address, isConnected } = useAccount()
   // Initial values apply only to corridors that have not been configured.
   const rules = { floor: 30, target: 50, act: 70, budget: 20, migrate: true, exit: true }
+  const [backupValues,setBackupValues]=useState(['50.0','70.0','20.0'])
   const client = usePublicClient({ chainId: baseSepolia.id })
   const { signMessageAsync } = useSignMessage()
   const session=useRef('');session.current=`${selected.accountId}:${address}`
@@ -57,6 +59,7 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
     let timer: number | undefined
     const poll = async () => {
       try {
+        const pendingRecord=JSON.parse(localStorage.getItem(`cmdk-live-action:${selected.accountId}:${address}`)??'{}')
         const next = await readSetupJob(config, jobId)
         if (!active) return
         setJob(next)
@@ -64,13 +67,13 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
           const receipts = next.receipts ?? []
           if (next.vault !== selected.accountId || !next.near_tx || !next.signed || receipts.length !== next.signed.length || receipts.some(item => item.status !== 1) || next.signed.some(tx=>!receipts.some(receipt=>receipt.hash.toLowerCase()===tx.hash.toLowerCase()))) setState({ kind: 'uncertain', message: 'The relayer marked setup done, but all planned Base receipts were not confirmed. Check your vault.' })
           else {
-            await verifyOwnerJob(config,selected,JSON.parse(localStorage.getItem(`cmdk-live-action:${selected.accountId}:${address}`)??'{}'),next)
+            await verifyOwnerJob(config,selected,pendingRecord,next)
             if(!client)throw new SetupError('Base confirmation client unavailable.',true)
             for(const tx of next.signed){const receipt=await client.waitForTransactionReceipt({hash:tx.hash as `0x${string}`,confirmations:2});if(receipt.status!=='success')throw new SetupError('A setup transaction reverted.',true)}
             const confirmed=await readLivePosition(config,selected.accountId,selected.owner)
             if(confirmed.errors?.length||confirmed.markets.some(m=>m.agentTrigger===null))throw new SetupError('Setup state is incomplete. Inspect the vault before retrying.',true)
             if(!active)return
-            if(key)sessionStorage.removeItem(key);localStorage.removeItem(`cmdk-live-action:${selected.accountId}:${address}`); setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); onComplete() }
+            if(key&&sessionStorage.getItem(key)===jobId)sessionStorage.removeItem(key);clearPendingAction(`cmdk-live-action:${selected.accountId}:${address}`,pendingRecord); setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); onComplete() }
         } else if (next.stage === 'failed') setState({ kind: next.http_status === 502 || next.base_sent?.length ? 'uncertain' : 'failed', message: next.error || 'Setup failed. Check the vault and transaction links before signing again.' })
         else { setState({ kind: 'working', message: 'The relayer is processing the owner-signed setup.' }); timer = window.setTimeout(poll, 1000) }
       } catch (error) {
@@ -100,7 +103,14 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
       if(position.errors?.length||position.markets.length!==config.createVault?.markets.length||position.markets.some(m=>m.readOnly||m.policyUnavailable))throw new SetupError('Read all registered markets and verify the deployment before repair.')
       const permissionAbi=parseAbi(['function allowance(address,address) view returns(uint256)','function isAuthorized(address,address) view returns(bool)'])
       const facts=await Promise.all(position.markets.map(async m=>{const [authorized,loan,collateral]=await Promise.all([client.readContract({address:m.morpho!,abi:permissionAbi,functionName:'isAuthorized',args:[position.baseAddress,m.executor!]}),client.readContract({address:m.loanToken,abi:permissionAbi,functionName:'allowance',args:[position.baseAddress,m.executor!]}),client.readContract({address:m.collateralToken,abi:permissionAbi,functionName:'allowance',args:[position.baseAddress,m.executor!]})]);return{id:m.id,executor:m.executor!,loanToken:m.loanToken,collateralToken:m.collateralToken,authorized,needsApproval:needsSetupApproval(loan,collateral),liquidationLtv:m.liquidationLtv,corridorSet:m.agentTrigger!==null&&vault.markets?.find(item=>item.id.toLowerCase()===m.id.toLowerCase())?.corridor_set===true,corridor:m.agentTarget!==null&&m.agentTrigger!==null&&m.floor!=null&&m.dailyBudget!=null?{target:m.agentTarget.toString(),act:m.agentTrigger.toString(),floor:m.floor.toString(),sell_budget:m.dailyBudget.toString(),migrate_allowed:!!m.migrateAllowed,exit_allowed:!!m.exitAllowed}:undefined}}))
-      const args=repairSetupArgs(config,rules,facts,!!vault.approved&&Object.entries(config.agent.measurement).every(([k,v])=>vault.approved![k]===v))
+      const independent=(!applySame&&backupMarket?.agentTrigger===null?backupValues:['50.0','70.0','20.0']).map(value=>{if(!/^\d+(\.\d)?$/.test(value))throw new SetupError('Use backup percentages with at most one decimal.');return Number(value)})
+      const overrides=backupMarket&&!applySame?{[backupMarket.id]:{...rules,target:independent[0],act:independent[1],budget:independent[2]}}:{}
+      const args=repairSetupArgs(config,rules,facts,!!vault.approved&&Object.entries(config.agent.measurement).every(([k,v])=>vault.approved![k]===v),overrides)
+      if(applySame&&liveMarket&&backupMarket){
+        const primary=position.markets.find(m=>m.id===liveMarket.id)
+        const backup=args.markets.find(m=>m.market===backupMarket.id)
+        if(primary?.agentTarget!=null&&primary.agentTrigger!=null&&primary.dailyBudget!=null&&backup?.corridor){backup.corridor={...backup.corridor,target:primary.agentTarget.toString(),act:primary.agentTrigger.toString(),sell_budget:primary.dailyBudget.toString()};if(BigInt(backup.corridor.act)>=backupMarket.liquidationLtv||BigInt(backup.corridor.floor)>=BigInt(backup.corridor.target))throw new SetupError('Shared rules do not fit the backup corridor. Configure independent backup rules.')}
+      }
       const now = await client.getBlock().then(block => Number(block.timestamp)).catch(() => Math.floor(Date.now() / 1000))
       const expiry=now+600
       const initial=JSON.parse(setupMessage(selected.accountId,nonce,expiry,config,rules))
@@ -108,12 +118,13 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
       setState({ kind: 'signing', message: 'Review and sign the exact setup message in your wallet.' })
       const signature = await signMessageAsync({ message: text })
       await checkSetupSignature(text, signature, address)
+      await assertFreshOwnerIntent(config,selected,text)
       if(!mounted.current||session.current!==expected)throw new SetupError('Wallet or vault changed. Reopen setup.')
       setState({ kind: 'working', message: 'Submitting the signed setup once…' })
       if(localStorage.getItem(lock))throw new SetupError('Another vault action started.')
       localStorage.setItem(lock,JSON.stringify(ownerPendingRecord(text,{operation:'setup'})))
       const id = await startSetupJob(config, selected.accountId, text, signature)
-      localStorage.setItem(lock,JSON.stringify({...JSON.parse(localStorage.getItem(lock)??'{}'),job:id}))
+      updatePendingAction(lock,{message:text},{job:id})
       sessionStorage.setItem(key, id)
       setJobId(id)
     } catch (error) {
@@ -130,7 +141,8 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
     {selected && <p className="setup-live__detail">Vault: {selected.accountId}</p>}
     {config?.agent.measurement && <><p className="setup-live__detail">Agent fingerprint: <code>{config.agent.measurement.mrtd.slice(0, 12)}…{config.agent.measurement.mrtd.slice(-8)}</code></p><p className="setup-live__detail">Version: {config.agent.version ?? 'Published measurement'} · Source commit: {config.agent.sourceCommit ?? 'Not published'}</p></>}
     {config?.createVault && <p className="setup-live__detail">Executor: {config.createVault.markets[0]?.executor}</p>}
-    {review && <div className="setup-live__review"><h3>Review before signing</h3><p>Only for unconfigured markets: Floor {rules.floor}%, Target {rules.target}%, Agent acts {rules.act}%, daily sell budget {rules.budget}%. Move to backup: {rules.migrate ? 'allowed' : 'off'}. Exit: {rules.exit ? 'allowed' : 'off'}.</p><p>Grants unlimited USDC and WETH allowances from the vault to its registered Executor and authorizes that Executor on Morpho. The approved agent version may register its limited key. Nothing leaves your position address. The message expires in 10 minutes.</p><p><a href="https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md" target="_blank" rel="noreferrer">How to compare the agent measurement ↗</a></p></div>}
+    {!applySame&&backupMarket&&backupMarket.agentTrigger===null&&<details><summary>Advanced · independent initial backup rules</summary>{['Target LTV','Trigger line','Daily budget'].map((label,i)=><label className="initial-backup-field" key={label}>{label} (%)<input inputMode="decimal" value={backupValues[i]} disabled={state.kind==='signing'||state.kind==='working'} onChange={event=>setBackupValues(backupValues.map((value,index)=>index===i?event.target.value:value))}/></label>)}</details>}
+    {review && <div className="setup-live__review"><h3>Review before signing</h3><p>Only for unconfigured markets: Floor {rules.floor}%, Target {rules.target}%, Agent acts {rules.act}%, daily sell budget {rules.budget}%. Move to backup: {rules.migrate ? 'allowed' : 'off'}. Exit: {rules.exit ? 'allowed' : 'off'}.</p>{!applySame&&backupMarket&&backupMarket.agentTrigger===null&&<p>Independent initial backup: Target {backupValues[0]}%, Trigger {backupValues[1]}%, Budget {backupValues[2]}%.</p>}<p>Grants unlimited USDC and WETH allowances from the vault to its registered Executor and authorizes that Executor on Morpho. The approved agent version may register its limited key. Nothing leaves your position address. The message expires in 10 minutes.</p><p><a href="https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md" target="_blank" rel="noreferrer">How to compare the agent measurement ↗</a></p></div>}
     {jobId && <div className="create-job__progress" aria-label="Setup progress">{labels.map((label, step) => <div key={label} className={step <= index ? 'is-reached' : ''}><span aria-hidden="true">{step < index || job?.stage === 'done' ? '✓' : step + 1}</span>{label}</div>)}</div>}
     {job?.near_tx && <p className="setup-live__detail"><a href={`https://testnet.nearblocks.io/txns/${encodeURIComponent(job.near_tx)}`} target="_blank" rel="noreferrer">View NEAR transaction ↗</a></p>}
     {job?.base_sent?.map(hash => <p className="setup-live__detail" key={hash}><a href={`https://sepolia.basescan.org/tx/${hash}`} target="_blank" rel="noreferrer">Base transaction {hash.slice(0, 12)}… ↗</a></p>)}

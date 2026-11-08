@@ -48,3 +48,21 @@ export function ownerTransactionsConsumed(signed: readonly { nonce: number; from
     Number.isSafeInteger(tx.nonce) && tx.nonce >= 0 && tx.nonce < confirmedNonce &&
     tx.from.toLowerCase() === vault.toLowerCase() && /^0x[0-9a-fA-F]{64}$/.test(tx.hash))
 }
+
+export function samePendingAction(current:PendingTransaction,expected:PendingTransaction) {
+  if(expected.message)return current.message===expected.message
+  if(expected.hash)return current.hash===expected.hash
+  if(expected.job)return current.job===expected.job
+  return !!expected.to&&!!expected.data&&expected.startedAt!==undefined&&current.to===expected.to&&current.data===expected.data&&current.startedAt===expected.startedAt
+}
+export function clearPendingAction(key:string,expected:PendingTransaction,storage:Pick<Storage,'getItem'|'removeItem'>=localStorage) {
+  const raw=storage.getItem(key)
+  if(!raw)return false
+  if(!samePendingAction(JSON.parse(raw),expected))return false
+  storage.removeItem(key);return true
+}
+export function updatePendingAction(key:string,expected:PendingTransaction,patch:Record<string,unknown>,storage:Pick<Storage,'getItem'|'setItem'>=localStorage) {
+  const current=JSON.parse(storage.getItem(key)??'{}') as PendingTransaction
+  if(!samePendingAction(current,expected))throw Error('The pending vault action changed. Its recovery record was preserved.')
+  const next={...current,...patch};storage.setItem(key,JSON.stringify(next));return next
+}

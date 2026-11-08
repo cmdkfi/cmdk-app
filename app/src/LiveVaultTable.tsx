@@ -1,3 +1,4 @@
+import {marketTitle} from './vault-layout.ts'
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
 import { loadConfig, type Vault } from './near.ts'
@@ -26,7 +27,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
         errors.push(...(read.value.errors ?? []))
         if (!read.value.markets.length && !read.value.errors?.length) errors.push(`Vault ${vault.number}: no configured markets.`)
         read.value.markets.forEach(market => rows.push({
-          marketLabel:market.label ?? `${market.id.slice(0,10)}…`, name: `${market.loanSymbol} / ${market.collateralSymbol}`, loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
+          marketLabel:market.label ?? `${market.id.slice(0,10)}…`, name: marketTitle(market), loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
           asset: market.collateralSymbol, assetId: market.collateralToken.toLowerCase(),
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
           value: market.priceUnavailable ? 'Oracle unavailable' : `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,

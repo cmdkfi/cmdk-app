@@ -58,3 +58,10 @@ test('setup repair can restore insufficient positive allowances as well as zero 
  assert.equal(needsSetupApproval(1n,max),true)
  assert.equal(needsSetupApproval(max,0n),true)
 })
+test('independent initial backup rules affect only unconfigured backup corridors',()=>{
+ const facts=[{id:'live',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:false,needsApproval:true,corridorSet:false},{id:'backup',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:false,needsApproval:true,corridorSet:false}]
+ const args=repairSetupArgs(config,rules,facts,false,{backup:{...rules,target:55,act:75,budget:10}})
+ assert.equal(args.markets[0].corridor.target,'500000000000000000');assert.equal(args.markets[1].corridor.target,'550000000000000000')
+ const existing=repairSetupArgs(config,rules,[facts[0],{...facts[1],corridorSet:true}],false,{backup:{...rules,target:55}})
+ assert.equal(existing.markets[1].corridor,null)
+})

@@ -63,7 +63,7 @@ export async function readSetupJob(config: AppConfig, job: string, fetcher: type
 
 export function hasMeasurement(value: AgentMeasurement | null): value is AgentMeasurement { return value !== null }
 
-export function repairSetupArgs(config: AppConfig, rules: InitialRules, facts: {id:string;executor:string;loanToken:string;collateralToken:string;authorized:boolean;needsApproval:boolean;corridorSet:boolean;liquidationLtv?:bigint;corridor?:{target:string;act:string;floor:string;sell_budget:string;migrate_allowed:boolean;exit_allowed:boolean}}[], measurementMatches:boolean) {
+export function repairSetupArgs(config: AppConfig, rules: InitialRules, facts: {id:string;executor:string;loanToken:string;collateralToken:string;authorized:boolean;needsApproval:boolean;corridorSet:boolean;liquidationLtv?:bigint;corridor?:{target:string;act:string;floor:string;sell_budget:string;migrate_allowed:boolean;exit_allowed:boolean}}[], measurementMatches:boolean, initialByMarket:Record<string,InitialRules>={}) {
   const initial=setupArgs(config,rules)
   const authorizations=new Set<string>(), approvals=new Set<string>()
   const markets=facts.map(fact=>{
@@ -73,7 +73,7 @@ export function repairSetupArgs(config: AppConfig, rules: InitialRules, facts: {
     const tokens=[fact.loanToken,fact.collateralToken].map(token=>`${executor}:${token.toLowerCase()}`)
     const approve=fact.needsApproval&&tokens.some(token=>!approvals.has(token))
     if(approve)tokens.forEach(token=>approvals.add(token))
-    const corridor=fact.corridorSet?null:fact.corridor??initial.markets[0].corridor
+    const corridor=fact.corridorSet?null:fact.corridor??(initialByMarket[fact.id]?setupArgs(config,initialByMarket[fact.id]).markets[0].corridor:initial.markets[0].corridor)
     if(corridor&&fact.liquidationLtv!==undefined&&BigInt(corridor.act)>=fact.liquidationLtv)throw new SetupError('Initial trigger must be below the actual market liquidation threshold.')
     return {market:fact.id,approve,authorize,corridor}
   })
