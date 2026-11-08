@@ -1,4 +1,4 @@
-import {ownerPendingRecord} from './owner-recovery.ts'
+import {ownerPendingRecord,verifyOwnerJob} from './owner-recovery.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import {parseAbi} from 'viem'
@@ -64,6 +64,7 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
           const receipts = next.receipts ?? []
           if (next.vault !== selected.accountId || !next.near_tx || !next.signed || receipts.length !== next.signed.length || receipts.some(item => item.status !== 1) || next.signed.some(tx=>!receipts.some(receipt=>receipt.hash.toLowerCase()===tx.hash.toLowerCase()))) setState({ kind: 'uncertain', message: 'The relayer marked setup done, but all planned Base receipts were not confirmed. Check your vault.' })
           else {
+            await verifyOwnerJob(config,selected,JSON.parse(localStorage.getItem(`cmdk-live-action:${selected.accountId}:${address}`)??'{}'),next)
             if(!client)throw new SetupError('Base confirmation client unavailable.',true)
             for(const tx of next.signed){const receipt=await client.waitForTransactionReceipt({hash:tx.hash as `0x${string}`,confirmations:2});if(receipt.status!=='success')throw new SetupError('A setup transaction reverted.',true)}
             const confirmed=await readLivePosition(config,selected.accountId,selected.owner)

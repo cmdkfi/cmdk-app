@@ -1,7 +1,8 @@
+import {nearQuery} from './near-rpc.ts'
 import {keccak256,parseTransaction,recoverTransactionAddress,type Hex} from 'viem'
 import type {AppConfig,Vault} from './near.ts'
 import {readRelayerHealth} from './relayer.ts'
-import {checkSetupSignature} from './vault-setup.ts'
+import {checkSetupSignature,type SetupJob} from './vault-setup.ts'
 import type {PendingTransaction} from './transaction-recovery.ts'
 export type SignedOwnerTransaction={raw:Hex;hash:Hex;from:string;nonce:number}
 export function ownerPendingRecord(message:string,extra:Record<string,unknown>={}) {
@@ -40,4 +41,29 @@ export async function readOwnerRecovery(config:AppConfig,vault:Vault,record:Pend
  const intent=JSON.parse(args.message) as {nonce?:number;vault?:string}
  if(String(intent.nonce)!==record.ownerNonce||intent.vault!==vault.accountId)throw Error('Owner nonce or vault intent differs.')
  return validateSignedOwnerTransactions(decode(result.status.SuccessValue),vault.baseAddress!)
+}
+
+export async function verifyOwnerJob(config:AppConfig,vault:Vault,record:PendingTransaction,job:SetupJob,fetcher:typeof fetch=fetch) {
+ if(job.vault!==vault.accountId||!job.near_tx)throw Error('The owner job has no matching NEAR transaction for this vault.')
+ const signed=await readOwnerRecovery(config,vault,record,job.near_tx,fetcher)
+ const sent=job.base_sent??[]
+ if(new Set(sent.map(hash=>hash.toLowerCase())).size!==sent.length||sent.some(hash=>!signed.some(tx=>tx.hash.toLowerCase()===hash.toLowerCase()))||job.stage==='done'&&sent.length!==signed.length)throw Error('Relayer Base hashes do not match the exact NEAR owner-call result.')
+ return signed
+}
+
+export async function unsubmittedOwnerExpired(config:AppConfig,vault:Vault,record:PendingTransaction,fetcher:typeof fetch=fetch) {
+ if(!record.message||!record.ownerNonce||record.expiry===undefined)return false
+ const intent=JSON.parse(record.message) as {protocol?:string;network?:string;vault?:string;nonce?:number;expiry?:number}
+ if(intent.protocol!=='cmdk-vault/1'||intent.network!=='testnet'||intent.vault!==vault.accountId||String(intent.nonce)!==record.ownerNonce||intent.expiry!==record.expiry)return false
+ const snapshot=await nearQuery<{block_hash?:string;result?:number[]}>(config.nearRpcUrl,{request_type:'call_function',finality:'final',account_id:vault.accountId,method_name:'get_state',args_base64:'e30='},fetcher)
+ if(!snapshot.block_hash||!Array.isArray(snapshot.result))throw Error('Final NEAR state identity unavailable.')
+ const state=JSON.parse(new TextDecoder().decode(new Uint8Array(snapshot.result))) as {owner?:string;base_address?:string;owner_nonce?:string|number}
+ if(state.owner?.toLowerCase()!==vault.owner.toLowerCase()||state.base_address?.toLowerCase()!==vault.baseAddress?.toLowerCase()||!/^\d+$/.test(String(state.owner_nonce)))throw Error('Final NEAR owner state does not match the recovery vault.')
+ if(BigInt(state.owner_nonce!)>=BigInt(record.ownerNonce))return false
+ const response=await fetcher(config.nearRpcUrl,{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(12000),body:JSON.stringify({jsonrpc:'2.0',id:'recovery-expiry',method:'block',params:{block_id:snapshot.block_hash}})})
+ if(!response.ok)throw Error('Final NEAR block unavailable.')
+ const data=await response.json() as {result?:{header?:{hash?:string;timestamp_nanosec?:string}}}
+ const header=data.result?.header
+ if(header?.hash!==snapshot.block_hash||!/^\d+$/.test(header.timestamp_nanosec??''))throw Error('Final NEAR block timestamp does not match its state snapshot.')
+ return BigInt(header.timestamp_nanosec!)/1000000000n>BigInt(record.expiry)
 }
