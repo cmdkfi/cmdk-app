@@ -16,3 +16,6 @@
 .agent-history h3, .agent-history h4 { margin-block: 20px 12px; }
 
 .vault-market-role { display: block; color: #b5b5bb; font-size: 13px; text-transform: capitalize; margin-top: 6px; }
+
+.activity-tools select {font-size:16px;}
+.near-history li>a,.agent-history-row>a {display:inline-flex;align-items:center;min-height:44px;padding-block:8px;}

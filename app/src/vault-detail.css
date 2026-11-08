@@ -15,3 +15,11 @@
 
 .vault-agent-limits summary,.cockpit-actions>details>summary { min-height:44px; padding-block:12px; cursor:pointer; color:var(--muted); font-size:13px; }
 .vault-agent-limits summary:focus-visible,.cockpit-actions>details>summary:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
+
+.live-actions input,.live-actions select {font-size:16px;}
+.live-actions label:has(input[type="checkbox"]) {display:flex;align-items:center;min-height:44px;gap:12px;}
+.live-actions input[type="checkbox"] {width:20px;height:20px;min-height:20px;padding:0;flex:none;}
+.vault-detail details>summary {min-height:44px;padding-block:12px;cursor:pointer;}
+.vault-detail details>summary:focus-visible {outline:2px solid var(--ink);outline-offset:3px;}
+.live-action-tabs.risk-actions {grid-template-columns:repeat(2,minmax(0,1fr));}
+.verification-field a {display:inline-block;min-height:44px;}
