@@ -1,3 +1,4 @@
+import {RevokeAgent} from './RevokeAgent.tsx'
 import { useEffect, useId, useRef, useState } from 'react'
 import { loadConfig, viewNear, type AgentMeasurement, type Vault } from './near.ts'
 import { readLivePosition, type MarketPosition, type VaultState } from './positions.ts'
@@ -53,7 +54,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         {approved && Object.entries(approved).map(([key,value]) => field(key,value))}
         <div><dt>Target / Trigger / Daily sell budget</dt><dd>{[policy?.agentTarget ?? null,policy?.agentTrigger ?? null,policy?.dailyBudget ?? null].map(n => n === null ? 'Not configured' : `${(Number(n)/1e16).toFixed(1)}%`).join(' / ')}</dd></div>
       </dl><p>Policy values are read from the Base executor corridor for this NEAR vault’s Base address. Heartbeat interval and raw quote are not exposed by get_state.</p></>}
-      <p role="status">{copied}</p>
+      <RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
     </dialog>
   </>
 }
