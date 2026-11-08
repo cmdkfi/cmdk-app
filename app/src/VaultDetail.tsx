@@ -83,7 +83,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     return () => window.clearInterval(timer)
   }, [key])
   const current = read?.key === key ? read : null
-  const markets=(current?.position?.markets??[]).map(market=>current?.error?{...market,readOnly:true,policyUnavailable:true,autopilot:'Unavailable'}:market)
+  const markets=(current?.position?.markets??[]).map(market=>current?.error?{...market,readOnly:true,snapshotUnavailable:true,policyUnavailable:true,autopilot:'Unavailable'}:market)
   const live=markets.find(market=>market.label==='live')??markets.find(market=>market.label!=='backup')??markets[0]
   const backup=markets.find(market=>market.label==='backup'&&market.id!==live?.id)
   return <div className="vault-detail">
