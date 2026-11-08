@@ -48,7 +48,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
   return <div>
     <p className="demo-summary">Read from NEAR and Base Sepolia. Debt and LTV include interest calculated at the read block. Autopilot reflects registration, rules and a recent agent observation, not a guarantee of execution or a successful market read.</p>
     <PrototypeButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh positions</PrototypeButton>
-    {loading && <p role="status">Reading vault positions…</p>}
+    <p className="position-read-status" role="status">{loading ? 'Reading vault positions…' : ' '}</p>
     {current?.errors.map(error => <p role="alert" key={error}>{error}</p>)}
     {current && current.rows.length > 0 && <VaultTable vaults={current.rows} />}
     {current && <p className="demo-summary">Last read {new Date(current.time).toLocaleTimeString()} · Updates every 30 seconds while visible.</p>}

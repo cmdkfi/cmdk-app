@@ -19,3 +19,5 @@
 
 .activity-tools select {font-size:16px;}
 .near-history li>a,.agent-history-row>a {display:inline-flex;align-items:center;min-height:44px;padding-block:8px;}
+
+.position-read-status {min-height:1.5em;}
