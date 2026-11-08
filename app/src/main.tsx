@@ -18,6 +18,6 @@ function App() {
     return () => window.removeEventListener('hashchange', changed)
   }, [])
   const page = hash.slice(1).split(/[/?]/)[0]
-  return <VaultHome activity={page === 'activity'} detail={page === 'vault'} create={page === 'create'} />
+  return <VaultHome activity={page === 'activity'} detail={page === 'vault'} create={page === 'create'} verification={page==='verify'?new URLSearchParams(hash.split('?')[1]).get('vault')??'':undefined} />
 }
 createRoot(document.getElementById('root')!).render(<WagmiProvider config={walletConfig}><QueryClientProvider client={new QueryClient()}><VaultSelectionProvider><App /></VaultSelectionProvider></QueryClientProvider></WagmiProvider>)

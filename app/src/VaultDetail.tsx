@@ -53,7 +53,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
     {!market.readOnly&&market.debt>0n&&(market.ltv===null||market.agentTrigger!==null&&market.ltv>=market.agentTrigger)&&<div className="live-action-tabs risk-actions"><PrototypeButton onClick={()=>setRequestedAction(previous=>({action:'Deposit',request:(previous?.request??0)+1}))}>Add collateral</PrototypeButton><PrototypeButton onClick={()=>setRequestedAction(previous=>({action:'Repay',request:(previous?.request??0)+1}))}>Repay debt</PrototypeButton></div>}
-    <VerificationDetails vault={vault} market={market} />
+    <VerificationDetails vault={vault} market={market}/>
     </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} requestedAction={requestedAction}/>{!market.readOnly&&<VaultFunding key={`funding:${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh}/>}</aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
@@ -87,7 +87,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
   const live=markets.find(market=>market.label==='live')??markets.find(market=>market.label!=='backup')??markets[0]
   const backup=markets.find(market=>market.label==='backup'&&market.id!==live?.id)
   return <div className="vault-detail">
-    <div className="vault-detail-heading"><a href="#connect">← Vaults</a>{vault && <PrototypeButton disabled={!current} onClick={() => setRevision(value => value + 1)}>Refresh</PrototypeButton>}</div>
+    <div className="vault-detail-heading"><a href="#connect">← Vaults</a>{vault&&<VerificationDetails vault={vault} inspectionOnly triggerLabel="Vault verification"/>} {vault && <PrototypeButton disabled={!current} onClick={() => setRevision(value => value + 1)}>Refresh</PrototypeButton>}</div>
     {vault&&<VaultRecovery key={`recovery:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/>}
     {vault&&<HeldCancellation key={`cancel:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/> }
     {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : !current.position ? <p role="alert">{current.error??'Vault data unavailable.'}</p> : <>

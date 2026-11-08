@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { loadConfig, viewNear, type AgentMeasurement, type Vault } from './near.ts'
 import { readLivePosition, type MarketPosition, type VaultState } from './positions.ts'
 import { PrototypeButton, PrototypeIconButton } from './ui/PrototypeControls.tsx'
-export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<MarketPosition,'id'|'label'|'executor'|'morpho'|'readOnly'>}) {
+export function VerificationDetails({vault, market, inspectionOnly=false, autoOpen=false, triggerLabel='Verification details'}: {vault:Vault;market?:Pick<MarketPosition,'id'|'label'|'executor'|'morpho'|'readOnly'>;inspectionOnly?:boolean;autoOpen?:boolean;triggerLabel?:string}) {
   const now=useNow()
   const [agentActive,setAgentActive]=useState(false),[agentRevision,setAgentRevision]=useState(0)
   const generation=useRef(0)
@@ -33,7 +33,8 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<Ma
   useEffect(()=>{if(!copied)return;const timer=setTimeout(()=>{setCopied('');setCopiedValue('')},1500);return()=>clearTimeout(timer)},[copied,copiedValue])
   const live = useRef(true)
   useEffect(() => { live.current = true; return () => { live.current = false } }, [])
-  useEffect(()=>{generation.current++;dialog.current?.close();setAgentActive(false);setLoading(false);setState(undefined);setPolicy(undefined)},[vault.accountId,vault.owner,market.id])
+  useEffect(()=>{generation.current++;dialog.current?.close();setAgentActive(false);setLoading(false);setState(undefined);setPolicy(undefined)},[vault.accountId,vault.owner,market?.id])
+  useEffect(()=>{if(autoOpen)void open()},[autoOpen,vault.accountId,vault.owner,market?.id])
   async function open(refreshEvidence=true) {
     const run=++generation.current;const current=()=>live.current&&generation.current===run
     setLinksOpen(false);setAgentActive(true);if(refreshEvidence)setAgentRevision(value=>value+1)
@@ -48,7 +49,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<Ma
       if(current()){setState(next);setPublished(config.agent.measurement);setReadAt(Date.now())}
       await Promise.allSettled([
         (async()=>{try {const result=await readNearSecurity(config,vault,next.agent?.public_key);if(current())setSecurity(result)}catch(e){if(current())setSecurityError((e as Error).message)}})(),
-        (async()=>{try {const position=await readLivePosition(config,vault.accountId,vault.owner);const fresh=position.markets.find(item=>item.id===market.id);if(!fresh)throw Error('Selected market is no longer configured.');if(current())setPolicy(fresh)}catch(e){if(current())setPolicyError((e as Error).message)}})()
+        (async()=>{try {const position=await readLivePosition(config,vault.accountId,vault.owner);const fresh=position.markets.find(item=>item.id===(market?.id??next.markets?.[0]?.id));if(!fresh)throw Error('Selected market is no longer configured.');if(current())setPolicy(fresh)}catch(e){if(current())setPolicyError((e as Error).message)}})()
       ])
     } catch (e) { if (current()) setError((e as Error).message) } finally { if (current()) setLoading(false) }
   }
@@ -58,7 +59,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<Ma
   async function copy(text:string) { try { await navigator.clipboard.writeText(text); setCopied('Copied');setCopiedValue(text) } catch { setCopied('Copy unavailable. Open raw data for the full value.');setCopiedValue('') } }
   const short=(value:string)=>value.length>24?`${value.slice(0,12)}…${value.slice(-8)}`:value
   const field = (label:string,value:string,href?:string) => <div className="verification-field" key={label}><dt>{label}</dt><dd>{href ? <a title={value} href={href} target="_blank" rel="noreferrer">{short(value)} ↗</a> : <code title={value}>{short(value)}</code>}<PrototypeButton onClick={() => void copy(value)} aria-label={`Copy ${label}`}>{copiedValue===value?'Copied':'Copy'}</PrototypeButton></dd></div>
-  return <><PrototypeButton onClick={() => void open()} aria-haspopup="dialog">Verification details</PrototypeButton>
+  return <><PrototypeButton onClick={() => void open()} aria-haspopup="dialog">{triggerLabel}</PrototypeButton>
     <dialog ref={dialog} className="connect-dialog verification-dialog" aria-label="Verification details" onClose={()=>{generation.current++;setAgentActive(false);setLoading(false);setLinksOpen(false)}}>
       <header className="verification-heading">
         <div className="verification-title"><h2>Verification</h2><div className="verification-header-actions">
@@ -69,7 +70,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<Ma
           </div>
           <PrototypeIconButton buttonRef={closeButton} aria-label="Close verification details" onClick={() => dialog.current?.close()}>×</PrototypeIconButton>
         </div></div>
-        <p>Morpho · WETH/USDC{market.label==='backup'?' · backup':''}</p>
+        <p>{market?`Morpho · WETH/USDC${market.label==='backup'?' · backup':''}`:'Vault verification'}{inspectionOnly?' · read-only':''}</p>
         <div className="verification-address"><a title={vault.accountId} href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer">{short(vault.accountId)} ↗</a><PrototypeIconButton aria-label="Copy vault address" title={copiedValue===vault.accountId?'Copied':'Copy vault address'} onClick={()=>void copy(vault.accountId)}><VerificationIcon kind={copiedValue===vault.accountId?'check':'copy'}/></PrototypeIconButton></div>
         <span className="verification-feedback" role="status">{copied}</span>
       </header>
@@ -106,14 +107,14 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<Ma
       </details>
       <details className="verification-disclosure"><summary>Contracts & raw data</summary><dl>
         {field('NEAR vault · get_state',vault.accountId,`https://testnet.nearblocks.io/address/${vault.accountId}#contract`)}
-        {market.executor && field('Base Executor',market.executor,`https://sepolia.basescan.org/address/${market.executor}#code`)}
-        {market.morpho && field('Morpho Blue',market.morpho,`https://sepolia.basescan.org/address/${market.morpho}#readContract`)}
-        {field('Market ID',market.id)}
+        {market?.executor && field('Base Executor',market.executor,`https://sepolia.basescan.org/address/${market.executor}#code`)}
+        {market?.morpho && field('Morpho Blue',market.morpho,`https://sepolia.basescan.org/address/${market.morpho}#readContract`)}
+        {market&&field('Market ID',market.id)}
       </dl><details><summary>Full contract state</summary><pre>{state?JSON.stringify(state,null,2):'NEAR state unavailable'}</pre></details>
       {evidenceUrl && <a href={evidenceUrl} target="_blank" rel="noreferrer">Agent decision transcripts ↗</a>}</details>
       <details className="verification-disclosure verification-permissions"><summary>Agent permissions</summary>
-        {state && !matches && !market.readOnly && <AgentApproval vault={vault} onConfirmed={()=>void open()} />}
-        <RevokeAgent vault={vault} onConfirmed={()=>void open()} />
+        {state && !matches && !inspectionOnly && market && !market.readOnly && <AgentApproval vault={vault} onConfirmed={()=>void open()} />}
+        {inspectionOnly?<p>Read-only inspection. Manage agent permissions from your vault cockpit.</p>:<RevokeAgent vault={vault} onConfirmed={()=>void open()} />}
       </details>
       </VerificationDisclosure>
       </div>
