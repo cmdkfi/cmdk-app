@@ -1,19 +1,23 @@
+import {VerificationDisclosure,VerificationIcon} from './ui/VerificationDisclosure.tsx'
 import {AgentEvidence} from './AgentEvidence.tsx'
 import {useNow} from './use-now.ts'
 import {protectionLabel} from './protection-clock.ts'
 import {AgentApproval} from './AgentApproval.tsx'
 import {readNearSecurity} from './near-security.ts'
 import {RevokeAgent} from './RevokeAgent.tsx'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadConfig, viewNear, type AgentMeasurement, type Vault } from './near.ts'
 import { readLivePosition, type MarketPosition, type VaultState } from './positions.ts'
 import { PrototypeButton, PrototypeIconButton } from './ui/PrototypeControls.tsx'
-export function VerificationDetails({vault, market}: {vault:Vault;market:MarketPosition}) {
+export function VerificationDetails({vault, market}: {vault:Vault;market:Pick<MarketPosition,'id'|'label'|'executor'|'morpho'|'readOnly'>}) {
   const now=useNow()
   const [agentActive,setAgentActive]=useState(false),[agentRevision,setAgentRevision]=useState(0)
   const generation=useRef(0)
-  const headingId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
+  const closeButton=useRef<HTMLButtonElement>(null)
+  const [linksOpen,setLinksOpen]=useState(false)
+  const links=useRef<HTMLDivElement>(null),linksTrigger=useRef<HTMLButtonElement>(null)
+  useEffect(()=>{if(!linksOpen)return;const outside=(event:PointerEvent)=>{if(!links.current?.contains(event.target as Node))setLinksOpen(false)};document.addEventListener('pointerdown',outside);return()=>document.removeEventListener('pointerdown',outside)},[linksOpen])
   const [policy,setPolicy] = useState<MarketPosition>()
   const [readAt,setReadAt] = useState<number>()
   const [evidenceUrl,setEvidenceUrl]=useState('')
@@ -26,13 +30,14 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const [copied,setCopied] = useState('')
   const [copiedValue,setCopiedValue] = useState('')
   const [loading,setLoading] = useState(false)
+  useEffect(()=>{if(!copied)return;const timer=setTimeout(()=>{setCopied('');setCopiedValue('')},1500);return()=>clearTimeout(timer)},[copied,copiedValue])
   const live = useRef(true)
   useEffect(() => { live.current = true; return () => { live.current = false } }, [])
   useEffect(()=>{generation.current++;dialog.current?.close();setAgentActive(false);setLoading(false);setState(undefined);setPolicy(undefined)},[vault.accountId,vault.owner,market.id])
   async function open(refreshEvidence=true) {
     const run=++generation.current;const current=()=>live.current&&generation.current===run
-    setAgentActive(true);if(refreshEvidence)setAgentRevision(value=>value+1)
-    if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setPolicyError('');setState(undefined);setPolicy(undefined);setCopied('');setCopiedValue('');setSecurity(undefined);setSecurityError('');setReadAt(undefined);setPublished(null)
+    setLinksOpen(false);setAgentActive(true);if(refreshEvidence)setAgentRevision(value=>value+1)
+    if (!dialog.current?.open){dialog.current?.showModal();closeButton.current?.focus()} setLoading(true); setError('');setPolicyError('');setState(undefined);setPolicy(undefined);setCopied('');setCopiedValue('');setSecurity(undefined);setSecurityError('');setReadAt(undefined);setPublished(null)
     try {
       const config = await loadConfig()
       if(!current())return
@@ -54,19 +59,27 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const short=(value:string)=>value.length>24?`${value.slice(0,12)}…${value.slice(-8)}`:value
   const field = (label:string,value:string,href?:string) => <div className="verification-field" key={label}><dt>{label}</dt><dd>{href ? <a title={value} href={href} target="_blank" rel="noreferrer">{short(value)} ↗</a> : <code title={value}>{short(value)}</code>}<PrototypeButton onClick={() => void copy(value)} aria-label={`Copy ${label}`}>{copiedValue===value?'Copied':'Copy'}</PrototypeButton></dd></div>
   return <><PrototypeButton onClick={() => void open()} aria-haspopup="dialog">Verification details</PrototypeButton>
-    <dialog ref={dialog} className="connect-dialog verification-dialog" aria-labelledby={headingId} onClose={()=>{generation.current++;setAgentActive(false);setLoading(false)}}>
+    <dialog ref={dialog} className="connect-dialog verification-dialog" aria-label="Verification details" onClose={()=>{generation.current++;setAgentActive(false);setLoading(false);setLinksOpen(false)}}>
       <header className="verification-heading">
-        <div className="verification-title"><h2 id={headingId}>Verification details</h2><PrototypeIconButton aria-label="Close verification details" onClick={() => dialog.current?.close()}>×</PrototypeIconButton></div>
+        <div className="verification-title"><h2>Verification</h2><div className="verification-header-actions">
+          <PrototypeIconButton aria-label="Refresh telemetry" title="Refresh telemetry" disabled={loading} onClick={()=>void open()}><VerificationIcon kind="refresh"/></PrototypeIconButton>
+          <div className="verification-links" ref={links} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget))setLinksOpen(false)}} onKeyDown={event=>{if(event.key==='Escape'&&linksOpen){event.preventDefault();event.stopPropagation();setLinksOpen(false);linksTrigger.current?.focus()}}}>
+            <button ref={linksTrigger} className="prototype-icon-button" aria-label="More verification links" aria-expanded={linksOpen} onClick={()=>setLinksOpen(value=>!value)}><VerificationIcon kind="more"/></button>
+            {linksOpen&&<nav className="prototype-filter-panel verification-links-panel" aria-label="Verification links"><a href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer" onClick={()=>setLinksOpen(false)}>Open vault in explorer ↗</a>{evidenceUrl&&<a href={evidenceUrl} target="_blank" rel="noreferrer" onClick={()=>setLinksOpen(false)}>Open transcript index ↗</a>}</nav>}
+          </div>
+          <PrototypeIconButton buttonRef={closeButton} aria-label="Close verification details" onClick={() => dialog.current?.close()}>×</PrototypeIconButton>
+        </div></div>
         <p>Morpho · WETH/USDC{market.label==='backup'?' · backup':''}</p>
-        <div className="verification-address"><a href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer">{short(vault.accountId)} ↗</a><PrototypeButton aria-label="Copy vault address" onClick={()=>void copy(vault.accountId)}>{copiedValue===vault.accountId?'Copied':'Copy'}</PrototypeButton></div>
-        <PrototypeButton disabled={loading} onClick={()=>void open()}>Refresh telemetry</PrototypeButton>
+        <div className="verification-address"><a title={vault.accountId} href={`https://testnet.nearblocks.io/address/${vault.accountId}#contract`} target="_blank" rel="noreferrer">{short(vault.accountId)} ↗</a><PrototypeIconButton aria-label="Copy vault address" title={copiedValue===vault.accountId?'Copied':'Copy vault address'} onClick={()=>void copy(vault.accountId)}><VerificationIcon kind={copiedValue===vault.accountId?'check':'copy'}/></PrototypeIconButton></div>
         <span className="verification-feedback" role="status">{copied}</span>
       </header>
       <div className="verification-body">
+      {copied.startsWith('Copy unavailable')&&<p role="alert">{copied}</p>}
       <dl className="verification-overview" aria-label="Contract verification summary"><div><dt>Agent registration</dt><dd>{state ? registered?'Registered · unexpired':'No unexpired registration' : loading?'Reading NEAR…':'Unavailable'}</dd></div></dl>
-      {error && <div className="verification-source-error" role="alert"><strong>NEAR state unavailable</strong><p>{error}</p><PrototypeButton disabled={loading} onClick={()=>void open(false)}>Retry NEAR state</PrototypeButton></div>}
-      {agentActive&&<AgentEvidence vault={vault} active={agentActive} revision={agentRevision} approved={state?.approved} agentKey={state?.agent?.public_key} registrationExpires={state?.agent?.expires_at}/>}
-      <details className="verification-disclosure"><summary>Agent registration & policy</summary>
+      {error && <div className="verification-inline-error" role="alert"><span>NEAR state couldn’t be verified.</span><PrototypeButton disabled={loading} onClick={()=>void open(false)} aria-label="Retry NEAR state">Retry</PrototypeButton></div>}
+      {agentActive&&<AgentEvidence vault={vault} active={agentActive} revision={agentRevision} approved={state?.approved} agentKey={state?.agent?.public_key} registrationExpires={state?.agent?.expires_at} registration={<>
+      <VerificationDisclosure title="Registration" status={state?registered?'Registered':'Not registered':loading?'Reading…':'Unavailable'}>
+      {error&&<p>NEAR state unavailable: {error}</p>}
       <p>Registration and attestation state are read from the NEAR vault. Market policy is read from the Base executor.</p>
       {readAt && <p>NEAR state read {new Date(readAt).toLocaleString()}</p>}
       {loading && <p role="status">Reading contract state and market policy…</p>}
@@ -85,8 +98,9 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         <div><dt>Floor / Migration / Exit</dt><dd>{policy?.floor == null ? 'Unavailable' : `${(Number(policy.floor)/1e16).toFixed(1)}%`} / {policy?.migrateAllowed===undefined?'Unavailable':policy.migrateAllowed?'allowed':'disabled'} / {policy?.exitAllowed===undefined?'Unavailable':policy.exitAllowed?'allowed':'disabled'}</dd></div>
         <div><dt>Target / Trigger / Daily sell budget</dt><dd>{!policy||policy.policyUnavailable?'Unavailable':[policy.agentTarget,policy.agentTrigger,policy.dailyBudget??null].map(n => n === null ? 'Not configured' : `${(Number(n)/1e16).toFixed(1)}%`).join(' / ')}</dd></div>
       </dl><p>Policy values are read from the Base executor corridor for this NEAR vault’s Base address. Heartbeat interval and raw quote are not exposed by get_state.</p></>}
-      </details>
-      <details className="verification-disclosure"><summary>NEAR account security</summary>
+      </VerificationDisclosure>
+      </>}/> }
+      <VerificationDisclosure title="Advanced"><details><summary>NEAR account security</summary>
       {securityError && <div role="alert"><p>NEAR account security unavailable: {securityError}</p><PrototypeButton disabled={loading} onClick={()=>void open(false)}>Retry account security</PrototypeButton></div>}
       {security && <><p>{security.codeMatches ? 'Vault code hash matches the factory configuration.' : 'Vault code hash does not match the factory configuration.'}</p><p>{security.restricted ? 'Exactly one registered agent key, restricted to reduce / migrate / exit on this vault.' : 'Access-key restrictions do not match the expected single registered agent key. Inspect the raw permissions.'}</p><dl>{field('Vault code hash',security.account.global_contract_hash ?? security.account.code_hash)}{security.factoryCodeHash && field('Factory code hash',security.factoryCodeHash)}</dl><details><summary>Raw access-key permissions</summary><pre>{JSON.stringify(security.keys,null,2)}</pre></details></>}
       </details>
@@ -101,6 +115,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         {state && !matches && !market.readOnly && <AgentApproval vault={vault} onConfirmed={()=>void open()} />}
         <RevokeAgent vault={vault} onConfirmed={()=>void open()} />
       </details>
+      </VerificationDisclosure>
       </div>
     </dialog>
   </>
