@@ -6,8 +6,8 @@ export function PrototypeButton({ primary = false, className = '', buttonRef, ..
   return <button ref={buttonRef} {...props} className={`prototype-button ${primary ? 'is-primary' : ''} ${className}`} />
 }
 
-export function PrototypeIconButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button {...props} className="prototype-icon-button" />
+export function PrototypeIconButton({buttonRef,...props}: ButtonHTMLAttributes<HTMLButtonElement> & {buttonRef?:Ref<HTMLButtonElement>}) {
+  return <button ref={buttonRef} {...props} className="prototype-icon-button" />
 }
 
 export function PrototypeSurface({ children, className = '' }: { children: ReactNode; className?: string }) {
