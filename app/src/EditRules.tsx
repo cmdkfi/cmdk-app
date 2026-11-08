@@ -7,7 +7,7 @@ import type {MarketPosition,VaultState} from './positions.ts'
 import {checkSetupSignature,startSetupJob,readSetupJob} from './vault-setup.ts'
 import {PrototypeButton} from './ui/PrototypeControls.tsx'
 const percent=(value:bigint)=>{const text=formatUnits(value,16);return text.includes('.')?text:`${text}.0`}
-const abi=parseAbi(['function corridors(address,bytes32) view returns(uint64 target,uint64 act,uint64 floor,uint64 sellBudget,bool migrateAllowed,bool exitAllowed,bool set)'])
+const abi=parseAbi(['function setCorridor(bytes32,(uint64 target,uint64 act,uint64 floor,uint64 sellBudget,bool migrateAllowed,bool exitAllowed,bool set),uint256)', 'function corridors(address,bytes32) view returns(uint64 target,uint64 act,uint64 floor,uint64 sellBudget,bool migrateAllowed,bool exitAllowed,bool set)'])
 export function EditRules({vault,market,onRefresh}:{vault:Vault;market:MarketPosition;onRefresh:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null),flight=useRef(false)
  const client=usePublicClient({chainId:84532}),{address,chainId}=useAccount(),{signMessageAsync}=useSignMessage()
@@ -29,6 +29,8 @@ export function EditRules({vault,market,onRefresh}:{vault:Vault;market:MarketPos
  if(state.owner?.toLowerCase()!==address.toLowerCase())throw Error('Connected wallet is not the vault owner.')
  const expiry=Number((await client.getBlock()).timestamp)+600
  const args={market:market.id,...edited}
+ if(!market.executor)throw Error('Executor unavailable.')
+ await client.simulateContract({account:vault.baseAddress as Hex,address:market.executor,abi,functionName:'setCorridor',args:[market.id,{target:BigInt(edited.target),act:BigInt(edited.act),floor:BigInt(edited.floor),sellBudget:BigInt(edited.sell_budget),migrateAllowed:edited.migrate_allowed,exitAllowed:edited.exit_allowed,set:false},BigInt(expiry)]})
  const message=JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault:vault.accountId,method:'set_corridor',args,nonce:Number(state.owner_nonce)+1,expiry})
  setMessage('Confirm the updated rules in your wallet.')
  assertSession(expected);const signature=await signMessageAsync({message});assertSession(expected);await checkSetupSignature(message,signature,address)
