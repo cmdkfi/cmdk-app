@@ -54,3 +54,10 @@ test('job confirmation is bound to its exact NEAR result, including NEAR-only ow
  await assert.rejects(verifyOwnerJob(config,vault,record,{...job,base_sent:['0x'+'aa'.repeat(32)]},fetcher),/Base hashes/)
  await assert.rejects(verifyOwnerJob(config,vault,record,{...job,vault:'other.testnet'},fetcher),/matching NEAR/)
 })
+import {assertFreshOwnerIntent} from './owner-recovery.ts'
+test('owner state is checked again after signing before creating a pending request',async()=>{
+ const vault={accountId:'v3.factory.testnet',owner:account.address},config={nearRpcUrl:'https://near'},message=JSON.stringify({vault:vault.accountId,nonce:4,expiry:2000000000})
+ const rpc=nonce=>async()=>Response.json({result:{result:[...new TextEncoder().encode(JSON.stringify({owner:account.address,owner_nonce:nonce}))]}})
+ await assertFreshOwnerIntent(config,vault,message,rpc(3))
+ await assert.rejects(assertFreshOwnerIntent(config,vault,message,rpc(4)),/changed while signing/)
+})
