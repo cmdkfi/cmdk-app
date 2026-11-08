@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { marketMath } from './positions.ts'
+import { marketMath, protectionStatus } from './positions.ts'
 
 test('calculates stored Morpho debt, collateral value and LTV with integer rounding', () => {
   const result = marketMath(2n * 10n ** 18n, 2_500_000_000n, 2_500_000_000n, 2_500_000_000n, 2_500n * 10n ** 24n)
@@ -13,4 +13,16 @@ test('zero collateral cannot produce a finite LTV', () => {
   const result = marketMath(0n, 1n, 1_000_000n, 1n, 2_500n * 10n ** 24n)
   assert.equal(result.collateralValue, 0n)
   assert.equal(result.ltv, null)
+})
+
+const agent = { public_key: 'key', expires_at: 2000 }
+const observation = { agent_status: 'active', base_address: '0xABC', expires_at: 2000, last_tick_unix: 990 }
+test('active protection requires configured rules and matching fresh observation', () => {
+  assert.equal(protectionStatus(agent, true, false, observation, '0xabc', 1000), 'Active')
+  assert.equal(protectionStatus(agent, false, false, observation, '0xabc', 1000), 'Not configured')
+  assert.equal(protectionStatus(agent, true, true, observation, '0xabc', 1000), 'Closed for agent')
+  assert.equal(protectionStatus(agent, true, false, null, '0xabc', 1000), 'Unavailable')
+  assert.equal(protectionStatus(agent, true, false, { ...observation, last_tick_unix: 800 }, '0xabc', 1000), 'Unavailable')
+  assert.equal(protectionStatus(agent, true, false, observation, '0xdef', 1000), 'Unavailable')
+  assert.equal(protectionStatus(agent, true, false, observation, '0xabc', 2000), 'Expired')
 })

@@ -24,6 +24,16 @@ export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConf
     !('createVault' in value) || (value.createVault !== null && (typeof value.createVault !== 'object' || !Array.isArray(value.createVault.markets)))) {
     throw new Error('App configuration does not match the supported testnet.')
   }
+  // Read-only discovery fallback from the configured relayer; never enables creation.
+  if (!value.near.factory) {
+    const health = await fetcher(`${value.relayerUrl}/health`, { signal: AbortSignal.timeout(12000), cache: 'no-store' })
+    if (!health.ok) throw new Error('Factory discovery is unavailable. Please retry.')
+    const published = await health.json()
+    if (published.chain_id !== value.baseChainId || published.near_network !== value.nearNetwork ||
+      published.factory_exists !== true || typeof published.factory !== 'string' ||
+      !/^[a-z0-9._-]+\.testnet$/.test(published.factory)) throw new Error('The relayer did not publish a supported testnet factory.')
+    value.near = { factory: published.factory }
+  }
   return value
 }
 

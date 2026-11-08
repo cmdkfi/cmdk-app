@@ -42,3 +42,12 @@ test('ignores a saved vault that does not belong to the discovered owner', () =>
 test('requires the expected network configuration', async () => {
   await assert.rejects(loadConfig(async () => ({ ok: true, json: async () => ({ ...config, baseChainId: 1 }) })), /supported testnet/)
 })
+
+test('uses validated relayer factory for reading without enabling creation', async () => {
+  const base = { ...config, baseRpcUrl: 'https://rpc.example', relayerUrl: 'https://relayer.example', relayerUrlFallback: '', near: { factory: null }, agent: { measurement: null }, createVault: null }
+  const fetcher = async url => ({ ok: true, json: async () => url === '/config.json' ? structuredClone(base) : { chain_id: 84532, near_network: 'testnet', factory_exists: true, factory: 'published.testnet' } })
+  const loaded = await loadConfig(fetcher)
+  assert.equal(loaded.near.factory, 'published.testnet')
+  assert.equal(loaded.createVault, null)
+  await assert.rejects(loadConfig(async url => ({ ok: true, json: async () => url === '/config.json' ? structuredClone(base) : { chain_id: 1, near_network: 'testnet', factory_exists: true, factory: 'published.testnet' } })), /supported testnet factory/)
+})

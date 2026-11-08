@@ -1,7 +1,7 @@
+import { VaultTable } from './VaultTable.tsx'
 import { useState } from 'react'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import './wallet-demo.css'
-import { TokenIcon } from './ui/TokenIcon.tsx'
 import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 
 const vaults = [
@@ -16,34 +16,7 @@ const actions = [
 ]
 
 export function DemoVaults() {
-  const [query, setQuery] = useState('')
-  const [asset, setAsset] = useState('all')
-  const [autopilot, setAutopilot] = useState('all')
-  const filtered = vaults.filter(vault => vault.name.toLowerCase().includes(query.trim().toLowerCase()) && (asset === 'all' || vault.collateral.endsWith(` ${asset}`)) && (autopilot === 'all' || vault.protection === `Autopilot ${autopilot}`))
-  const hasFilters = query !== '' || asset !== 'all' || autopilot !== 'all'
-  function clearFilters() { setQuery(''); setAsset('all'); setAutopilot('all') }
-  return <><p className="demo-summary" role="status">{filtered.length} of {vaults.length} vaults · Base Sepolia · Sample portfolio</p>
-    <PrototypeSurface className="demo-vault-tools">
-      <div className="demo-vault-filter-row">
-        <PrototypeFilter label="Asset" value={asset} onChange={setAsset} icon="asset" options={[{ value: 'all', label: 'All assets' }, { value: 'ETH', label: 'ETH' }, { value: 'WETH', label: 'WETH' }]} />
-        <PrototypeFilter label="Autopilot" value={autopilot} onChange={setAutopilot} icon="status" options={[{ value: 'all', label: 'All statuses' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} />
-        {hasFilters && <PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton>}
-      </div>
-      <label className="demo-vault-search"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" aria-label="Search vaults by name" placeholder="Filter vaults by name" value={query} onChange={event => setQuery(event.target.value)} /></label>
-    </PrototypeSurface>
-    {filtered.length === 0 && <PrototypeSurface className="demo-vault-no-results"><h2>No vaults found</h2><p>Try another name or clear your filters.</p><PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton></PrototypeSurface>}
-    {filtered.length > 0 && <PrototypeSurface className="demo-vault-table"><table><caption className="demo-table-caption">Demo vaults</caption>
-      <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV</th><th scope="col">Autopilot</th></tr></thead>
-      <tbody>{filtered.map(vault => <tr key={vault.name}>
-        <th scope="row"><span className="demo-asset-name"><TokenIcon asset={vault.name.startsWith('WETH') ? 'WETH' : 'ETH'}/>{vault.name}</span><small>Base Sepolia</small></th>
-        <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}</td><td><span className="demo-autopilot">{vault.protection === 'Autopilot on' ? 'On' : 'Off'}</span></td>
-      </tr>)}</tbody>
-    </table></PrototypeSurface>}
-    <div className="demo-vault-cards">{filtered.map(vault => <PrototypeSurface key={vault.name} className="demo-vault-compact">
-      <div className="demo-card-heading"><div><h2 className="demo-asset-name"><TokenIcon asset={vault.name.startsWith('WETH') ? 'WETH' : 'ETH'}/>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
-      <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV</dt><dd>{vault.ltv}</dd></div></dl>
-    </PrototypeSurface>)}</div>
-  </>
+  return <VaultTable demo vaults={vaults.map((row, i) => ({ ...row, name: `Vault ${i + 1}`, asset: 'WETH', assetId: 'demo-weth', detail: `WETH / USDC · Demo market ${i + 1}`, collateral: `${i ? '2.00' : '5.00'} WETH`, value: `${i ? '5,600' : '14,000'} USDC at oracle`, liquidation: '86.0%', protection: i ? 'Not configured' : 'Active' }))} />
 }
 
 export function DemoActivity() {
