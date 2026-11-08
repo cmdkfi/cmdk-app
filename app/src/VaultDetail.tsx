@@ -5,6 +5,7 @@ import { readLivePosition, type LivePosition, type MarketPosition } from './posi
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { AssetIcon } from './VaultTable.tsx'
 import './vault-detail.css'
+import { EditRules } from './EditRules.tsx'
 import { VaultSetup } from './VaultSetup.tsx'
 import { LiveActions } from './LiveActions.tsx'
 import { VerificationDetails } from './VerificationDetails.tsx'
@@ -38,6 +39,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       <dl className="vault-ltv-legend">{thresholds.map(t => <div key={t.name}><dt><i className={t.tone}/>{t.name}</dt><dd>{pct(t.value)}</dd></div>)}</dl>
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
+    <EditRules vault={vault} market={market} onRefresh={onRefresh} />
     <VerificationDetails vault={vault} market={market} />
     <LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
