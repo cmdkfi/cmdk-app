@@ -9,7 +9,7 @@ const morphoAbi = parseAbi([
   'function idToMarketParams(bytes32 id) view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)',
 ])
 const oracleAbi = parseAbi(['function price() view returns (uint256)'])
-const executorAbi = parseAbi(['function closedForAgent(address user, bytes32 id) view returns (bool)', 'function corridors(address user, bytes32 id) view returns (uint64 target, uint64 act, uint64 floor, uint64 sellBudget, bool migrateAllowed, bool exitAllowed, bool set)'])
+const executorAbi = parseAbi(['function soldInWindow(address user,address token) view returns (uint256)', 'function movesInWindow(address user) view returns (uint256)', 'function sessionStart(address user,bytes32 id) view returns (uint256)', 'function lastAgentCall(address user) view returns (uint256)', 'function COOLDOWN() view returns (uint256)', 'function closedForAgent(address user, bytes32 id) view returns (bool)', 'function corridors(address user, bytes32 id) view returns (uint64 target, uint64 act, uint64 floor, uint64 sellBudget, bool migrateAllowed, bool exitAllowed, bool set)'])
 const tokenAbi = parseAbi(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
 const irmAbi = parseAbi(['function borrowRateView((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv),(uint128 totalSupplyAssets,uint128 totalSupplyShares,uint128 totalBorrowAssets,uint128 totalBorrowShares,uint128 lastUpdate,uint128 fee)) view returns (uint256)'])
 const WAD = 10n ** 18n
@@ -31,6 +31,10 @@ export type MarketPosition = {
   irm?: Address
   liquidity?: bigint
   borrowShares?: bigint
+  floor?: bigint | null
+  migrateAllowed?: boolean
+  exitAllowed?: boolean
+  telemetry?: { sold: bigint; moves: bigint; sessionStart: bigint; lastCall: bigint; cooldown: bigint; closed: boolean }
   dailyBudget?: bigint | null
   agentTarget: bigint | null
   agentTrigger: bigint | null
@@ -41,7 +45,7 @@ export type MarketPosition = {
   loanDecimals: number
   collateralDecimals: number
 }
-export type LivePosition = { vault: string; baseAddress: Address; markets: MarketPosition[]; readAt: number; errors?: string[] }
+export type LivePosition = { vault: string; baseAddress: Address; markets: MarketPosition[]; readAt: number; gasBalance?: bigint; freeBalances?: {token:Address;symbol:string;decimals:number;balance:bigint}[]; errors?: string[] }
 
 export function accruedBorrowAssets(assets: bigint, rate: bigint, elapsed: bigint) {
   if (elapsed < 0n || rate < 0n) throw new Error('Invalid interest snapshot.')
@@ -100,7 +104,15 @@ export async function readLivePosition(config: AppConfig, vaultId: string, expec
     const rate = params[3] === '0x0000000000000000000000000000000000000000' ? 0n : await client.readContract({address:params[3],abi:irmAbi,functionName:'borrowRateView',blockNumber,args:[{loanToken:params[0],collateralToken:params[1],oracle:params[2],irm:params[3],lltv:params[4]},{totalSupplyAssets:totals[0],totalSupplyShares:totals[1],totalBorrowAssets:totals[2],totalBorrowShares:totals[3],lastUpdate:totals[4],fee:totals[5]}]})
     const borrowAssets = accruedBorrowAssets(totals[2],rate,block.timestamp-totals[4])
     const values = marketMath(position[2], position[1], borrowAssets, totals[3], oraclePrice)
+    const telemetry = await Promise.all([
+      client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'soldInWindow',args:[baseAddress,params[1]],blockNumber}),
+      client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'movesInWindow',args:[baseAddress],blockNumber}),
+      client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'sessionStart',args:[baseAddress,id],blockNumber}),
+      client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'lastAgentCall',args:[baseAddress],blockNumber}),
+      client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'COOLDOWN',blockNumber}),
+    ]).then(([sold,moves,sessionStart,lastCall,cooldown])=>({sold,moves,sessionStart,lastCall,cooldown,closed})).catch(()=>undefined)
     return {
+      floor:corridor[6] ? corridor[2] : null, migrateAllowed:corridor[4],exitAllowed:corridor[5],telemetry,
       readOnly: !config.createVault?.markets.some(item => item.id.toLowerCase() === id.toLowerCase() && item.executor.toLowerCase() === market.executor!.toLowerCase()),
       priceUnavailable: oraclePrice <= 0n,
       executor: market.executor as Address, morpho, oracle: params[2], irm: params[3], liquidity: totals[0] > totals[2] ? totals[0] - totals[2] : 0n, borrowShares: position[1], dailyBudget: corridor[6] ? corridor[3] : null,
@@ -118,7 +130,14 @@ export async function readLivePosition(config: AppConfig, vaultId: string, expec
     if (read.status === 'fulfilled') markets.push(read.value)
     else errors.push(`Market ${state.markets![index].id ?? index + 1}: ${read.reason instanceof Error ? read.reason.message : 'Read failed. Retry.'}`)
   })
-  return { vault: vaultId, baseAddress, markets, errors, readAt: Date.now() }
+  const tokens = new Map<string,{token:Address;symbol:string;decimals:number}>()
+  markets.forEach(m => {tokens.set(m.loanToken.toLowerCase(),{token:m.loanToken,symbol:m.loanSymbol,decimals:m.loanDecimals});tokens.set(m.collateralToken.toLowerCase(),{token:m.collateralToken,symbol:m.collateralSymbol,decimals:m.collateralDecimals})})
+  const balanceAbi = parseAbi(['function balanceOf(address) view returns (uint256)'])
+  const balances = await Promise.allSettled([...tokens.values()].map(async token => ({...token,balance:await client.readContract({address:token.token,abi:balanceAbi,functionName:'balanceOf',args:[baseAddress],blockNumber})})))
+  const freeBalances: NonNullable<LivePosition['freeBalances']> = []
+  balances.forEach(result => {if(result.status==='fulfilled') freeBalances.push(result.value);else errors.push('A free-token balance could not be read.')})
+  const gasBalance = await client.getBalance({address:baseAddress,blockNumber}).catch(()=>undefined)
+  return { vault: vaultId, baseAddress, markets, errors, freeBalances, gasBalance, readAt: Date.now() }
 }
 
 export function protectionStatus(agent: { public_key?: string; expires_at?: number } | undefined, configured: boolean, closed: boolean,
