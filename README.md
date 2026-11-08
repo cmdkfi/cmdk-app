@@ -39,3 +39,21 @@ pnpm test
 ```
 
 Pull requests run build/TypeScript and the Node test suite through `frontend quality`. Main pushes run the same checks before the Cloudflare deployment. Helper tests do not replace signed transaction testing or desktop/mobile browser verification. Native Rust/Solidity protocol checks belong to cmdkfi/app and require its toolchains.
+
+## Browser scenario tests
+
+```sh
+cd app
+pnpm exec playwright install chromium
+pnpm build
+pnpm test:bundle-boundary
+pnpm test:browser
+```
+
+Playwright runs 14 scenarios in desktop and mobile Chromium (28 cases). Wallet rejection/retry/disconnection and unsupported-account discovery use the production entry. Network/account switching, Edit rules and recovery use the real React components in an isolated test entry. They do not mock component functions or protocol calculations.
+
+Only controlled EIP-1193, Base/NEAR RPC and relayer responses are used. Signatures come from public throwaway fixture keys. No real extension, live RPC, relayer POST or on-chain transaction is used. Unknown external requests fail the test; SDK analytics are swallowed locally. The fixture models the API/ABI shapes in cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd`, not a chain emulator or contract execution proof.
+
+Coverage includes shared-rule Floor/permission preservation, exact signed payload bytes, nonce/account/corridor changes while signing, no-op/invalid/rejected saves, receipt/state mismatch, direct reverted receipt recovery, held suffixes across reload, lost cancellation jobs, mismatched NEAR evidence, and explicit exact-call rebroadcast. Browser TypeScript is checked separately. PR and deployment workflows run the suite before merge/publication; failure traces, screenshots and HTML reports are retained as CI artifacts for seven days.
+
+`e2e/harness.html` is dev/test-only. The production bundle boundary check rejects fixture markers or test entries in `dist/`. These tests supplement live signed rehearsals; they do not replace them. WebKit/Safari, real extensions and arbitrary protocol failures remain outside this suite.

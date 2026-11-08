@@ -1,1 +1,3 @@
 deployments/
+app/playwright-report/
+app/test-results/

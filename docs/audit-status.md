@@ -21,13 +21,13 @@ Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (fetched again 
 | F13 identity/icons | Token-address icon mapping; collateral-first Morpho names and backup identity (#64, #71). | No remaining known defect. |
 | F14 selected vault | Explicit selection preserved in details navigation (#51). | Multi-owner browser rehearsal still useful; no extra vault was created for QA. |
 | F15 review/risk navigation | Explicit pre-sign review (#55), contextual risk-reducing actions, review/Cancel keyboard focus, touch controls and mobile filter sizing (#68). | Contextual high-risk buttons reviewed in source; current live vault is empty, so that branch was not demonstrated with real debt. |
-| F16 gates/scaling | PR build/TypeScript/tests (#56); obsolete demo components removed (#67); deduplicated reads, timeout/rate-limit handling (#59). Current suite: 71 Node tests. | Partial: no comprehensive React/browser E2E suite. Discovery still enumerates factory vaults (cap 10,000); factory has get_config/create_vault but no owner index. |
+| F16 gates/scaling | PR build/TypeScript/tests (#56); obsolete demo components removed (#67); deduplicated reads, timeout/rate-limit handling (#59). Current suite: 71 Node tests. | 28 controlled browser cases now cover wallet connection, recovery and Edit rules on desktop/mobile Chromium; they run before merge and deployment. Partial: this is not comprehensive cross-browser/live-extension E2E coverage. Discovery still enumerates factory vaults (cap 10,000); factory has get_config/create_vault but no owner index. |
 | F17 documentation | README describes actual React runtime, interest, routes, transactions and test limitations (#56, #67). Planning docs found in fffilimonov/prime, not missing protocol implementation. | Planning source: docs/04-app-requirements.md Q14 in prime; keep its role separate from deployed contract authority. |
 
 ## Next frontend work
 
 1. Rehearse the implemented held-cancellation flow with the user when a genuine failed owner-call exists. Do not manufacture a failure or submit an unchanged intent to generate evidence. Protocol references: vault/src/lib.rs owner_call `cancel`; scripts/RELAYER.md failed/held jobs. Cancellation does not prove the original action never executed.
-2. Add scenario-level component/browser coverage for wallet change, pending recovery, review focus and shared-rule setup. The current 71 helper tests do not substitute for this.
+2. Extend the new 28-case browser suite when new protocol flows land; add WebKit/real-extension coverage separately. Controlled RPC/wallet fixtures and 71 helper tests do not replace live signed rehearsals.
 3. Rehearse changed signed flows with the user; do not submit unchanged rules merely to generate evidence.
 
 ## Note for Vadim (not sent)
