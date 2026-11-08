@@ -16,7 +16,7 @@ export const activityAbi=parseAbi([
 'event Exited(address indexed caller,bytes32 indexed market,uint256 repaid,uint256 fromIdle,uint256 collateralSold,uint256 collateralOut)',
 'event SessionEnded(address indexed caller,bytes32 indexed market,uint256 ltv)',
 ])
-export type ActivityEvent={key:string;vault:string;name:string;actor:'user'|'agent'|'unknown';hash:Hex;block:bigint;index:number;details:Record<string,unknown>}
+export type ActivityEvent={key:string;vault:string;name:string;actor:'user'|'agent'|'unknown';hash:Hex;block:bigint;index:number;timestamp?:number;details:Record<string,unknown>}
 export function activityActor(name:string,caller:unknown,owner:string):ActivityEvent['actor']{
  if(['Reduced','Migrated','Exited','SessionEnded'].includes(name))return 'agent'
  if(['Opened','Closed','CorridorSet'].includes(name)||typeof caller==='string'&&caller.toLowerCase()===owner.toLowerCase())return 'user'
@@ -28,7 +28,7 @@ export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:b
  if(await client.getChainId()!==84532)throw Error('RPC is not Base Sepolia.')
  const addresses=[...new Set(position.markets.flatMap(m=>[m.morpho!,m.executor!,m.collateralToken,m.loanToken]))]
  const logs=(await Promise.all(addresses.map(address=>client.getLogs({address,fromBlock:from,toBlock:to})))).flat()
- return logs.flatMap<ActivityEvent>(log=>{try{
+ const events=logs.flatMap<ActivityEvent>(log=>{try{
  const decoded=decodeEventLog({abi:activityAbi,data:log.data,topics:log.topics});const args=decoded.args as Record<string,unknown>
  if(decoded.eventName==='Transfer'){
  if(![args.from,args.to].some(x=>String(x).toLowerCase()===position.baseAddress.toLowerCase()))return []
@@ -40,4 +40,9 @@ export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:b
  if(!position.markets.some(m=>m.id.toLowerCase()===String(market).toLowerCase()))return []
  return [{key:`${log.transactionHash}:${log.logIndex}:${vault.accountId}`,vault:vault.accountId,name:decoded.eventName,actor:activityActor(decoded.eventName,args.caller,vault.owner),hash:log.transactionHash!,block:log.blockNumber!,index:log.logIndex!,details:args}]
  }catch{return []}})
+ const times=new Map<bigint,number>()
+ await Promise.all([...new Set(events.map(event=>event.block))].map(async block=>{times.set(block,Number((await client.getBlock({blockNumber:block})).timestamp))}))
+ return events.map(event=>({...event,timestamp:times.get(event.block)}))
 }
+export function eventTitle(name:string){return ({SupplyCollateral:'Deposit collateral',WithdrawCollateral:'Release collateral',Borrow:'Borrow',Repay:'Repay debt',Opened:'Open / borrow via vault',Closed:'Close position',Reduced:'Reduce debt',Migrated:'Migrate position',Exited:'Agent exit',SessionEnded:'Protection session ended',CorridorSet:'Update risk rules'} as Record<string,string>)[name]??name}
+
