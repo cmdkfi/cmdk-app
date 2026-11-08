@@ -47,6 +47,8 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   const max = action === 'Borrow' ? borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
   const quote = preview(m, action, value)
   const liquidationPrice = quote.collateral > 0n && m.liquidationLtv > 0n ? quote.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (quote.collateral * m.liquidationLtv) : null
+  const currentLiquidationPrice = m.collateral > 0n && m.liquidationLtv > 0n ? m.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (m.collateral * m.liquidationLtv) : null
+  const priceLabel = (price:bigint|null) => price===null?'—':Number(formatUnits(price,m.loanDecimals)).toFixed(1)
   const pct = (n: bigint | null) => n === null ? '—' : `${(Number(n) / 1e16).toFixed(1)}%`
   function assertSession() { if (!alive.current) throw new Error('Wallet or vault changed. Reopen this vault.') }
   async function receipt(hash: Hex) {
@@ -198,12 +200,12 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {action === 'Withdraw' && <><p>Withdraw free tokens only. Repay debt, then release collateral before withdrawing WETH.</p><label>Token <select disabled={busy} value={withdrawCollateral ? 'collateral' : 'loan'} onChange={e => {setWithdrawCollateral(e.target.value === 'collateral');setInput('')}}><option value="loan">{m.loanSymbol}</option><option value="collateral">{m.collateralSymbol}</option></select></label></>}
     {action === 'Borrow' && <p>Borrow to the vault via NEAR owner-call, then withdraw the free {m.loanSymbol}. The signed target determines the amount at execution; this is an estimate.</p>}
     <label>Amount · {symbol}<input inputMode="decimal" value={input} disabled={busy || locked} onChange={e => {setInput(e.target.value);setRepayAll(false)}} placeholder="0.0" /></label>
-    {action === 'Deposit' && m.collateralToken.toLowerCase() === '0x4200000000000000000000000000000000000006' && <div><p>Wallet test ETH: {ethBalance === null ? 'Loading…' : formatUnits(ethBalance,18)}. Wrap ETH to get WETH first; keep ETH for gas.</p><PrototypeButton disabled={busy || locked || chainId !== 84532 || value <= 0n || !!inputError || ethBalance === null || value >= ethBalance} onClick={() => void wrap()}>Wrap entered ETH amount to WETH</PrototypeButton></div>}
+    {action === 'Deposit' && m.collateralToken.toLowerCase() === '0x4200000000000000000000000000000000000006' && <div><p>Wallet test ETH: {!address ? 'Connect wallet' : ethBalance === null ? 'Loading…' : formatUnits(ethBalance,18)}. Wrap ETH to get WETH first; keep ETH for gas.</p><PrototypeButton disabled={busy || locked || chainId !== 84532 || value <= 0n || !!inputError || ethBalance === null || value >= ethBalance} onClick={() => void wrap()}>Wrap entered ETH amount to WETH</PrototypeButton></div>}
     <div className="live-action-tabs">{[25,50,75,100].map(n => <PrototypeButton key={n} disabled={busy || locked} onClick={() => {setInput(formatUnits(max*BigInt(n)/100n,decimals));setRepayAll(action === 'Repay' && n === 100 && max === m.debt)}}>{n.toFixed(1)}%</PrototypeButton>)}</div>
     {repayAll && <p>Repay all borrow shares. Approval includes a 1.0% buffer for interest; only the actual debt is spent.</p>}
     <p>Available {action === 'Borrow' ? 'within trigger and liquidity' : action === 'Withdraw' ? 'free at vault' : 'for this action'}: {formatUnits(max,decimals)} {symbol}</p>
     <p>LTV {pct(m.ltv)} → {pct(quote.ltv)} · Trigger {pct(m.agentTrigger)}</p>
-    <p>Liquidation price: {liquidationPrice === null ? '—' : Number(formatUnits(liquidationPrice,m.loanDecimals)).toFixed(1)} {m.loanSymbol} / {m.collateralSymbol}</p>
+    <p>Liquidation price: {priceLabel(currentLiquidationPrice)} → {priceLabel(liquidationPrice)} {m.loanSymbol} / {m.collateralSymbol}</p>
     {quote.ltv !== null && m.agentTrigger !== null && <p>{quote.ltv > m.agentTrigger ? 'Above trigger' : 'Below trigger'} · {pct(quote.ltv > m.agentTrigger ? quote.ltv-m.agentTrigger : m.agentTrigger-quote.ltv)} distance</p>}
     {inputError && <p role="alert">{inputError}</p>}
     {value > max && <p role="alert">Amount exceeds available capacity.</p>}

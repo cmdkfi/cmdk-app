@@ -5,7 +5,7 @@ import { readLivePosition } from './positions.ts'
 import { VaultTable, type VaultTableRow } from './VaultTable.tsx'
 import { PrototypeButton } from './ui/PrototypeControls.tsx'
 
-const amount = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })
+const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 const percent = (value: bigint | null) => value === null ? '—' : `${(Number(value) / 1e16).toFixed(1)}%`
 
 export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (id: string) => void }) {
@@ -31,7 +31,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
           value: `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
           debt: `${amount(market.debt, market.loanDecimals)} ${market.loanSymbol}`,
-          ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
+          health: market.debt===0n ? 'No debt' : market.ltv && market.ltv>0n ? (Number(market.liquidationLtv)/Number(market.ltv)).toFixed(1) : '—', ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
           onOpen: () => onOpen(vault.accountId),
         }))
       })

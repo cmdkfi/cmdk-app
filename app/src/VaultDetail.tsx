@@ -11,7 +11,7 @@ import { LiveActions } from './LiveActions.tsx'
 import { VerificationDetails } from './VerificationDetails.tsx'
 
 const pct = (value: bigint | null) => value === null ? 'Not set' : `${(Number(value) / 1e16).toFixed(1)}%`
-const amount = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })
+const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 
 function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
   const empty = market.collateral === 0n && market.debt === 0n
@@ -21,7 +21,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
   const risk = empty ? 'No open position' : current === null ? 'LTV unavailable' : market.ltv! >= market.liquidationLtv ? 'At or above liquidation threshold' : market.agentTrigger !== null && market.ltv! > market.agentTrigger ? 'Above agent act line' : 'Below liquidation threshold'
   return <section className="vault-market-detail" aria-label={`${market.loanSymbol} / ${market.collateralSymbol} market`}>
     <div className="vault-detail-heading"><h2 className="vault-token-pair"><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span></h2><span className="demo-autopilot">Autopilot · {market.autopilot}</span></div>
-    <div className="vault-balance-grid">
+    <div className="cockpit-columns"><div className="cockpit-monitor"><div className="vault-balance-grid">
       <PrototypeSurface><h3>Collateral</h3><strong>{amount(market.collateral, market.collateralDecimals)} <span>{market.collateralSymbol}</span></strong><p>{amount(market.collateralValue, market.loanDecimals)} {market.loanSymbol} at oracle</p></PrototypeSurface>
       <PrototypeSurface><h3>Debt</h3><strong>{amount(market.debt, market.loanDecimals)} <span>{market.loanSymbol}</span></strong><p>{empty ? 'No outstanding loan' : 'Includes interest at the read block'}</p></PrototypeSurface>
     </div>
@@ -41,7 +41,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
     </PrototypeSurface>
     <EditRules vault={vault} market={market} onRefresh={onRefresh} />
     <VerificationDetails vault={vault} market={market} />
-    <LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />
+    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} /></aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
 }
