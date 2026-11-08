@@ -71,7 +71,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
       {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
       <PrototypeSurface><h3>Free vault balances</h3>{current.position.freeBalances?.map(token => <p key={token.token}>{formatUnits(token.balance,token.decimals)} {token.symbol} · available to withdraw</p>)}<p>Gas reserve: {current.position.gasBalance === undefined ? 'Unavailable' : `${formatUnits(current.position.gasBalance,18)} test ETH`}</p><p>Free tokens are separate from collateral locked in Morpho.</p></PrototypeSurface>
-      {vault && current.position.markets.some(market => market.agentTrigger === null) && <VaultSetup key={vault.accountId} vault={vault} onComplete={() => setRevision(value => value + 1)} />}
+      {vault && <details><summary>Inspect / repair vault setup</summary><VaultSetup key={`${vault.accountId}:${vault.owner}`} vault={vault} onComplete={() => setRevision(value => value + 1)} /></details>}
       {current.position.errors?.map(error => <p role="alert" key={error}>{error}</p>)}
       {current.position.markets.length ? current.position.markets.map(market => <MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}
     </>}

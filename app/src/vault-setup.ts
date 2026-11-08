@@ -63,3 +63,19 @@ export async function readSetupJob(config: AppConfig, job: string, fetcher: type
 }
 
 export function hasMeasurement(value: AgentMeasurement | null): value is AgentMeasurement { return value !== null }
+
+export function repairSetupArgs(config: AppConfig, rules: DemoRules, facts: {id:string;executor:string;loanToken:string;collateralToken:string;authorized:boolean;needsApproval:boolean;corridorSet:boolean;corridor?:{target:string;act:string;floor:string;sell_budget:string;migrate_allowed:boolean;exit_allowed:boolean}}[], measurementMatches:boolean) {
+  const initial=setupArgs(config,rules)
+  const authorizations=new Set<string>(), approvals=new Set<string>()
+  const markets=facts.map(fact=>{
+    const executor=fact.executor.toLowerCase()
+    const authorize=!fact.authorized&&!authorizations.has(executor)
+    if(authorize)authorizations.add(executor)
+    const tokens=[fact.loanToken,fact.collateralToken].map(token=>`${executor}:${token.toLowerCase()}`)
+    const approve=fact.needsApproval&&tokens.some(token=>!approvals.has(token))
+    if(approve)tokens.forEach(token=>approvals.add(token))
+    return {market:fact.id,approve,authorize,corridor:fact.corridorSet?null:fact.corridor??initial.markets[0].corridor}
+  })
+  if(measurementMatches&&markets.every(m=>!m.approve&&!m.authorize&&!m.corridor))throw new SetupError('Setup is already complete. No unchanged rules need to be saved.')
+  return {markets,measurement:measurementMatches?null:initial.measurement}
+}
