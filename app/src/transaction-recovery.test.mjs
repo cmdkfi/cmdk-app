@@ -48,3 +48,14 @@ test('failed owner jobs unlock only after every signed nonce is consumed on the 
  assert.equal(ownerTransactionsConsumed([{...signed[0],nonce:-1}],vault,10),false)
  assert.equal(ownerTransactionsConsumed([{...signed[0],hash:'invalid'}],vault,10),false)
 })
+import {clearPendingAction,updatePendingAction} from './transaction-recovery.ts'
+test('an old confirmation cannot erase or overwrite a newer vault action',()=>{
+ let value=JSON.stringify({message:'new owner intent',job:'new-job'})
+ const storage={getItem:()=>value,setItem:(_key,next)=>{value=next},removeItem:()=>{value=null}}
+ assert.equal(clearPendingAction('vault',{message:'old owner intent'},storage),false)
+ assert.throws(()=>updatePendingAction('vault',{message:'old owner intent'},{job:'old-job'},storage),/changed/)
+ assert.equal(JSON.parse(value).job,'new-job')
+ updatePendingAction('vault',{message:'new owner intent'},{job:'confirmed-job'},storage)
+ assert.equal(clearPendingAction('vault',{message:'new owner intent'},storage),true)
+ assert.equal(value,null)
+})

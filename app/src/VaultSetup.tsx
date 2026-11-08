@@ -1,4 +1,5 @@
-import {ownerPendingRecord,verifyOwnerJob} from './owner-recovery.ts'
+import {clearPendingAction,updatePendingAction} from './transaction-recovery.ts'
+import {ownerPendingRecord,assertFreshOwnerIntent,verifyOwnerJob} from './owner-recovery.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import {parseAbi} from 'viem'
@@ -57,6 +58,7 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
     let timer: number | undefined
     const poll = async () => {
       try {
+        const pendingRecord=JSON.parse(localStorage.getItem(`cmdk-live-action:${selected.accountId}:${address}`)??'{}')
         const next = await readSetupJob(config, jobId)
         if (!active) return
         setJob(next)
@@ -64,13 +66,13 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
           const receipts = next.receipts ?? []
           if (next.vault !== selected.accountId || !next.near_tx || !next.signed || receipts.length !== next.signed.length || receipts.some(item => item.status !== 1) || next.signed.some(tx=>!receipts.some(receipt=>receipt.hash.toLowerCase()===tx.hash.toLowerCase()))) setState({ kind: 'uncertain', message: 'The relayer marked setup done, but all planned Base receipts were not confirmed. Check your vault.' })
           else {
-            await verifyOwnerJob(config,selected,JSON.parse(localStorage.getItem(`cmdk-live-action:${selected.accountId}:${address}`)??'{}'),next)
+            await verifyOwnerJob(config,selected,pendingRecord,next)
             if(!client)throw new SetupError('Base confirmation client unavailable.',true)
             for(const tx of next.signed){const receipt=await client.waitForTransactionReceipt({hash:tx.hash as `0x${string}`,confirmations:2});if(receipt.status!=='success')throw new SetupError('A setup transaction reverted.',true)}
             const confirmed=await readLivePosition(config,selected.accountId,selected.owner)
             if(confirmed.errors?.length||confirmed.markets.some(m=>m.agentTrigger===null))throw new SetupError('Setup state is incomplete. Inspect the vault before retrying.',true)
             if(!active)return
-            if(key)sessionStorage.removeItem(key);localStorage.removeItem(`cmdk-live-action:${selected.accountId}:${address}`); setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); onComplete() }
+            if(key&&sessionStorage.getItem(key)===jobId)sessionStorage.removeItem(key);clearPendingAction(`cmdk-live-action:${selected.accountId}:${address}`,pendingRecord); setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); onComplete() }
         } else if (next.stage === 'failed') setState({ kind: next.http_status === 502 || next.base_sent?.length ? 'uncertain' : 'failed', message: next.error || 'Setup failed. Check the vault and transaction links before signing again.' })
         else { setState({ kind: 'working', message: 'The relayer is processing the owner-signed setup.' }); timer = window.setTimeout(poll, 1000) }
       } catch (error) {
@@ -108,12 +110,13 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
       setState({ kind: 'signing', message: 'Review and sign the exact setup message in your wallet.' })
       const signature = await signMessageAsync({ message: text })
       await checkSetupSignature(text, signature, address)
+      await assertFreshOwnerIntent(config,selected,text)
       if(!mounted.current||session.current!==expected)throw new SetupError('Wallet or vault changed. Reopen setup.')
       setState({ kind: 'working', message: 'Submitting the signed setup once…' })
       if(localStorage.getItem(lock))throw new SetupError('Another vault action started.')
       localStorage.setItem(lock,JSON.stringify(ownerPendingRecord(text,{operation:'setup'})))
       const id = await startSetupJob(config, selected.accountId, text, signature)
-      localStorage.setItem(lock,JSON.stringify({...JSON.parse(localStorage.getItem(lock)??'{}'),job:id}))
+      updatePendingAction(lock,{message:text},{job:id})
       sessionStorage.setItem(key, id)
       setJobId(id)
     } catch (error) {

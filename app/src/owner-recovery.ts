@@ -67,3 +67,12 @@ export async function unsubmittedOwnerExpired(config:AppConfig,vault:Vault,recor
  if(header?.hash!==snapshot.block_hash||!/^\d+$/.test(header.timestamp_nanosec??''))throw Error('Final NEAR block timestamp does not match its state snapshot.')
  return BigInt(header.timestamp_nanosec!)/1000000000n>BigInt(record.expiry)
 }
+
+export async function assertFreshOwnerIntent(config:AppConfig,vault:Vault,message:string,fetcher:typeof fetch=fetch) {
+ const intent=JSON.parse(message) as {vault?:string;nonce?:number;expiry?:number}
+ if(intent.vault!==vault.accountId||!Number.isSafeInteger(intent.nonce)||!Number.isSafeInteger(intent.expiry))throw Error('Owner intent identity is unavailable.')
+ const state=await nearQuery<{result?:number[]}>(config.nearRpcUrl,{request_type:'call_function',finality:'final',account_id:vault.accountId,method_name:'get_state',args_base64:'e30='},fetcher)
+ if(!Array.isArray(state.result))throw Error('Fresh owner state unavailable.')
+ const owner=JSON.parse(new TextDecoder().decode(new Uint8Array(state.result))) as {owner?:string;owner_nonce?:string|number}
+ if(owner.owner?.toLowerCase()!==vault.owner.toLowerCase()||String(owner.owner_nonce)!==String(intent.nonce!-1))throw Error('Owner or nonce changed while signing. Refresh and review again before submitting.')
+}
