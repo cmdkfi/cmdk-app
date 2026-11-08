@@ -7,7 +7,7 @@ import { checkSetupSignature, readSetupJob, startSetupJob } from './vault-setup.
 import { borrowCapacity, borrowTarget, erc20, executorActions, morphoActions, ownerMessage, params, parseAmount, preview, type Action } from './live-actions.ts'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 
-import { validateDepositReceipt, validateRecovery, type PendingTransaction } from './transaction-recovery.ts'
+import { ownerTransactionsConsumed, validateDepositReceipt, validateRecovery, type PendingTransaction } from './transaction-recovery.ts'
 
 export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
   const { address, chainId } = useAccount()
@@ -34,6 +34,13 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   const symbol = token === m.collateralToken ? m.collateralSymbol : m.loanSymbol
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   useEffect(() => {
+    const sync = () => setLocked(!!localStorage.getItem(key))
+    sync()
+    window.addEventListener('storage', sync)
+    const timer = window.setInterval(sync, 1000)
+    return () => { window.removeEventListener('storage', sync); window.clearInterval(timer) }
+  }, [key])
+  useEffect(() => {
     let active = true
     setBalance(null)
     setEthBalance(null)
@@ -54,7 +61,13 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   async function receipt(hash: Hex) {
     setHashes(previous => [...previous, hash]); setMessage('Waiting for Base confirmation…')
     const result = await client!.waitForTransactionReceipt({hash, confirmations: 2})
-    if (result.status !== 'success') throw new Error('Transaction reverted. No position change was applied.')
+    if (result.status !== 'success') {
+      const record: PendingTransaction = JSON.parse(localStorage.getItem(key) ?? '{}')
+      if (record.hash === hash && record.kind !== 'owner' && !record.job) {
+        localStorage.removeItem(key); setLocked(false); onRefresh()
+      }
+      throw new Error('Transaction reverted. No position change was applied.')
+    }
     assertSession()
   }
   async function recover() {
@@ -67,7 +80,11 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       if (record.hash) { await receipt(record.hash) }
       else if (record.job) {
         const job = await readSetupJob(await loadConfig(), record.job)
+        if (job.vault !== vault.accountId) throw new Error('Recovery job belongs to another vault.')
         setHashes(job.base_sent ?? []); setNearTx(job.near_tx)
+        if (job.stage === 'failed' && ownerTransactionsConsumed(job.signed ?? [], vault.baseAddress!, await client.getTransactionCount({address:vault.baseAddress as Hex,blockNumber:(await client.getBlockNumber()) - 1n}))) {
+          assertSession(); localStorage.removeItem(key); setLocked(false); onRefresh(); setMessage('Previous owner action ended. Its signed Base nonces are consumed; review the refreshed position before continuing.'); return
+        }
         if (job.stage !== 'done' || !job.base_sent?.length) throw new Error(job.error ?? 'Owner action is still pending. Check again; do not resubmit.')
         for (const hash of job.base_sent) await receipt(hash as Hex)
       } else {
@@ -101,7 +118,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       setMessage(`Confirm wrapping ${formatUnits(value,18)} test ETH into WETH in your own wallet. This does not deposit into the vault.`)
       localStorage.setItem(key,JSON.stringify({pending:true,to:request.address,data:encodeFunctionData(request),value:value.toString(),startedAt:Date.now()})); setLocked(true)
       const hash = await writeContractAsync({...request,chainId:84532})
-      sent = true; localStorage.setItem(key,JSON.stringify({hash}))
+      sent = true; localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key) ?? '{}'),hash}))
       await receipt(hash)
       localStorage.removeItem(key); setLocked(false); onRefresh()
     } catch (error) {
@@ -147,7 +164,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
           localStorage.setItem(key, JSON.stringify({pending:true, to:request.address, data:encodeFunctionData(request), value:'0', startedAt:Date.now()})); submitted = true; setLocked(true)
           hash = await writeContractAsync({...request,chainId:84532})
         }
-        localStorage.setItem(key,JSON.stringify({hash}))
+        localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key) ?? '{}'),hash}))
         await receipt(hash)
       } else {
         const state = await viewNear<VaultState>(config.nearRpcUrl, vault.accountId, 'get_state')
@@ -173,9 +190,9 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
         setMessage('Review and sign the exact vault owner message in your wallet.')
         const signature = await signMessageAsync({message})
         assertSession(); await checkSetupSignature(message,signature,address)
-        localStorage.setItem(key,JSON.stringify({pending:true,kind:'owner'})); submitted = true; setLocked(true)
+        localStorage.setItem(key,JSON.stringify({pending:true,kind:'owner',ownerNonce:String(Number(state.owner_nonce)+1),expiry,startedAt:Date.now()})); submitted = true; setLocked(true)
         const job = await startSetupJob(config,vault.accountId,message,signature)
-        localStorage.setItem(key,JSON.stringify({job})); setMessage('Owner action submitted. Waiting for NEAR and Base…')
+        localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key) ?? '{}'),job})); setMessage('Owner action submitted. Waiting for NEAR and Base…')
         for (let i = 0; i < 90; i++) {
           const result = await readSetupJob(config,job)
           assertSession(); setHashes(result.base_sent ?? []); setNearTx(result.near_tx)
