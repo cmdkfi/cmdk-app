@@ -1,0 +1,29 @@
+name: frontend quality
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: frontend-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.7.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm, cache-dependency-path: app/pnpm-lock.yaml}
+      - name: Read public testnet manifest
+        run: |
+          mkdir -p deployments
+          curl --retry 2 -fsSL https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json -o deployments/testnet.json
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm build
+        working-directory: app
+      - run: pnpm test
+        working-directory: app
