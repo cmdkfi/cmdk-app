@@ -1,4 +1,4 @@
-import {ownerPendingRecord} from './owner-recovery.ts'
+import {ownerPendingRecord,verifyOwnerJob} from './owner-recovery.ts'
 import {useRef,useState} from 'react'
 import {useAccount,useSignMessage} from 'wagmi'
 import {loadConfig,viewNear,type AgentMeasurement,type Vault} from './near.ts'
@@ -32,6 +32,7 @@ export function AgentApproval({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>v
  const record=JSON.parse(localStorage.getItem(key)??'{}');if(record.operation!=='approve_measurement'||!record.job||!record.measurement)throw Error('No measurement approval job. Inspect activity before retrying.')
  const config=await loadConfig(),job=await readSetupJob(config,record.job)
  if(job.vault!==vault.accountId||job.stage!=='done'||!job.near_tx||job.base_sent?.length)throw Error(job.error??'Approval is not confirmed.')
+ await verifyOwnerJob(config,vault,record,job)
  const state=await viewNear<VaultState>(config.nearRpcUrl,vault.accountId,'get_state')
  if(!state.approved||Object.entries(record.measurement).some(([k,v])=>state.approved![k]!==v))throw Error('Stored measurement does not match the approval. Inspect NEAR before retrying.')
  localStorage.removeItem(key);setMeasurement(null);setStatus('Measurement confirmed on NEAR. Agent registration is separate and must be observed before protection is active.');onConfirmed()
