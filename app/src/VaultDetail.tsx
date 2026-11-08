@@ -1,3 +1,4 @@
+import {VaultFunding} from './VaultFunding.tsx'
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
 import { loadConfig, type Vault } from './near.ts'
@@ -44,7 +45,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
     </PrototypeSurface>
     {!market.readOnly && <EditRules vault={vault} market={market} onRefresh={onRefresh} />}
     <VerificationDetails vault={vault} market={market} />
-    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} /></aside></div>
+    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />{!market.readOnly&&<VaultFunding key={`funding:${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh}/>}</aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
 }
