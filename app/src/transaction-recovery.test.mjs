@@ -20,3 +20,20 @@ test('new pending actions require exact target, calldata, native value and sende
  assert.doesNotThrow(()=>validateRecovery(tx,record,owner,vault,market))
  for(const altered of [{...tx,from:vault},{...tx,to:vault},{...tx,input:'0x'},{...tx,value:1n}]) assert.throws(()=>validateRecovery(altered,record,owner,vault,market))
 })
+
+import { encodeEventTopics, encodeAbiParameters, parseAbi } from 'viem'
+import {validateDepositReceipt} from './transaction-recovery.ts'
+const id='0x'+'ab'.repeat(32)
+const eventAbi=parseAbi(['event SupplyCollateral(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets)'])
+const log={address:market.morpho,topics:encodeEventTopics({abi:eventAbi,eventName:'SupplyCollateral',args:{id,caller:owner,onBehalf:vault}}),data:encodeAbiParameters([{type:'uint256'}],[1000000000000000n])}
+test('delegated wallet recovery checks the actual Morpho caller, vault, market and amount',()=>{
+ const m={...market,id}
+ assert.doesNotThrow(()=>validateDepositReceipt([log],{},owner,vault,m))
+ assert.doesNotThrow(()=>validateDepositReceipt([log],{to:market.morpho,data},owner,vault,m))
+ for(const logs of [[],[{...log,address:vault}],[log,log]]) assert.throws(()=>validateDepositReceipt(logs,{},owner,vault,m))
+ assert.throws(()=>validateDepositReceipt([log],{},vault,vault,m))
+ assert.throws(()=>validateDepositReceipt([log],{},owner,owner,m))
+ assert.throws(()=>validateDepositReceipt([log],{},owner,vault,{...m,id:'0x'+'cd'.repeat(32)}))
+ assert.throws(()=>validateDepositReceipt([log],{kind:'owner'},owner,vault,m))
+ assert.throws(()=>validateDepositReceipt([{...log,data:encodeAbiParameters([{type:'uint256'}],[1n])}],{to:market.morpho,data},owner,vault,m))
+})

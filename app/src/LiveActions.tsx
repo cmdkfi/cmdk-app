@@ -7,7 +7,7 @@ import { checkSetupSignature, readSetupJob, startSetupJob } from './vault-setup.
 import { borrowCapacity, borrowTarget, erc20, executorActions, morphoActions, ownerMessage, params, parseAmount, preview, type Action } from './live-actions.ts'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 
-import { validateRecovery, type PendingTransaction } from './transaction-recovery.ts'
+import { validateDepositReceipt, validateRecovery, type PendingTransaction } from './transaction-recovery.ts'
 
 export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
   const { address, chainId } = useAccount()
@@ -72,7 +72,12 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
         if (!/^0x[0-9a-fA-F]{64}$/.test(recoveryHash)) throw new Error('Paste the confirmed transaction hash from your wallet. Do not submit the action again.')
         const hash = recoveryHash as Hex
         const tx = await client.getTransaction({hash})
-        validateRecovery(tx, record, address, vault.baseAddress!, m)
+        try { validateRecovery(tx, record, address, vault.baseAddress!, m) }
+        catch {
+          const confirmed = await client.getTransactionReceipt({hash})
+          if (confirmed.status !== 'success') throw new Error('Transaction reverted. The pending action has not been recovered.')
+          validateDepositReceipt(confirmed.logs, record, address, vault.baseAddress!, m)
+        }
         if (record.startedAt && tx.blockNumber !== null) {
           const block = await client.getBlock({blockNumber:tx.blockNumber})
           if (Number(block.timestamp) * 1000 < record.startedAt - 60_000) throw new Error('Transaction predates the pending action.')
@@ -205,7 +210,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {chainId !== 84532 && <p>Switch your wallet to Base Sepolia to continue.</p>}
     <PrototypeButton primary disabled={busy || locked || chainId !== 84532 || value <= 0n || value > max || !!inputError} onClick={() => void execute()}>{busy ? 'Waiting for confirmation…' : `Review ${action.toLowerCase()}`}</PrototypeButton>
     {action === 'Withdraw' && m.debt === 0n && m.collateral > 0n && <PrototypeButton disabled={busy || locked || chainId !== 84532} onClick={() => void execute(true)}>Release collateral via vault</PrototypeButton>}
-    {locked && <label>Confirmed transaction hash<input value={recoveryHash} disabled={busy} onChange={e => setRecoveryHash(e.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} /><small>If the wallet completed the transaction but this page lost its status, paste its hash. Legacy recovery accepts only a direct collateral deposit for this vault and market.</small></label>}
+    {locked && <label>Confirmed transaction hash<input value={recoveryHash} disabled={busy} onChange={e => setRecoveryHash(e.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} /><small>If the wallet completed the transaction but this page lost its status, paste its hash. Legacy recovery accepts only a confirmed collateral deposit for this vault and market.</small></label>}
     {locked && <PrototypeButton disabled={busy} onClick={() => void recover()}>Check transaction status</PrototypeButton>}
     <p role="status">{message}</p>
     {nearTx && <a href={`https://testnet.nearblocks.io/txns/${encodeURIComponent(nearTx)}`} target="_blank" rel="noreferrer">NEAR transaction ↗</a>}

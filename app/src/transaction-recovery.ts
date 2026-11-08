@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeFunctionData, type Hex } from 'viem'
+import { decodeEventLog, parseAbi, decodeFunctionData, encodeFunctionData, type Hex } from 'viem'
 import { morphoActions, params } from './live-actions.ts'
 import type { MarketPosition } from './positions.ts'
 
@@ -18,3 +18,27 @@ export function validateRecovery(tx: Transaction, record: PendingTransaction, ow
   const expected = encodeFunctionData({abi:morphoActions,functionName:'supplyCollateral',args:[params(market),call.args[1],vault as Hex,'0x']})
   if (tx.input.toLowerCase() !== expected.toLowerCase()) throw new Error('Deposit does not match this market.')
 }
+
+// Delegated wallets may broadcast through a relayer. Morpho's event records the actual caller.
+export function validateDepositReceipt(logs: readonly {address:string; topics:readonly Hex[]; data:Hex}[], record: PendingTransaction, owner:string, vault:string, market:MarketPosition) {
+  if (record.kind === 'owner' || record.job) throw new Error('Use the owner-call job status to recover this action.')
+  let amount: bigint | undefined
+  if (record.data) {
+    if (record.to?.toLowerCase() !== market.morpho?.toLowerCase()) throw new Error('Not a Morpho deposit.')
+    const call=decodeFunctionData({abi:morphoActions,data:record.data})
+    if (call.functionName !== 'supplyCollateral' || call.args[2].toLowerCase() !== vault.toLowerCase()) throw new Error('Not a deposit for this vault.')
+    const expected=encodeFunctionData({abi:morphoActions,functionName:'supplyCollateral',args:[params(market),call.args[1],vault as Hex,'0x']})
+    if (record.data.toLowerCase() !== expected.toLowerCase()) throw new Error('Different market.')
+    amount=call.args[1]
+  }
+  const matches=logs.filter(log=>{
+    if(log.address.toLowerCase() !== market.morpho?.toLowerCase()) return false
+    try {
+      const {args}=decodeEventLog({abi:depositEvents,data:log.data,topics:log.topics as [Hex,...Hex[]]})
+      return args.id.toLowerCase() === market.id.toLowerCase() && args.caller.toLowerCase() === owner.toLowerCase() && args.onBehalf.toLowerCase() === vault.toLowerCase() && args.assets>0n && (amount===undefined || amount===args.assets)
+    } catch {return false}
+  })
+  if(matches.length !== 1) throw new Error('No unique matching Morpho deposit found in this transaction.')
+}
+
+const depositEvents=parseAbi(['event SupplyCollateral(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets)'])
