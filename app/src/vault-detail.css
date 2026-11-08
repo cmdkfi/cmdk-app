@@ -38,3 +38,5 @@
 .vault-detail{grid-template-columns:minmax(0,1fr);min-width:0}.vault-detail>*,.vault-market-detail>*{min-width:0}.vault-detail select{max-width:100%}
 .vault-detail .live-actions{grid-template-columns:minmax(0,1fr)}.vault-detail .live-actions>*{min-width:0}
 .vault-detail .live-actions select{width:100%;min-width:0;box-sizing:border-box}
+
+.held-cancellation pre{white-space:pre-wrap;overflow-wrap:anywhere}.held-cancellation input{font-size:16px;min-height:44px}.held-cancellation section[aria-label="Review cancellation"]{padding:16px;border:1px solid var(--line);border-radius:16px}

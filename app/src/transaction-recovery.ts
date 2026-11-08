@@ -2,7 +2,7 @@ import { decodeEventLog, parseAbi, decodeFunctionData, encodeFunctionData, type 
 import { morphoActions, params } from './live-actions.ts'
 import type { MarketPosition } from './positions.ts'
 
-export type PendingTransaction = { message?: string; ownerNonce?: string; expiry?: number; pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number }
+export type PendingTransaction = { message?: string; ownerNonce?: string; expiry?: number; pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number; cancellation?: PendingTransaction }
 type Transaction = { from: string; to: string | null; input: Hex; value: bigint }
 
 // Legacy records have no intent. Only a manually identified collateral deposit can recover them.
@@ -58,11 +58,11 @@ export function samePendingAction(current:PendingTransaction,expected:PendingTra
 export function clearPendingAction(key:string,expected:PendingTransaction,storage:Pick<Storage,'getItem'|'removeItem'>=localStorage) {
   const raw=storage.getItem(key)
   if(!raw)return false
-  if(!samePendingAction(JSON.parse(raw),expected))return false
+  if(JSON.parse(raw).cancellation||!samePendingAction(JSON.parse(raw),expected))return false
   storage.removeItem(key);return true
 }
 export function updatePendingAction(key:string,expected:PendingTransaction,patch:Record<string,unknown>,storage:Pick<Storage,'getItem'|'setItem'>=localStorage) {
   const current=JSON.parse(storage.getItem(key)??'{}') as PendingTransaction
-  if(!samePendingAction(current,expected))throw Error('The pending vault action changed. Its recovery record was preserved.')
+  if(current.cancellation||!samePendingAction(current,expected))throw Error('The pending vault action changed. Its recovery record was preserved.')
   const next={...current,...patch};storage.setItem(key,JSON.stringify(next));return next
 }
