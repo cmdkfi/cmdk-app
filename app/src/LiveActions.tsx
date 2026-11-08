@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatUnits, type Hex } from 'viem'
+import { formatUnits, parseAbi, type Hex } from 'viem'
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
 import { loadConfig, viewNear, type Vault } from './near.ts'
 import { readLivePosition, type MarketPosition, type VaultState } from './positions.ts'
@@ -15,6 +15,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   const [action, setAction] = useState<Action>('Deposit')
   const [withdrawCollateral, setWithdrawCollateral] = useState(false)
   const [input, setInput] = useState('')
+  const [ethBalance, setEthBalance] = useState<bigint | null>(null)
   const [balance, setBalance] = useState<bigint | null>(null)
   const inFlight = useRef(false)
   const [repayAll, setRepayAll] = useState(false)
@@ -32,6 +33,8 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   useEffect(() => {
     let active = true
     setBalance(null)
+    setEthBalance(null)
+    if (client && address) client.getBalance({address}).then(value => {if(active) setEthBalance(value)}).catch(() => {})
     if (client && address && vault.baseAddress) client.readContract({address: token, abi: erc20, functionName:'balanceOf', args:[action === 'Withdraw' ? vault.baseAddress as Hex : address]})
       .then(value => { if (active) setBalance(value) }).catch(() => { if (active) setMessage('Token balance unavailable. Retry after refreshing.') })
     return () => { active = false }
@@ -63,6 +66,25 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       } else throw new Error('Submission outcome is unknown. Inspect vault transactions before retrying; automatic resubmission is blocked.')
       localStorage.removeItem(key); setLocked(false); onRefresh(); setMessage('Confirmed. Position refreshed.')
     } catch (error) { setMessage((error as Error).message) } finally { setBusy(false) }
+  }
+  async function wrap() {
+    if (inFlight.current || locked || localStorage.getItem(key) || !client || !address || chainId !== 84532 || value <= 0n || inputError || ethBalance === null || value >= ethBalance || m.collateralToken.toLowerCase() !== '0x4200000000000000000000000000000000000006') return
+    inFlight.current = true; setBusy(true)
+    let sent = false
+    try {
+      if (await client.getChainId() !== 84532) throw new Error('RPC is not Base Sepolia.')
+      const {request} = await client.simulateContract({account:address,address:m.collateralToken,abi:parseAbi(['function deposit() payable']),functionName:'deposit',value})
+      assertSession()
+      setMessage(`Confirm wrapping ${formatUnits(value,18)} test ETH into WETH in your own wallet. This does not deposit into the vault.`)
+      localStorage.setItem(key,JSON.stringify({pending:true})); setLocked(true)
+      const hash = await writeContractAsync({...request,chainId:84532})
+      sent = true; localStorage.setItem(key,JSON.stringify({hash}))
+      await receipt(hash)
+      localStorage.removeItem(key); setLocked(false); onRefresh()
+    } catch (error) {
+      setMessage((error as Error).message)
+      if (!sent && (error as Error).message.includes('User rejected')) {localStorage.removeItem(key);setLocked(false)}
+    } finally {inFlight.current = false;setBusy(false)}
   }
   async function execute(close = false) {
     if (inFlight.current || busy || locked || localStorage.getItem(key) || !client || !address || chainId !== 84532 || !vault.baseAddress || (!close && (value <= 0n || value > max || inputError))) return
@@ -155,6 +177,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {action === 'Withdraw' && <><p>Withdraw free tokens only. Repay debt, then release collateral before withdrawing WETH.</p><label>Token <select disabled={busy} value={withdrawCollateral ? 'collateral' : 'loan'} onChange={e => {setWithdrawCollateral(e.target.value === 'collateral');setInput('')}}><option value="loan">{m.loanSymbol}</option><option value="collateral">{m.collateralSymbol}</option></select></label></>}
     {action === 'Borrow' && <p>Borrow to the vault via NEAR owner-call, then withdraw the free {m.loanSymbol}. The signed target determines the amount at execution; this is an estimate.</p>}
     <label>Amount · {symbol}<input inputMode="decimal" value={input} disabled={busy || locked} onChange={e => {setInput(e.target.value);setRepayAll(false)}} placeholder="0.0" /></label>
+    {action === 'Deposit' && m.collateralToken.toLowerCase() === '0x4200000000000000000000000000000000000006' && <div><p>Wallet test ETH: {ethBalance === null ? 'Loading…' : formatUnits(ethBalance,18)}. Wrap ETH to get WETH first; keep ETH for gas.</p><PrototypeButton disabled={busy || locked || chainId !== 84532 || value <= 0n || !!inputError || ethBalance === null || value >= ethBalance} onClick={() => void wrap()}>Wrap entered ETH amount to WETH</PrototypeButton></div>}
     <div className="live-action-tabs">{[25,50,75,100].map(n => <PrototypeButton key={n} disabled={busy || locked} onClick={() => {setInput(formatUnits(max*BigInt(n)/100n,decimals));setRepayAll(action === 'Repay' && n === 100 && max === m.debt)}}>{n.toFixed(1)}%</PrototypeButton>)}</div>
     {repayAll && <p>Repay all borrow shares. Approval includes a 1.0% buffer for interest; only the actual debt is spent.</p>}
     <p>Available {action === 'Borrow' ? 'within trigger and liquidity' : action === 'Withdraw' ? 'free at vault' : 'for this action'}: {formatUnits(max,decimals)} {symbol}</p>

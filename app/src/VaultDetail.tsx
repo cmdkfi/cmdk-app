@@ -5,6 +5,7 @@ import { readLivePosition, type LivePosition, type MarketPosition } from './posi
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { AssetIcon } from './VaultTable.tsx'
 import './vault-detail.css'
+import { VaultSetup } from './VaultSetup.tsx'
 import { LiveActions } from './LiveActions.tsx'
 import { VerificationDetails } from './VerificationDetails.tsx'
 
@@ -62,6 +63,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : current.error ? <p role="alert">{current.error}</p> : current.position && <>
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
       {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Refresh to update balances and agent status.</p>}
+      {vault && current.position.markets.some(market => market.agentTrigger === null) && <VaultSetup key={vault.accountId} vault={vault} onComplete={() => setRevision(value => value + 1)} />}
       {current.position.markets.length ? current.position.markets.map(market => <MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>No markets configured for this vault.</p>}
     </>}
   </div>
