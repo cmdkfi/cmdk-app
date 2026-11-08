@@ -50,3 +50,11 @@ test('repair preserves existing corridors and avoids repeating granted authoriza
 test('repair validates new corridors against the actual market LLTV rather than a demo constant',()=>{
  assert.throws(()=>repairSetupArgs(config,rules,[{id:'one',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:true,needsApproval:false,corridorSet:false,liquidationLtv:650000000000000000n}],true),/actual market/)
 })
+
+import {needsSetupApproval} from './vault-setup.ts'
+test('setup repair can restore insufficient positive allowances as well as zero approvals',()=>{
+ const max=(1n<<256n)-1n
+ assert.equal(needsSetupApproval(max,max),false)
+ assert.equal(needsSetupApproval(1n,max),true)
+ assert.equal(needsSetupApproval(max,0n),true)
+})
