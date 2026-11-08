@@ -53,7 +53,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   }, [action, repaySource, token, client, address, vault.baseAddress, m])
   let value = 0n; let inputError = ''
   try { if (input) value = parseAmount(input, decimals) } catch (error) { inputError = (error as Error).message }
-  const max = action === 'Borrow' ? m.priceUnavailable ? 0n : borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
+  const max = action === 'Borrow' ? m.priceUnavailable || m.policyUnavailable ? 0n : borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
   const quote = preview(m, action, value)
   const liquidationPrice = quote.collateral > 0n && m.liquidationLtv > 0n ? quote.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (quote.collateral * m.liquidationLtv) : null
   const currentLiquidationPrice = m.collateral > 0n && m.liquidationLtv > 0n ? m.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (m.collateral * m.liquidationLtv) : null
@@ -183,6 +183,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
           method='repay';args={market:market.id,amount:amount.toString()}
           await client.simulateContract({account:fresh.baseAddress,address:market.executor,abi:executorActions,functionName:'repay',args:[market.id,amount,BigInt(expiry)]})
         } else if (action === 'Borrow') {
+          if (market.policyUnavailable) throw new Error('Live Executor permissions and corridor are required to borrow.')
           if (market.priceUnavailable) throw new Error('A live oracle price is required to borrow.')
           const target = borrowTarget(market,value)
           method = 'open'; args = {market:market.id,collateral_in:'0',target_ltv:target.toString()}

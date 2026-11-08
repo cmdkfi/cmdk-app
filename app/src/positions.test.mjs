@@ -33,3 +33,10 @@ test('accrued debt includes Morpho Taylor interest with integer rounding', async
  assert.equal(accruedBorrowAssets(1000000n,1000000000000000n,10n),1010050n)
  assert.throws(()=>accruedBorrowAssets(1n,1n,-1n))
 })
+
+import {remainingSellBudget} from './positions.ts'
+test('shared budget follows the executor window base including already sold collateral',()=>{
+ assert.equal(remainingSellBudget(100n,10n,200000000000000000n),12n)
+ assert.equal(remainingSellBudget(0n,100n,200000000000000000n),0n)
+ assert.equal(remainingSellBudget(100n,0n,0n),0n)
+})
