@@ -1,5 +1,5 @@
 import {editedCorridor} from './rules.ts'
-import {useRef,useState} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {parseAbi,formatUnits,type Hex} from 'viem'
 import {useAccount,usePublicClient,useSignMessage} from 'wagmi'
 import {loadConfig,viewNear,type Vault} from './near.ts'
@@ -12,9 +12,14 @@ export function EditRules({vault,market,onRefresh}:{vault:Vault;market:MarketPos
  const client=usePublicClient({chainId:84532}),{address,chainId}=useAccount(),{signMessageAsync}=useSignMessage()
  const [values,setValues]=useState(['','','']),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(false)
  const key=`cmdk-live-action:${vault.accountId}:${address}`
+ const session=useRef('');session.current=`${vault.accountId}:${address}:${chainId}`
+ const mounted=useRef(true)
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[])
+ function assertSession(expected:string){if(!mounted.current||session.current!==expected)throw Error('Wallet or vault changed. Reopen Edit rules.')}
+
  async function read(){if(!client||!market.executor)throw Error('Executor unavailable');return client.readContract({address:market.executor,abi,functionName:'corridors',args:[vault.baseAddress as Hex,market.id]})}
  async function open(){dialog.current?.showModal();setReady(false);setMessage('Reading Base Executor…');try{const c=await read();if(!c[6])throw Error('Configure this market first.');setValues([c[0],c[1],c[3]].map(v=>formatUnits(v,16)));setReady(true);setMessage('')}catch(e){setMessage((e as Error).message)}}
- async function save(){if(flight.current||!client||!address)return;flight.current=true;setBusy(true)
+ async function save(){if(flight.current||!client||!address)return;const expected=session.current;flight.current=true;setBusy(true)
  try{
  if(chainId!==84532||await client.getChainId()!==84532)throw Error('Switch to Base Sepolia.')
  if(localStorage.getItem(key))throw Error('A vault action is pending. Check its status before saving rules.')
@@ -25,9 +30,9 @@ export function EditRules({vault,market,onRefresh}:{vault:Vault;market:MarketPos
  const args={market:market.id,...edited}
  const message=JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault:vault.accountId,method:'set_corridor',args,nonce:Number(state.owner_nonce)+1,expiry})
  setMessage('Confirm the updated rules in your wallet.')
- const signature=await signMessageAsync({message});await checkSetupSignature(message,signature,address)
+ assertSession(expected);const signature=await signMessageAsync({message});assertSession(expected);await checkSetupSignature(message,signature,address)
  const latest=await read();if(latest.some((x,i)=>x!==c[i]))throw Error('Rules changed while signing. Reload the form and review again.')
- if(localStorage.getItem(key))throw Error('Another vault action started. Check its status.')
+ assertSession(expected);if(localStorage.getItem(key))throw Error('Another vault action started. Check its status.')
  localStorage.setItem(key,JSON.stringify({pending:true,kind:'owner'}))
  const job=await startSetupJob(config,vault.accountId,message,signature);localStorage.setItem(key,JSON.stringify({job}));setMessage('Submitted. Check confirmation below.')
  }catch(e){setMessage((e as Error).message)}finally{setBusy(false);flight.current=false}}
