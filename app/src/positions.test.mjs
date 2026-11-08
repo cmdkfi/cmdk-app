@@ -26,3 +26,10 @@ test('active protection requires configured rules and matching fresh observation
   assert.equal(protectionStatus(agent, true, false, observation, '0xdef', 1000), 'Unavailable')
   assert.equal(protectionStatus(agent, true, false, observation, '0xabc', 2000), 'Expired')
 })
+
+test('accrued debt includes Morpho Taylor interest with integer rounding', async () => {
+ const {accruedBorrowAssets} = await import('./positions.ts')
+ assert.equal(accruedBorrowAssets(1000000n,0n,100n),1000000n)
+ assert.equal(accruedBorrowAssets(1000000n,1000000000000000n,10n),1010050n)
+ assert.throws(()=>accruedBorrowAssets(1n,1n,-1n))
+})

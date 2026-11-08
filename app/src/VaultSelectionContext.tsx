@@ -19,6 +19,8 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const client = usePublicClient({ chainId: baseSepolia.id })
   const [state, setState] = useState<DiscoveryState>(() => empty('disconnected'))
   const [stateOwner, setStateOwner] = useState<string | undefined>()
+  const [route, setRoute] = useState(window.location.hash)
+  useEffect(() => { const update = () => setRoute(window.location.hash); window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update) }, [])
   const [revision, setRevision] = useState(0)
   const owner = isConnected ? address?.toLowerCase() : undefined
   const current = stateOwner === owner ? state : empty(owner ? 'loading' : 'disconnected')
@@ -58,7 +60,10 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     }).catch(() => {})
   }
 
-  return <VaultSelectionContext.Provider value={{ ...current, refresh: () => setRevision(value => value + 1), select }}>{children}</VaultSelectionContext.Provider>
+  let routeId: string | null = null
+  try { routeId = route.startsWith('#vault/') ? decodeURIComponent(route.slice(7)) : new URLSearchParams(route.split('?')[1]).get('id') } catch { /* Invalid routes use the first owned vault. */ }
+  const routed = route.startsWith('#vault') ? selectedOwnedVault(current.vaults, routeId) : current.selected
+  return <VaultSelectionContext.Provider value={{ ...current, selected: routed, refresh: () => setRevision(value => value + 1), select }}>{children}</VaultSelectionContext.Provider>
 }
 
 export function useVaultSelection(): VaultSelection {

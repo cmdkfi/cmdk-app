@@ -42,7 +42,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
   }, [vaults, revision])
   const current = result?.source === vaults ? result : null
   return <div>
-    <p className="demo-summary">Read from NEAR and Base Sepolia. Debt and LTV use stored market totals; pending interest is not included. Autopilot reflects registration, rules and a recent agent observation, not a guarantee of execution.</p>
+    <p className="demo-summary">Read from NEAR and Base Sepolia. Debt and LTV include interest calculated at the read block. Autopilot reflects registration, rules and a recent agent observation, not a guarantee of execution.</p>
     <PrototypeButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh positions</PrototypeButton>
     {loading && <p role="status">Reading vault positions…</p>}
     {current?.errors.map(error => <p role="alert" key={error}>{error}</p>)}
