@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import './wallet-demo.css'
+import { PrototypeFilter, FilterIcon } from './ui/PrototypeFilter.tsx'
 
 const vaults = [
   { name: 'ETH vault', collateral: '5.00 ETH', value: '$14,000.00', debt: '7,000.00 USDC', ltv: '50.0%', protection: 'Autopilot on' },
@@ -23,8 +24,8 @@ export function DemoVaults() {
   return <><p className="demo-summary" role="status">{filtered.length} of {vaults.length} vaults · Base Sepolia · Sample portfolio</p>
     <PrototypeSurface className="demo-vault-tools">
       <div className="demo-vault-filter-row">
-        <label>Asset<select value={asset} onChange={event => setAsset(event.target.value)}><option value="all">All assets</option><option value="ETH">ETH</option><option value="WETH">WETH</option></select></label>
-        <label>Autopilot<select value={autopilot} onChange={event => setAutopilot(event.target.value)}><option value="all">All statuses</option><option value="on">On</option><option value="off">Off</option></select></label>
+        <PrototypeFilter label="Asset" value={asset} onChange={setAsset} icon="asset" options={[{ value: 'all', label: 'All assets' }, { value: 'ETH', label: 'ETH' }, { value: 'WETH', label: 'WETH' }]} />
+        <PrototypeFilter label="Autopilot" value={autopilot} onChange={setAutopilot} icon="status" options={[{ value: 'all', label: 'All statuses' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} />
         {hasFilters && <PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton>}
       </div>
       <label className="demo-vault-search"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" aria-label="Search vaults by name" placeholder="Filter vaults by name" value={query} onChange={event => setQuery(event.target.value)} /></label>
@@ -33,12 +34,12 @@ export function DemoVaults() {
     {filtered.length > 0 && <PrototypeSurface className="demo-vault-table"><table><caption className="demo-table-caption">Demo vaults</caption>
       <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV</th><th scope="col">Autopilot</th></tr></thead>
       <tbody>{filtered.map(vault => <tr key={vault.name}>
-        <th scope="row">{vault.name}<small>Base Sepolia</small></th>
+        <th scope="row"><span className="demo-asset-name"><FilterIcon kind="asset"/>{vault.name}</span><small>Base Sepolia</small></th>
         <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}</td><td><span className="demo-autopilot">{vault.protection === 'Autopilot on' ? 'On' : 'Off'}</span></td>
       </tr>)}</tbody>
     </table></PrototypeSurface>}
     <div className="demo-vault-cards">{filtered.map(vault => <PrototypeSurface key={vault.name} className="demo-vault-compact">
-      <div className="demo-card-heading"><div><h2>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
+      <div className="demo-card-heading"><div><h2 className="demo-asset-name"><FilterIcon kind="asset"/>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
       <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV</dt><dd>{vault.ltv}</dd></div></dl>
     </PrototypeSurface>)}</div>
   </>
@@ -48,7 +49,7 @@ export function DemoActivity() {
   const [actor, setActor] = useState('all')
   const [vault, setVault] = useState('all')
   const visible = actions.filter(action => (actor === 'all' || action.actor === actor) && (vault === 'all' || action.vault === vault))
-  return <><div className="demo-filters"><div className="demo-filter-buttons" role="group" aria-label="Filter by action author">{[['all', 'All'], ['you', 'Your actions'], ['agent', 'Agent actions']].map(([value, label]) => <PrototypeButton key={value} primary={actor === value} aria-pressed={actor === value} onClick={() => setActor(value)}>{label}</PrototypeButton>)}</div><label className="demo-vault-filter">Vault<select value={vault} onChange={event => setVault(event.target.value)}><option value="all">All vaults</option>{vaults.map(item => <option key={item.name}>{item.name}</option>)}</select></label></div>
+  return <><div className="demo-filters"><div className="demo-filter-buttons" role="group" aria-label="Filter by action author">{[['all', 'All'], ['you', 'Your actions'], ['agent', 'Agent actions']].map(([value, label]) => <PrototypeButton key={value} primary={actor === value} aria-pressed={actor === value} onClick={() => setActor(value)}>{label}</PrototypeButton>)}</div><PrototypeFilter label="Vault" value={vault} onChange={setVault} icon="asset" options={[{ value: 'all', label: 'All vaults' }, ...vaults.map(item => ({ value: item.name, label: item.name }))]} /></div>
     <p className="demo-summary" role="status">{visible.length} sample events · All times UTC</p>
     <PrototypeSurface className="demo-activity"><ul>{visible.map(action => <li key={action.id}><div className="demo-event-main"><h2>{action.title}</h2><p>{action.vault} · {action.actor === 'agent' ? 'Agent' : 'You'} · Demo</p><p>{action.detail}</p></div><div className="demo-event-meta"><strong>{action.amount}</strong><small>{action.time}</small></div></li>)}</ul>{visible.length === 0 && <p className="demo-empty">No sample events match these filters.</p>}</PrototypeSurface>
   </>
