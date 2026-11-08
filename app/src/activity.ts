@@ -9,6 +9,7 @@ export const activityAbi=parseAbi([
 'event WithdrawCollateral(bytes32 indexed id,address caller,address indexed onBehalf,address indexed receiver,uint256 assets)',
 'event Borrow(bytes32 indexed id,address caller,address indexed onBehalf,address indexed receiver,uint256 assets,uint256 shares)',
 'event Repay(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets,uint256 shares)',
+'event Repaid(address indexed caller,bytes32 indexed market,uint256 repaid)',
 'event Opened(address indexed caller,bytes32 indexed market,uint256 collateralIn,uint256 borrowed,uint256 ltv)',
 'event Closed(address indexed caller,bytes32 indexed market,uint256 repaid,uint256 collateralOut)',
 'event Reduced(address indexed caller,bytes32 indexed market,uint256 repaid,uint256 collateralSold,uint256 ltvBefore,uint256 ltvAfter,bool protective)',
@@ -19,7 +20,7 @@ export const activityAbi=parseAbi([
 export type ActivityEvent={key:string;vault:string;name:string;actor:'user'|'agent'|'unknown';hash:Hex;block:bigint;index:number;timestamp?:number;amount?:string;details:Record<string,unknown>}
 export function activityActor(name:string,caller:unknown,owner:string):ActivityEvent['actor']{
  if(['Reduced','Migrated','Exited','SessionEnded'].includes(name))return 'agent'
- if(['Opened','Closed','CorridorSet'].includes(name)||typeof caller==='string'&&caller.toLowerCase()===owner.toLowerCase())return 'user'
+ if(['Opened','Closed','CorridorSet','Repaid'].includes(name)||typeof caller==='string'&&caller.toLowerCase()===owner.toLowerCase())return 'user'
  return 'unknown'
 }
 export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:bigint):Promise<ActivityEvent[]>{
@@ -59,4 +60,11 @@ export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:b
  return {...event,timestamp:times.get(event.block),amount:typeof value==='bigint'&&symbol&&decimals!==undefined?`${formatUnits(value,decimals)} ${symbol}`:undefined}
  })
 }
-export function eventTitle(name:string){return ({SupplyCollateral:'Deposit collateral',WithdrawCollateral:'Release collateral',Borrow:'Borrow',Repay:'Repay debt',Opened:'Open / borrow via vault',Closed:'Close position',Reduced:'Reduce debt',Migrated:'Migrate position',Exited:'Agent exit',SessionEnded:'Protection session ended',CorridorSet:'Update risk rules'} as Record<string,string>)[name]??name}
+export function eventTitle(name:string){return ({SupplyCollateral:'Deposit collateral',WithdrawCollateral:'Release collateral',Borrow:'Borrow',Repay:'Repay debt',Repaid:'Repay from vault',Opened:'Open / borrow via vault',Closed:'Close position',Reduced:'Reduce debt',Migrated:'Migrate position',Exited:'Agent exit',SessionEnded:'Protection session ended',CorridorSet:'Update risk rules'} as Record<string,string>)[name]??name}
+
+export function groupActivity(events:ActivityEvent[]) {
+ const groups=new Map<string,ActivityEvent[]>()
+ for(const event of events){const key=`${event.vault}:${event.hash}`;const group=groups.get(key)??[];if(!group.some(item=>item.key===event.key))group.push(event);groups.set(key,group)}
+ const priorities=['Exited','Migrated','Reduced','Closed','Repaid','Opened','CorridorSet','Repay','Borrow','WithdrawCollateral','SupplyCollateral','Token transfer']
+ return [...groups.values()].map(events=>({primary:[...events].sort((a,b)=>priorities.indexOf(a.name)-priorities.indexOf(b.name))[0],events}))
+}
