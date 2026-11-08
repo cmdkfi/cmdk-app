@@ -1,3 +1,4 @@
+import {VaultRecovery} from './VaultRecovery.tsx'
 import {VaultFunding} from './VaultFunding.tsx'
 import {useNow} from './use-now.ts'
 import {protectionLabel} from './protection-clock.ts'
@@ -74,6 +75,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
   const current = read?.key === key ? read : null
   return <div className="vault-detail">
     <div className="vault-detail-heading"><a href="#connect">← Vaults</a>{vault && <PrototypeButton disabled={!current} onClick={() => setRevision(value => value + 1)}>Refresh</PrototypeButton>}</div>
+    {vault&&<VaultRecovery key={`recovery:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/>}
     {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : current.error ? <p role="alert">{current.error}</p> : current.position && <>
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
       {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
