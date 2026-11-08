@@ -1,6 +1,6 @@
 # Protocol/frontend audit status — 2026-11-08
 
-Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (fetched again on this date). Frontend integration includes PRs #50–#71 and the #68 follow-up. This ledger supersedes the original findings as a status report; it does not erase their historical evidence.
+Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (rechecked against protocol main `910811b`; relevant contracts/relayer unchanged, evidence proxy added). Frontend integration includes PRs #50–#71 and the #68 follow-up. This ledger supersedes the original findings as a status report; it does not erase their historical evidence.
 
 “Implemented” means source and relevant automated/read-only browser checks pass. It does not mean every failure was induced with a real funded wallet. No new owner signatures or transactions were performed for this audit follow-up.
 
@@ -12,9 +12,9 @@ Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (fetched again 
 | F04 reapproval | Separate measurement approval and factual setup repair (#54, #58); #68 also repairs positive limited allowances. | Revoke/reapprove live cycle remains unexecuted in QA. |
 | F05 account eligibility | Creation checks supported owner account before POST (#51); wallet/account tests. | Contract-wallet creation intentionally unsupported by current owner-signature model. |
 | F06 free funds | Free USDC/WETH and gas reserve; wallet/vault repayment source; close/release and reopen from free funds (#53, #55, #63). | Additional owner-funded reopen variants were not signed in this audit. |
-| F07 verification | Actual NEAR code/factory hash and restricted key checks, approved/published measurement, Base policy, explorer/copy controls (#53). | Partial: raw quote/event-log evidence and independent TDX verification are not exposed by vault get_state. Do not claim full attestation verification in the browser. |
+| F07 verification | Actual NEAR code/factory hash and restricted key checks, approved/published measurement, Base policy, explorer/copy controls (#53). | Partial: raw quote/event-log are not in vault get_state. Protocol `d3a0f31` now adds GET /agent/evidence/<file> with CORS; frontend integration and independent TDX verification remain separate work. Do not claim full browser attestation verification. |
 | F08 agent limits | Actual Floor, migration/exit permissions, shared executor budget/window/session and cooldown (#53, #60). | No remaining display omission identified; policy failure stays explicit. |
-| F09 activity | Grouped Base operations, Executor repayments, decoded NEAR owner intents and signed-call correlation; separate hash-checked agent transcript viewer (#57, #65). | Partial: browser access to raw quote/event-log and some transcript resources depends on evidence proxy routes/CORS; a transcript never proves execution. |
+| F09 activity | Grouped Base operations, Executor repayments, decoded NEAR owner intents and signed-call correlation; separate hash-checked agent transcript viewer (#57, #65). | Partial: the protocol now supplies the allowlisted measurement evidence proxy route (d3a0f31). Wire and validate that evidence separately; a transcript never proves execution. |
 | F10 agent health | Position refresh and stale observation expiry (#59, #62). Copy explicitly describes a recent loop observation. | Partial: last successful market snapshot/execution health needs a separately defined protocol telemetry field; last_tick alone is insufficient. |
 | F11 zero collateral debt | Explicit critical state distinguishes debt without collateral value from empty/no-debt and RPC failure (#52). | Extreme state covered mathematically; not created in user vault. |
 | F12 create/setup lifecycle | Resumable tracked creation, create another, owner-bound state and factual setup repair (#51, #58); Q14 shared/independent rules (#71). | New vault + partial setup should receive another signed end-to-end rehearsal when the user is present. |
@@ -34,6 +34,6 @@ Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (fetched again 
 
 - Factory owner discovery: confirm a supported owner-to-vault index or paginated API; current factory `get_config` exposes total count, not an owner lookup. Frontend cannot honestly make enumeration O(owned vaults) without an index.
 - Agent health: define and publish the last successful market snapshot and last confirmed execution separately from loop tick/registration. Frontend currently makes only the weaker observation claim.
-- Evidence: confirm supported public quote/event-log URLs and evidence-proxy CORS. Vault get_state is current contract state, not a raw TDX evidence archive. NearBlocks Testnet remains the user-approved transaction-discovery source; RPC receipts remain execution authority.
+- Evidence follow-up: protocol d3a0f31 implements the allowlisted /agent/evidence/<file> proxy with CORS. This supersedes the request to add that route; frontend integration and deployment/boot binding validation remain. Vault get_state is current contract state, not a raw TDX evidence archive. NearBlocks Testnet remains the user-approved transaction-discovery source; RPC receipts remain execution authority.
 
 These are API/telemetry questions, not authorization to change deployed contracts or invent data. No message has been sent to Vadim.
