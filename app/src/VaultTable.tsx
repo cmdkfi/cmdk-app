@@ -46,4 +46,3 @@ export function VaultTable({ vaults, demo = false }: { vaults: VaultTableRow[]; 
     </PrototypeSurface>)}</div>
   </>
 }
-
