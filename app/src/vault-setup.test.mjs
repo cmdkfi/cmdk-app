@@ -50,3 +50,10 @@ test('repair preserves existing corridors and avoids repeating granted authoriza
 test('repair validates new corridors against the actual market LLTV rather than a demo constant',()=>{
  assert.throws(()=>repairSetupArgs(config,rules,[{id:'one',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:true,needsApproval:false,corridorSet:false,liquidationLtv:650000000000000000n}],true),/actual market/)
 })
+test('independent initial backup rules affect only unconfigured backup corridors',()=>{
+ const facts=[{id:'live',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:false,needsApproval:true,corridorSet:false},{id:'backup',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:false,needsApproval:true,corridorSet:false}]
+ const args=repairSetupArgs(config,rules,facts,false,{backup:{...rules,target:55,act:75,budget:10}})
+ assert.equal(args.markets[0].corridor.target,'500000000000000000');assert.equal(args.markets[1].corridor.target,'550000000000000000')
+ const existing=repairSetupArgs(config,rules,[facts[0],{...facts[1],corridorSet:true}],false,{backup:{...rules,target:55}})
+ assert.equal(existing.markets[1].corridor,null)
+})
