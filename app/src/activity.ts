@@ -28,7 +28,7 @@ export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:b
  if(await client.getChainId()!==84532)throw Error('RPC is not Base Sepolia.')
  const addresses=[...new Set(position.markets.flatMap(m=>[m.morpho!,m.executor!,m.collateralToken,m.loanToken]))]
  const logs=(await Promise.all(addresses.map(address=>client.getLogs({address,fromBlock:from,toBlock:to})))).flat()
- return logs.flatMap(log=>{try{
+ return logs.flatMap<ActivityEvent>(log=>{try{
  const decoded=decodeEventLog({abi:activityAbi,data:log.data,topics:log.topics});const args=decoded.args as Record<string,unknown>
  if(decoded.eventName==='Transfer'){
  if(![args.from,args.to].some(x=>String(x).toLowerCase()===position.baseAddress.toLowerCase()))return []
