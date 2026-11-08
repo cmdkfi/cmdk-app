@@ -29,7 +29,9 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       <div className="vault-detail-heading"><div><h3>Loan to Value (LTV)</h3><p>Your debt as a percentage of collateral value.</p></div><strong className="vault-current-ltv">{current === null ? '—' : pct(market.ltv)}</strong></div>
       <p className="vault-risk-description">{risk}</p>
       <p>Liquidation buffer: {market.ltv === null ? '—' : `${((Number(market.liquidationLtv)-Number(market.ltv))/1e16).toFixed(1)} percentage points`}</p>
-      <p>Daily sell budget: {pct(market.dailyBudget ?? null)}</p>
+      <p>Daily sell budget: {pct(market.dailyBudget ?? null)} · Floor {pct(market.floor ?? null)}</p>
+      <p>Migration {market.migrateAllowed ? 'allowed' : 'disabled'} · Exit {market.exitAllowed ? 'allowed' : 'disabled'}</p>
+      {market.telemetry ? <><p>Discretionary sales in rolling 24h: {formatUnits(market.telemetry.sold,market.collateralDecimals)} {market.collateralSymbol} · Moves {market.telemetry.moves.toString()}</p><p>Protective session: {market.telemetry.sessionStart === 0n ? 'None' : new Date(Number(market.telemetry.sessionStart)*1000).toLocaleString()} · Base cooldown {market.telemetry.cooldown.toString()}s</p><p>Protective reductions are not limited by the discretionary sell budget. Shared-token limits are evaluated by the Executor at execution.</p></> : <p>Agent execution counters unavailable.</p>}
       <div className="vault-ltv-track" role="img" aria-label={`Current LTV ${current === null ? 'unavailable' : pct(market.ltv)}. ${thresholds.map(t => `${t.name} ${pct(t.value)}`).join('. ')}`}>
         {current !== null && <span className="vault-ltv-fill" style={{ width: position(current) }} />}
         {thresholds.map(t => t.value !== null && <span key={t.name} className={`vault-ltv-tick ${t.tone}`} style={{ left: position(Number(t.value) / 1e16) }} />)}
@@ -68,6 +70,7 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : current.error ? <p role="alert">{current.error}</p> : current.position && <>
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
       {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
+      <PrototypeSurface><h3>Free vault balances</h3>{current.position.freeBalances?.map(token => <p key={token.token}>{formatUnits(token.balance,token.decimals)} {token.symbol} · available to withdraw</p>)}<p>Gas reserve: {current.position.gasBalance === undefined ? 'Unavailable' : `${formatUnits(current.position.gasBalance,18)} test ETH`}</p><p>Free tokens are separate from collateral locked in Morpho.</p></PrototypeSurface>
       {vault && current.position.markets.some(market => market.agentTrigger === null) && <VaultSetup key={vault.accountId} vault={vault} onComplete={() => setRevision(value => value + 1)} />}
       {current.position.errors?.map(error => <p role="alert" key={error}>{error}</p>)}
       {current.position.markets.length ? current.position.markets.map(market => <MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}

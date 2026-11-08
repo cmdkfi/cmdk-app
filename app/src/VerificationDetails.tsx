@@ -1,3 +1,4 @@
+import {readNearSecurity} from './near-security.ts'
 import {RevokeAgent} from './RevokeAgent.tsx'
 import { useEffect, useId, useRef, useState } from 'react'
 import { loadConfig, viewNear, type AgentMeasurement, type Vault } from './near.ts'
@@ -11,18 +12,21 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const [evidenceUrl,setEvidenceUrl]=useState('')
   const [state,setState] = useState<VaultState>()
   const [published,setPublished] = useState<AgentMeasurement | null>(null)
+  const [security,setSecurity]=useState<Awaited<ReturnType<typeof readNearSecurity>>>()
+  const [securityError,setSecurityError]=useState('')
   const [error,setError] = useState('')
   const [copied,setCopied] = useState('')
   const [loading,setLoading] = useState(false)
   const live = useRef(true)
   useEffect(() => { live.current = true; return () => { live.current = false } }, [])
   async function open() {
-    if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setState(undefined);setPolicy(undefined);setCopied('')
+    if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setState(undefined);setPolicy(undefined);setCopied('');setSecurity(undefined);setSecurityError('')
     try {
       const config = await loadConfig()
       if(live.current)setEvidenceUrl(`${config.relayerUrl}/agent/transcripts`)
       const next = await viewNear<VaultState>(config.nearRpcUrl,vault.accountId,'get_state')
       if (next.owner?.toLowerCase() !== vault.owner.toLowerCase()) throw new Error('Vault owner changed.')
+      try { const result = await readNearSecurity(config,vault,next.agent?.public_key);if(live.current)setSecurity(result) } catch(e) {if(live.current)setSecurityError((e as Error).message)}
       const position = await readLivePosition(config,vault.accountId,vault.owner)
       const fresh = position.markets.find(item=>item.id===market.id)
       if (!fresh) throw Error('Selected market is no longer configured.')
@@ -54,8 +58,11 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         {state.agent?.public_key && field('Registered agent',state.agent.public_key)}
         {state.agent?.expires_at && <div><dt>Registration expires</dt><dd>{new Date(state.agent.expires_at*1000).toLocaleString()}</dd></div>}
         {approved && Object.entries(approved).map(([key,value]) => field(key,value))}
+        <div><dt>Floor / Migration / Exit</dt><dd>{policy?.floor == null ? 'Unavailable' : `${(Number(policy.floor)/1e16).toFixed(1)}%`} / {policy?.migrateAllowed ? 'allowed' : 'disabled'} / {policy?.exitAllowed ? 'allowed' : 'disabled'}</dd></div>
         <div><dt>Target / Trigger / Daily sell budget</dt><dd>{[policy?.agentTarget ?? null,policy?.agentTrigger ?? null,policy?.dailyBudget ?? null].map(n => n === null ? 'Not configured' : `${(Number(n)/1e16).toFixed(1)}%`).join(' / ')}</dd></div>
       </dl><p>Policy values are read from the Base executor corridor for this NEAR vault’s Base address. Heartbeat interval and raw quote are not exposed by get_state.</p></>}
+      {securityError && <p role="alert">{securityError}</p>}
+      {security && <><h3>NEAR account security</h3><p>{security.codeMatches ? 'Vault code hash matches the factory configuration.' : 'Vault code hash does not match the factory configuration.'}</p><p>{security.restricted ? 'Exactly one registered agent key, restricted to reduce / migrate / exit on this vault.' : 'Access-key restrictions do not match the expected single registered agent key. Inspect the raw permissions.'}</p><dl>{field('Vault code hash',security.account.global_contract_hash ?? security.account.code_hash)}{security.factoryCodeHash && field('Factory code hash',security.factoryCodeHash)}</dl><details><summary>Raw access-key permissions</summary><pre>{JSON.stringify(security.keys,null,2)}</pre></details></>}
       <p>{evidenceUrl && <a href={evidenceUrl} target="_blank" rel="noreferrer">Agent decision transcripts ↗</a>} Decision evidence is published by the agent. Confirm execution through chain receipts.</p><RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
     </dialog>
   </>
