@@ -15,6 +15,8 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   const { writeContractAsync } = useWriteContract()
   const { signMessageAsync } = useSignMessage()
   const [action, setAction] = useState<Action>('Deposit')
+  const [repaySource,setRepaySource] = useState<'wallet'|'vault'>('wallet')
+  const [review,setReview] = useState<boolean|null>(null)
   const [withdrawCollateral, setWithdrawCollateral] = useState(false)
   const [input, setInput] = useState('')
   const [ethBalance, setEthBalance] = useState<bigint | null>(null)
@@ -45,10 +47,10 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     setBalance(null)
     setEthBalance(null)
     if (client && address) client.getBalance({address}).then(value => {if(active) setEthBalance(value)}).catch(() => {})
-    if (client && address && vault.baseAddress) client.readContract({address: token, abi: erc20, functionName:'balanceOf', args:[action === 'Withdraw' ? vault.baseAddress as Hex : address]})
+    if (client && address && vault.baseAddress) client.readContract({address: token, abi: erc20, functionName:'balanceOf', args:[action === 'Withdraw' || action === 'Repay' && repaySource === 'vault' ? vault.baseAddress as Hex : address]})
       .then(value => { if (active) setBalance(value) }).catch(() => { if (active) setMessage('Token balance unavailable. Retry after refreshing.') })
     return () => { active = false }
-  }, [action, token, client, address, vault.baseAddress, m])
+  }, [action, repaySource, token, client, address, vault.baseAddress, m])
   let value = 0n; let inputError = ''
   try { if (input) value = parseAmount(input, decimals) } catch (error) { inputError = (error as Error).message }
   const max = action === 'Borrow' ? m.priceUnavailable ? 0n : borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
@@ -138,7 +140,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       const market = fresh.markets.find(item => item.id === m.id)
       if (!market?.morpho || market.readOnly || !market.executor || fresh.baseAddress.toLowerCase() !== vault.baseAddress.toLowerCase()) throw new Error('Vault or market changed. Refresh first.')
       assertSession()
-      if (!close && (action === 'Deposit' || action === 'Repay')) {
+      if (!close && (action === 'Deposit' || action === 'Repay' && repaySource === 'wallet')) {
         const walletBalance = await client.readContract({address: token, abi: erc20, functionName:'balanceOf', args:[address]})
         if (value > walletBalance || (action === 'Repay' && value > market.debt)) throw new Error('Balance or debt changed. Refresh the amount.')
         const approvalAmount = action === 'Repay' && repayAll ? market.debt + market.debt / 100n + 1n : value
@@ -170,11 +172,16 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
         const state = await viewNear<VaultState>(config.nearRpcUrl, vault.accountId, 'get_state')
         if (state.owner?.toLowerCase() !== address.toLowerCase()) throw new Error('Vault owner changed.')
         const expiry = Number((await client.getBlock()).timestamp) + 600
-        let method: 'open' | 'withdraw' | 'close'; let args: Record<string,string>
+        let method: 'open' | 'withdraw' | 'close' | 'repay'; let args: Record<string,string>
         if (close) {
-          if (market.debt !== 0n) throw new Error('Repay the debt before releasing collateral.')
           method = 'close'; args = {market:market.id}
           await client.simulateContract({account:fresh.baseAddress,address:market.executor,abi:executorActions,functionName:'close',args:[market.id,BigInt(expiry)]})
+        } else if (action === 'Repay') {
+          const amount = repayAll ? market.debt + market.debt / 100n + 1n : value
+          const free = await client.readContract({address:market.loanToken,abi:erc20,functionName:'balanceOf',args:[fresh.baseAddress]})
+          if (amount > free) throw new Error('Insufficient free vault USDC for repayment and interest buffer.')
+          method='repay';args={market:market.id,amount:amount.toString()}
+          await client.simulateContract({account:fresh.baseAddress,address:market.executor,abi:executorActions,functionName:'repay',args:[market.id,amount,BigInt(expiry)]})
         } else if (action === 'Borrow') {
           if (market.priceUnavailable) throw new Error('A live oracle price is required to borrow.')
           const target = borrowTarget(market,value)
@@ -203,7 +210,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
           await new Promise(resolve => window.setTimeout(resolve,2000))
         }
       }
-      localStorage.removeItem(key); setLocked(false); setMessage('Confirmed on Base Sepolia. Refreshing position…'); setInput(''); onRefresh()
+      localStorage.removeItem(key); setLocked(false); setMessage('Confirmed on Base Sepolia. Refreshing position…'); setInput(''); setReview(null); onRefresh()
     } catch (error) {
       setMessage((error as Error).message)
       const rejected = (error as {code?:number;walk?:()=>{code?:number}}).code === 4001 || (error as Error).message?.includes('User rejected')
@@ -216,12 +223,13 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   return <PrototypeSurface className="live-actions">
     <h3>Manage position</h3>
     {m.priceUnavailable && <p role="alert">Oracle price unavailable. Risk preview and borrowing are unavailable. Repayment and free-token withdrawal remain available.</p>}
-    <div className="live-action-tabs">{(['Deposit','Withdraw','Borrow','Repay'] as Action[]).map(tab => <PrototypeButton key={tab} primary={action === tab} disabled={busy || locked} onClick={() => {setAction(tab);setInput('');setMessage('');setRepayAll(false)}}>{tab}</PrototypeButton>)}</div>
-    {action === 'Withdraw' && <><p>Withdraw free tokens only. Repay debt, then release collateral before withdrawing WETH.</p><label>Token <select disabled={busy} value={withdrawCollateral ? 'collateral' : 'loan'} onChange={e => {setWithdrawCollateral(e.target.value === 'collateral');setInput('')}}><option value="loan">{m.loanSymbol}</option><option value="collateral">{m.collateralSymbol}</option></select></label></>}
+    <div className="live-action-tabs">{(['Deposit','Withdraw','Borrow','Repay'] as Action[]).map(tab => <PrototypeButton key={tab} primary={action === tab} disabled={busy || locked} onClick={() => {setAction(tab);setInput('');setMessage('');setRepayAll(false);setReview(null)}}>{tab}</PrototypeButton>)}</div>
+    {action === 'Repay' && <label>Repayment source<select value={repaySource} disabled={busy||locked} onChange={e=>{setRepaySource(e.target.value as 'wallet'|'vault');setInput('');setRepayAll(false);setReview(null)}}><option value="wallet">Wallet USDC · direct Morpho repay</option><option value="vault">Free vault USDC · owner-call</option></select></label>}
+    {action === 'Withdraw' && <><p>Withdraw free tokens only. Repay debt, then release collateral before withdrawing WETH.</p><label>Token <select disabled={busy} value={withdrawCollateral ? 'collateral' : 'loan'} onChange={e => {setWithdrawCollateral(e.target.value === 'collateral');setInput('');setReview(null)}}><option value="loan">{m.loanSymbol}</option><option value="collateral">{m.collateralSymbol}</option></select></label></>}
     {action === 'Borrow' && <p>Borrow to the vault via NEAR owner-call, then withdraw the free {m.loanSymbol}. The signed target determines the amount at execution; this is an estimate.</p>}
-    <label>Amount · {symbol}<input inputMode="decimal" value={input} disabled={busy || locked} onChange={e => {setInput(e.target.value);setRepayAll(false)}} placeholder="0.0" /></label>
+    <label>Amount · {symbol}<input inputMode="decimal" value={input} disabled={busy || locked} onChange={e => {setInput(e.target.value);setRepayAll(false);setReview(null)}} placeholder="0.0" /></label>
     {action === 'Deposit' && m.collateralToken.toLowerCase() === '0x4200000000000000000000000000000000000006' && <div><p>Wallet test ETH: {!address ? 'Connect wallet' : ethBalance === null ? 'Loading…' : formatUnits(ethBalance,18)}. Wrap ETH to get WETH first; keep ETH for gas.</p><PrototypeButton disabled={busy || locked || chainId !== 84532 || value <= 0n || !!inputError || ethBalance === null || value >= ethBalance} onClick={() => void wrap()}>Wrap entered ETH amount to WETH</PrototypeButton></div>}
-    <div className="live-action-tabs">{[25,50,75,100].map(n => <PrototypeButton key={n} disabled={busy || locked} onClick={() => {setInput(formatUnits(max*BigInt(n)/100n,decimals));setRepayAll(action === 'Repay' && n === 100 && max === m.debt)}}>{n.toFixed(1)}%</PrototypeButton>)}</div>
+    <div className="live-action-tabs">{[25,50,75,100].map(n => <PrototypeButton key={n} disabled={busy || locked} onClick={() => {setInput(formatUnits(max*BigInt(n)/100n,decimals));setRepayAll(action === 'Repay' && n === 100 && max === m.debt);setReview(null)}}>{n.toFixed(1)}%</PrototypeButton>)}</div>
     {repayAll && <p>Repay all borrow shares. Approval includes a 1.0% buffer for interest; only the actual debt is spent.</p>}
     <p>Available {action === 'Borrow' ? 'within trigger and liquidity' : action === 'Withdraw' ? 'free at vault' : 'for this action'}: {formatUnits(max,decimals)} {symbol}</p>
     <p>LTV {pct(m.ltv)} → {pct(quote.ltv)} · Trigger {pct(m.agentTrigger)}</p>
@@ -230,8 +238,9 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {inputError && <p role="alert">{inputError}</p>}
     {value > max && <p role="alert">Amount exceeds available capacity.</p>}
     {chainId !== 84532 && <p>Switch your wallet to Base Sepolia to continue.</p>}
-    <PrototypeButton primary disabled={busy || locked || chainId !== 84532 || value <= 0n || value > max || !!inputError} onClick={() => void execute()}>{busy ? 'Waiting for confirmation…' : `Review ${action.toLowerCase()}`}</PrototypeButton>
-    {action === 'Withdraw' && m.debt === 0n && m.collateral > 0n && <PrototypeButton disabled={busy || locked || chainId !== 84532} onClick={() => void execute(true)}>Release collateral via vault</PrototypeButton>}
+    <PrototypeButton primary disabled={busy || locked || chainId !== 84532 || value <= 0n || value > max || !!inputError} onClick={() => setReview(false)}>{busy ? 'Waiting for confirmation…' : `Review ${action.toLowerCase()}`}</PrototypeButton>
+    {action === 'Withdraw' && m.collateral > 0n && <PrototypeButton disabled={busy || locked || chainId !== 84532} onClick={() => setReview(true)}>{m.debt > 0n ? 'Repay from vault and release collateral' : 'Release collateral via vault'}</PrototypeButton>}
+    {review !== null && <section className="prototype-surface" aria-label="Review transaction"><h3>Review {review ? 'close position' : action.toLowerCase()}</h3><p>Vault: {vault.accountId}</p><p>{review ? 'Repay all remaining debt using free vault USDC, then release all collateral into the vault. Tokens are not sent to your wallet.' : `${input} ${symbol} · ${action === 'Repay' ? repaySource === 'wallet' ? 'from your wallet to Morpho' : 'from free vault funds via owner-call' : action === 'Withdraw' ? 'from free vault balance to your connected wallet' : action === 'Borrow' ? 'borrowed USDC stays in the vault until you withdraw it' : 'from your wallet into Morpho collateral'}`}</p><p>Current LTV {pct(m.ltv)} → {review ? 'No debt' : pct(quote.ltv)}. The final state is checked again before signing.</p><PrototypeButton primary disabled={busy||locked||chainId!==84532} onClick={()=>void execute(review)}>Continue to wallet</PrototypeButton><PrototypeButton disabled={busy} onClick={()=>setReview(null)}>Cancel review</PrototypeButton></section>}
     {locked && <label>Confirmed transaction hash<input value={recoveryHash} disabled={busy} onChange={e => setRecoveryHash(e.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} /><small>If the wallet completed the transaction but this page lost its status, paste its hash. Legacy recovery accepts only a confirmed collateral deposit for this vault and market.</small></label>}
     {locked && <PrototypeButton disabled={busy} onClick={() => void recover()}>Check transaction status</PrototypeButton>}
     <p role="status">{message}</p>
