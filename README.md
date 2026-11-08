@@ -9,7 +9,7 @@ The React/Vite application in `app/` is deployed from `main` to https://testnet.
 - **Activity** (`#activity`): confirmed Base events plus separately indexed NEAR history from NearBlocks Testnet. Agent transcripts are evidence published by the agent, not transaction receipts.
 - **Create** (`#create`): checked owner account, relayer readiness and a single tracked creation request, followed by initial setup.
 
-There are no demo balances or demo routes in the running application. Legacy prototype/demo files remain historical source, not evidence of live product support. `app/src/main.tsx` is the production entry point.
+There are no demo balances or demo routes in the running application. Unused React demo screens and their obsolete scene tests have been removed. The root static prototype remains historical design source, not evidence of live product support. `app/src/main.tsx` is the production entry point.
 
 ## Transactions
 

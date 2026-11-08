@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { TokenIcon } from './ui/TokenIcon.tsx'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
-import './wallet-demo.css'
+import './vault-table.css'
 
 export type VaultTableRow = { marketLabel?:string; name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; protectionValidUntil?:number;registrationExpires?:number; asset: string; assetId: string; detail: string; onOpen?: () => void }
 export function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
