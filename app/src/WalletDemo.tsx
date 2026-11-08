@@ -14,12 +14,34 @@ const actions = [
 ]
 
 export function DemoVaults() {
-  return <><p className="demo-summary">2 vaults · Base Sepolia · Sample portfolio</p><div className="demo-vault-grid">{vaults.map(vault => <PrototypeSurface key={vault.name} className="demo-vault">
-    <div className="demo-card-heading"><h2>{vault.name}</h2><span className="testnet-label">Demo</span></div>
-    <p className="demo-protection">{vault.protection}</p>
-    <dl className="demo-metrics"><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>Loan-to-value</dt><dd>{vault.ltv}</dd></div></dl>
-    <a className="prototype-button" href="#activity">View activity <span aria-hidden="true"> ↗</span></a>
-  </PrototypeSurface>)}</div></>
+  const [query, setQuery] = useState('')
+  const [asset, setAsset] = useState('all')
+  const [autopilot, setAutopilot] = useState('all')
+  const filtered = vaults.filter(vault => vault.name.toLowerCase().includes(query.trim().toLowerCase()) && (asset === 'all' || vault.collateral.endsWith(` ${asset}`)) && (autopilot === 'all' || vault.protection === `Autopilot ${autopilot}`))
+  const hasFilters = query !== '' || asset !== 'all' || autopilot !== 'all'
+  function clearFilters() { setQuery(''); setAsset('all'); setAutopilot('all') }
+  return <><p className="demo-summary" role="status">{filtered.length} of {vaults.length} vaults · Base Sepolia · Sample portfolio</p>
+    <PrototypeSurface className="demo-vault-tools">
+      <div className="demo-vault-filter-row">
+        <label>Asset<select value={asset} onChange={event => setAsset(event.target.value)}><option value="all">All assets</option><option value="ETH">ETH</option><option value="WETH">WETH</option></select></label>
+        <label>Autopilot<select value={autopilot} onChange={event => setAutopilot(event.target.value)}><option value="all">All statuses</option><option value="on">On</option><option value="off">Off</option></select></label>
+        {hasFilters && <PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton>}
+      </div>
+      <label className="demo-vault-search"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" aria-label="Search vaults by name" placeholder="Filter vaults by name" value={query} onChange={event => setQuery(event.target.value)} /></label>
+    </PrototypeSurface>
+    {filtered.length === 0 && <PrototypeSurface className="demo-vault-no-results"><h2>No vaults found</h2><p>Try another name or clear your filters.</p><PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton></PrototypeSurface>}
+    {filtered.length > 0 && <PrototypeSurface className="demo-vault-table"><table><caption className="demo-table-caption">Demo vaults</caption>
+      <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV</th><th scope="col">Autopilot</th></tr></thead>
+      <tbody>{filtered.map(vault => <tr key={vault.name}>
+        <th scope="row">{vault.name}<small>Base Sepolia</small></th>
+        <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}</td><td><span className="demo-autopilot">{vault.protection === 'Autopilot on' ? 'On' : 'Off'}</span></td>
+      </tr>)}</tbody>
+    </table></PrototypeSurface>}
+    <div className="demo-vault-cards">{filtered.map(vault => <PrototypeSurface key={vault.name} className="demo-vault-compact">
+      <div className="demo-card-heading"><div><h2>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
+      <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV</dt><dd>{vault.ltv}</dd></div></dl>
+    </PrototypeSurface>)}</div>
+  </>
 }
 
 export function DemoActivity() {
