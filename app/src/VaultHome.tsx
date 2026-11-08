@@ -1,3 +1,4 @@
+import { Activity } from './Activity.tsx'
 import { VaultDetail } from './VaultDetail.tsx'
 import { useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
@@ -42,7 +43,7 @@ export function VaultHome({ activity = false, detail = false, create = false }: 
         <p>{activity ? 'Connect your wallet to view activity for your address.' : 'Find your vaults or create your first one.'}</p>
         <PrototypeButton primary onClick={open}>Connect wallet</PrototypeButton>
         <small>Connecting won’t move funds or request a signature.</small>
-      </PrototypeSurface> : activity ? <PrototypeSurface className="vault-welcome"><h2>Activity is not available yet</h2><p>The activity feed for this address is not connected. Open a vault to inspect its available position data.</p><a className="button button--secondary" href="#connect">View vaults</a></PrototypeSurface> : <VaultDiscovery />}
+      </PrototypeSurface> : activity ? <Activity vaults={discovery.vaults} /> : <VaultDiscovery />}
     </main>
     <footer className="vault-footer">NEAR testnet · Base Sepolia <span>Unaudited. No real money.</span></footer>
     <dialog ref={dialog} className="connect-dialog" aria-label="Wallet connection" onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.current?.close() } }}>
