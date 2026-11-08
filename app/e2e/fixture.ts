@@ -21,6 +21,7 @@ export class ProtocolFixture {
  originalRecord:Record<string,unknown>={};originalSigned:Signed[]=[]
  nearResults=new Map<string,{message:string;signature:Hex;signed:Signed[]}>()
  jobs=new Map<string,Record<string,unknown>>()
+ failEvidenceIndex=false;failTranscripts=false;failNearState=false;
  evidenceBoot=AGENT_BOOT;evidenceCount=2;evidenceStamp=Math.floor(Date.now()/1000)-60;corruptEvidence='';corruptTranscript=false;wrongTranscriptVault=false;secondaryError=false;rotateEvidence=false;agentWrongArgs=false;agentReceiptStatus='0x1';agentSigned?:Signed
  directReceipt=false;lastCancelNear='';lastCancel?:Signed
  async signed(nonce:number,to:Hex,data:Hex='0x'):Promise<Signed>{const raw=await baseAccount.signTransaction({chainId:84532,type:'eip1559',nonce,to,data,value:0n,gas:300000n,maxFeePerGas:1000000000n,maxPriorityFeePerGas:1n});return{raw,hash:keccak256(raw),from:BASE,nonce}}
@@ -115,8 +116,9 @@ export class ProtocolFixture {
     if(url.hostname==='cca-lite.coinbase.com')return route.fulfill({status:204,body:''})
     if(url.hostname==='near.fixture.test'){
      const req=request.postDataJSON();let result:unknown
+     if(this.failNearState&&req.params?.method_name==='get_state')return route.fulfill({status:503,body:'NEAR temporarily unavailable'})
      if(req.method==='query'){
-      const state=req.params.method_name==='get_config'?{count:0}:{owner:OWNER,owner_nonce:this.ownerNonce,base_address:BASE,markets:[LIVE,BACKUP].map(id=>({id,executor:EXECUTOR,corridor_set:true}))}
+      const state=req.params.method_name==='get_config'?{count:0}:{owner:OWNER,owner_nonce:this.ownerNonce,base_address:BASE,approved:measurement,agent:{public_key:AGENT_KEY,expires_at:NOW+86400},markets:[LIVE,BACKUP].map(id=>({id,executor:EXECUTOR,corridor_set:true}))}
       result={block_hash:HASH,result:[...Buffer.from(JSON.stringify(state))]}
      }else if(req.method==='tx'){
       if(req.params.tx_hash===AGENT_NEAR){return route.fulfill({json:{result:{final_execution_status:'FINAL',receipts_outcome:[{outcome:{status:{SuccessValue:''}}}],transaction:{hash:AGENT_NEAR,receiver_id:VAULT,signer_id:VAULT,public_key:AGENT_KEY,actions:[{FunctionCall:{method_name:'reduce',args:encode({market:LIVE,amount:this.agentWrongArgs?'101':'100',tx:{}})}}]},status:{SuccessValue:encode([this.agentSigned])}}}})}
@@ -127,6 +129,8 @@ export class ProtocolFixture {
      return route.fulfill({json:{jsonrpc:'2.0',id:req.id,result}})
     }
     if(['relayer.fixture.test','fallback.fixture.test'].includes(url.hostname)){
+     if(url.pathname==='/agent/'&&this.failEvidenceIndex)return route.fulfill({status:503,body:'Evidence temporarily unavailable'})
+     if(url.pathname==='/agent/transcripts'&&this.failTranscripts)return route.fulfill({status:503,body:'Transcripts temporarily unavailable'})
      if(url.pathname==='/agent/')return route.fulfill({json:{boot:this.evidenceBoot,files:this.evidenceFiles().map(({text,...row})=>row)}})
      if(url.pathname==='/agent/transcripts')return route.fulfill({json:{boot:this.evidenceBoot,transcripts:this.evidenceTranscripts().map(({text,...row})=>row)}})
      if(url.pathname.startsWith('/agent/transcripts/')){const row=this.evidenceTranscripts().find(row=>row.name===url.pathname.split('/').pop());if(!row)throw Error('Unknown fixture transcript');return route.fulfill({contentType:'application/json',body:row.text+(this.corruptTranscript?'x':'')})}

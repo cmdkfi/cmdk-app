@@ -37,3 +37,10 @@ Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (rechecked agai
 - Evidence route and frontend integration are now present. File SHA checks use a second boot-index read; comparisons to approved measurement/key are labelled separately from independent TDX verification. Vault get_state is current contract state, not a raw TDX evidence archive. NearBlocks Testnet remains the user-approved transaction-discovery source; RPC receipts remain execution authority.
 
 The developer supplied these integration decisions. No contract or agent change is requested; missing evidence remains explicit. No message has been sent to Vadim.
+
+
+### Verification hierarchy — 2026-11-08
+
+The drawer now leads with registration, published snapshot age, execution-proof level and per-file SHA status. Snapshot/execution, boot files, registration/policy, account security, contracts/raw data and permissions are separate disclosures. Contract failures do not suppress agent evidence; source retries keep unrelated evidence available. The heading remains fixed while the body scrolls on desktop and mobile. All raw state, receipt checks, copy actions and revocation confirmation remain available.
+
+Protocol cross-check: cmdkfi/app origin/main `47fd4fb`, `vault/src/lib.rs` registration/get_state, `agent/MEASUREMENT.md` evidence channel, `agent/src/main.rs` sent proposal and `agent/src/chain.rs` snapshot error fields. A published snapshot remains an observation, not a heartbeat; SHA consistency remains separate from independent TDX verification. No protocol transaction or financial calculation changes. Existing motion is preserved; this task introduces no motion-token or animation changes.
