@@ -31,7 +31,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
           value: `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
           debt: `${amount(market.debt, market.loanDecimals)} ${market.loanSymbol}`,
-          ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
+          health: market.debt===0n ? 'No debt' : market.ltv && market.ltv>0n ? (Number(market.liquidationLtv)/Number(market.ltv)).toFixed(1) : '—', ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
           onOpen: () => onOpen(vault.accountId),
         }))
       })

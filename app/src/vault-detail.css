@@ -8,3 +8,4 @@
 .verification-field { margin-block: 20px; }
 .verification-field dd { margin: 8px 0; display: grid; gap: 8px; overflow-wrap: anywhere; }
 .verification-field code { white-space: normal; }
+.cockpit-columns{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:24px;align-items:start}.cockpit-monitor{display:grid;gap:20px;min-width:0}.cockpit-actions{position:sticky;top:24px;min-width:0}.cockpit-actions .live-actions{margin:0}.cockpit-actions .live-action-tabs{gap:6px}.cockpit-actions input{font-size:16px;font-variant-numeric:tabular-nums}@media(max-width:900px){.cockpit-columns{grid-template-columns:1fr}.cockpit-actions{position:static}}

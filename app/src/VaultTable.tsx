@@ -4,7 +4,7 @@ import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 import './wallet-demo.css'
 
-export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; ltv: string; liquidation: string; protection: string; asset: string; assetId: string; detail: string; onOpen?: () => void }
+export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; asset: string; assetId: string; detail: string; onOpen?: () => void }
 export function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
   const known = address === 'demo-weth' || address.toLowerCase() === '0x4200000000000000000000000000000000000006' ? 'WETH'
     : address === 'demo-usdc' || address.toLowerCase() === '0x036cbd53842c5426634e7929541ec2318f3dcf7e' ? 'USDC' : null
@@ -37,12 +37,12 @@ export function VaultTable({ vaults, demo = false }: { vaults: VaultTableRow[]; 
       <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV / Liquidation</th><th scope="col">Autopilot</th></tr></thead>
       <tbody>{filtered.map(vault => <tr key={`${vault.name}:${vault.detail}`}>
         <th scope="row"><VaultTitle vault={vault} /><small className="vault-address" title={`${vault.vaultAddress} · ${vault.detail}`}>{shortAddress(vault.vaultAddress)}</small></th>
-        <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}<small>Liquidation {vault.liquidation}</small></td><td><span className="demo-autopilot">{vault.protection}</span></td>
+        <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}<small>Liquidation {vault.liquidation}</small>{vault.health && <small>Health {vault.health}</small>}</td><td><span className="demo-autopilot">{vault.protection}</span></td>
       </tr>)}</tbody>
     </table></PrototypeSurface>}
     <div className="demo-vault-cards">{filtered.map(vault => <PrototypeSurface key={`${vault.name}:${vault.detail}`} className="demo-vault-compact">
       <div className="demo-card-heading"><div><h2><VaultTitle vault={vault} /></h2><small className="vault-address" title={`${vault.vaultAddress} · ${vault.detail}`}>{shortAddress(vault.vaultAddress)}</small></div><span className="demo-autopilot">{vault.protection}</span></div>
-      <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV / Liquidation</dt><dd>{vault.ltv}<small>Liquidation {vault.liquidation}</small></dd></div></dl>
+      <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV / Liquidation</dt><dd>{vault.ltv}<small>Liquidation {vault.liquidation}</small>{vault.health && <small>Health {vault.health}</small>}</dd></div></dl>
     </PrototypeSurface>)}</div>
   </>
 }

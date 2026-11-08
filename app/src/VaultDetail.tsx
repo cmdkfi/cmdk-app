@@ -20,7 +20,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
   const risk = empty ? 'No open position' : current === null ? 'LTV unavailable' : market.ltv! >= market.liquidationLtv ? 'At or above liquidation threshold' : market.agentTrigger !== null && market.ltv! > market.agentTrigger ? 'Above agent act line' : 'Below liquidation threshold'
   return <section className="vault-market-detail" aria-label={`${market.loanSymbol} / ${market.collateralSymbol} market`}>
     <div className="vault-detail-heading"><h2 className="vault-token-pair"><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span></h2><span className="demo-autopilot">Autopilot · {market.autopilot}</span></div>
-    <div className="vault-balance-grid">
+    <div className="cockpit-columns"><div className="cockpit-monitor"><div className="vault-balance-grid">
       <PrototypeSurface><h3>Collateral</h3><strong>{amount(market.collateral, market.collateralDecimals)} <span>{market.collateralSymbol}</span></strong><p>{amount(market.collateralValue, market.loanDecimals)} {market.loanSymbol} at oracle</p></PrototypeSurface>
       <PrototypeSurface><h3>Debt</h3><strong>{amount(market.debt, market.loanDecimals)} <span>{market.loanSymbol}</span></strong><p>{empty ? 'No outstanding loan' : 'Includes interest at the read block'}</p></PrototypeSurface>
     </div>
@@ -39,7 +39,7 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
     <VerificationDetails vault={vault} market={market} />
-    <LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />
+    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} /></aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
 }

@@ -47,6 +47,8 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   const max = action === 'Borrow' ? borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
   const quote = preview(m, action, value)
   const liquidationPrice = quote.collateral > 0n && m.liquidationLtv > 0n ? quote.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (quote.collateral * m.liquidationLtv) : null
+  const currentLiquidationPrice = m.collateral > 0n && m.liquidationLtv > 0n ? m.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (m.collateral * m.liquidationLtv) : null
+  const priceLabel = (price:bigint|null) => price===null?'—':Number(formatUnits(price,m.loanDecimals)).toFixed(1)
   const pct = (n: bigint | null) => n === null ? '—' : `${(Number(n) / 1e16).toFixed(1)}%`
   function assertSession() { if (!alive.current) throw new Error('Wallet or vault changed. Reopen this vault.') }
   async function receipt(hash: Hex) {
@@ -203,7 +205,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {repayAll && <p>Repay all borrow shares. Approval includes a 1.0% buffer for interest; only the actual debt is spent.</p>}
     <p>Available {action === 'Borrow' ? 'within trigger and liquidity' : action === 'Withdraw' ? 'free at vault' : 'for this action'}: {formatUnits(max,decimals)} {symbol}</p>
     <p>LTV {pct(m.ltv)} → {pct(quote.ltv)} · Trigger {pct(m.agentTrigger)}</p>
-    <p>Liquidation price: {liquidationPrice === null ? '—' : Number(formatUnits(liquidationPrice,m.loanDecimals)).toFixed(1)} {m.loanSymbol} / {m.collateralSymbol}</p>
+    <p>Liquidation price: {priceLabel(currentLiquidationPrice)} → {priceLabel(liquidationPrice)} {m.loanSymbol} / {m.collateralSymbol}</p>
     {quote.ltv !== null && m.agentTrigger !== null && <p>{quote.ltv > m.agentTrigger ? 'Above trigger' : 'Below trigger'} · {pct(quote.ltv > m.agentTrigger ? quote.ltv-m.agentTrigger : m.agentTrigger-quote.ltv)} distance</p>}
     {inputError && <p role="alert">{inputError}</p>}
     {value > max && <p role="alert">Amount exceeds available capacity.</p>}
