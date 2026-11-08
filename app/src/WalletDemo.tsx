@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import './wallet-demo.css'
-import { PrototypeFilter, FilterIcon } from './ui/PrototypeFilter.tsx'
+import { TokenIcon } from './ui/TokenIcon.tsx'
+import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 
 const vaults = [
   { name: 'ETH vault', collateral: '5.00 ETH', value: '$14,000.00', debt: '7,000.00 USDC', ltv: '50.0%', protection: 'Autopilot on' },
@@ -34,12 +35,12 @@ export function DemoVaults() {
     {filtered.length > 0 && <PrototypeSurface className="demo-vault-table"><table><caption className="demo-table-caption">Demo vaults</caption>
       <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV</th><th scope="col">Autopilot</th></tr></thead>
       <tbody>{filtered.map(vault => <tr key={vault.name}>
-        <th scope="row"><span className="demo-asset-name"><FilterIcon kind="asset"/>{vault.name}</span><small>Base Sepolia</small></th>
+        <th scope="row"><span className="demo-asset-name"><TokenIcon asset={vault.name.startsWith('WETH') ? 'WETH' : 'ETH'}/>{vault.name}</span><small>Base Sepolia</small></th>
         <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}</td><td><span className="demo-autopilot">{vault.protection === 'Autopilot on' ? 'On' : 'Off'}</span></td>
       </tr>)}</tbody>
     </table></PrototypeSurface>}
     <div className="demo-vault-cards">{filtered.map(vault => <PrototypeSurface key={vault.name} className="demo-vault-compact">
-      <div className="demo-card-heading"><div><h2 className="demo-asset-name"><FilterIcon kind="asset"/>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
+      <div className="demo-card-heading"><div><h2 className="demo-asset-name"><TokenIcon asset={vault.name.startsWith('WETH') ? 'WETH' : 'ETH'}/>{vault.name}</h2><small>Base Sepolia</small></div><span className="demo-autopilot">{vault.protection}</span></div>
       <dl><div><dt>Collateral</dt><dd>{vault.collateral}<small>{vault.value}</small></dd></div><div><dt>Debt</dt><dd>{vault.debt}</dd></div><div><dt>LTV</dt><dd>{vault.ltv}</dd></div></dl>
     </PrototypeSurface>)}</div>
   </>
