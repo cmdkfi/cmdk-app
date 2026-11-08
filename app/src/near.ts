@@ -41,6 +41,7 @@ export async function viewNear<T>(rpcUrl: string, accountId: string, methodName:
   const response = await fetcher(rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(12000),
     body: JSON.stringify({ jsonrpc: '2.0', id: 'cmdk', method: 'query', params: { request_type: 'call_function', finality: 'final', account_id: accountId, method_name: methodName, args_base64: 'e30=' } }),
   })
   if (!response.ok) throw new Error('NEAR RPC is unavailable.')

@@ -62,7 +62,7 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
 
   let routeId: string | null = null
   try { routeId = route.startsWith('#vault/') ? decodeURIComponent(route.slice(7)) : new URLSearchParams(route.split('?')[1]).get('id') } catch { /* Invalid routes use the first owned vault. */ }
-  const routed = route.startsWith('#vault') ? selectedOwnedVault(current.vaults, routeId) : current.selected
+  const routed = route.startsWith('#vault') ? selectedOwnedVault(current.vaults, routeId ?? current.selected?.accountId ?? null) : current.selected
   return <VaultSelectionContext.Provider value={{ ...current, selected: routed, refresh: () => setRevision(value => value + 1), select }}>{children}</VaultSelectionContext.Provider>
 }
 
