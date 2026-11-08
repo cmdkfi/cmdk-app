@@ -84,6 +84,7 @@ export function LiveActions({ market: m, vault, onRefresh, requestedAction }: { 
     setBusy(true)
     try {
       let record: PendingTransaction = JSON.parse(localStorage.getItem(key) ?? '{}')
+      if(record.cancellation)throw Error('A cancellation is pending. Use Held transaction cancellation to reconcile it.')
       if (await client.getChainId() !== 84532) throw new Error('RPC is not Base Sepolia.')
       if (recoveryNearHash) {
         const signed=await readOwnerRecovery(await loadConfig(),vault,record,recoveryNearHash)
@@ -131,6 +132,7 @@ export function LiveActions({ market: m, vault, onRefresh, requestedAction }: { 
   async function resumeRecovered() {
     if(!recovered||!client||inFlight.current||!vault.baseAddress)return
     const record:PendingTransaction=JSON.parse(localStorage.getItem(key)??'{}')
+    if(record.cancellation){setMessage('Cancellation is pending. Do not resume the original calls.');return}
     if(record.message!==recovered.message){setMessage('Pending intent changed. Verify its NEAR transaction again.');return}
     inFlight.current=true;setBusy(true)
     try{
@@ -141,6 +143,7 @@ export function LiveActions({ market: m, vault, onRefresh, requestedAction }: { 
         assertSession()
         const existing=await client.getTransaction({hash:tx.hash}).catch(()=>null)
         assertSession()
+        if(JSON.parse(localStorage.getItem(key)??'{}').cancellation)throw Error('Cancellation started. Original broadcast stopped.');
         if(!existing){const sent=await client.sendRawTransaction({serializedTransaction:tx.raw});if(sent.toLowerCase()!==tx.hash.toLowerCase())throw Error('Broadcast hash differs from the recovered signed call.')}
         await receipt(tx.hash)
       }
