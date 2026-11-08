@@ -13,8 +13,8 @@ export function AssetIcon({ symbol, address }: { symbol: string; address: string
   return known ? <TokenIcon asset={known} /> : <span className="token-icon" aria-hidden="true">{symbol.slice(0, 1)}</span>
 }
 function VaultTitle({ vault }: { vault: VaultTableRow }) {
-  const pair = <span className="vault-token-pair"><span><AssetIcon symbol={vault.loanSymbol} address={vault.loanId} />{vault.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={vault.asset} address={vault.assetId} />{vault.asset}</span></span>
-  return <>{vault.onOpen ? <button className="vault-table-open" aria-label={`Open ${vault.loanSymbol} / ${vault.asset}, ${vault.vaultAddress}, ${vault.detail}`} onClick={vault.onOpen}>{pair}</button> : pair}{vault.marketLabel&&<small className="vault-market-role">{vault.marketLabel}</small>}</>
+  const pair = <span className="vault-token-pair"><span>Morpho ·</span><span><AssetIcon symbol={vault.asset} address={vault.assetId} />{vault.asset}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={vault.loanSymbol} address={vault.loanId} />{vault.loanSymbol}</span>{vault.marketLabel==='backup'&&<span>· backup</span>}</span>
+  return <>{vault.onOpen ? <button className="vault-table-open" aria-label={`Open ${vault.name}, ${vault.vaultAddress}, ${vault.detail}`} onClick={vault.onOpen}>{pair}</button> : pair}</>
 }
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`
 

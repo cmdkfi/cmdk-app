@@ -9,8 +9,8 @@ import { readLivePosition, type LivePosition, type MarketPosition } from './posi
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { AssetIcon } from './VaultTable.tsx'
 import './vault-detail.css'
-import { EditRules } from './EditRules.tsx'
-import { VaultSetup } from './VaultSetup.tsx'
+import {VaultRules} from './VaultRules.tsx'
+import {hasPosition,marketTitle} from './vault-layout.ts'
 import { LiveActions } from './LiveActions.tsx'
 import { VerificationDetails } from './VerificationDetails.tsx'
 
@@ -24,8 +24,8 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
   const thresholds = [{ name: 'Target', value: market.agentTarget, tone: 'target' }, { name: 'Act', value: market.agentTrigger, tone: 'act' }, { name: 'Liquidation', value: market.liquidationLtv, tone: 'liquidation' }]
   const position = (value: number) => `${Math.max(0, Math.min(100, value))}%`
   const risk = market.priceUnavailable ? 'Oracle unavailable · risk cannot be priced' : market.collateralValue === 0n && market.debt > 0n ? 'Critical · debt without collateral value' : empty ? 'No open position' : current === null ? 'LTV unavailable' : market.ltv! >= market.liquidationLtv ? 'At or above liquidation threshold' : market.agentTrigger !== null && market.ltv! > market.agentTrigger ? 'Above agent act line' : 'Below liquidation threshold'
-  return <section className="vault-market-detail" aria-label={`${market.loanSymbol} / ${market.collateralSymbol} market`}>
-    <div className="vault-detail-heading"><h2 className="vault-token-pair"><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span></h2><span className="vault-market-role">{market.label ?? `${market.id.slice(0,10)}…`}</span><span className="demo-autopilot">Autopilot · {protectionLabel(market.autopilot,market.protectionValidUntil,market.registrationExpires,now)}</span></div>
+  return <section className="vault-market-detail" aria-label={marketTitle(market)}>
+    <div className="vault-detail-heading"><h2 className="vault-token-pair"><span>Morpho ·</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span>{market.label==='backup'&&<span>· backup</span>}</h2><span className="demo-autopilot">Autopilot · {protectionLabel(market.autopilot,market.protectionValidUntil,market.registrationExpires,now)}</span></div>
     {market.policyUnavailable && <p role="alert">Executor policy telemetry unavailable. Position balances are still shown; borrowing and setup repair require a successful policy read.</p>}
     <div className="cockpit-columns"><div className="cockpit-monitor"><div className="vault-balance-grid">
       <PrototypeSurface><h3>Collateral</h3><strong>{amount(market.collateral, market.collateralDecimals)} <span>{market.collateralSymbol}</span></strong><p>{market.priceUnavailable ? 'Oracle unavailable' : `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`}</p></PrototypeSurface>
@@ -49,11 +49,17 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       </details>
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
-    {!market.readOnly && <EditRules vault={vault} market={market} onRefresh={onRefresh} />}
     <VerificationDetails vault={vault} market={market} />
     </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />{!market.readOnly&&<VaultFunding key={`funding:${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh}/>}</aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
+}
+
+function BackupMarket({market,vault,onRefresh}:{market:MarketPosition;vault:Vault;onRefresh:()=>void}) {
+ const active=hasPosition(market)
+ const [expanded,setExpanded]=useState(active)
+ useEffect(()=>{setExpanded(active)},[active])
+ return <details className="backup-market" open={expanded} onToggle={event=>setExpanded(event.currentTarget.open)}><summary><span className="backup-market-summary"><span>{marketTitle(market)}</span><small>{active?'Position active':'No position'} · migration destination</small></span></summary><MarketDetail market={market} vault={vault} onRefresh={onRefresh}/></details>
 }
 
 export function VaultDetail({ vault }: { vault: Vault | null }) {
@@ -73,6 +79,9 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     return () => window.clearInterval(timer)
   }, [key])
   const current = read?.key === key ? read : null
+  const markets=current?.position?.markets??[]
+  const live=markets.find(market=>market.label==='live')??markets.find(market=>market.label!=='backup')??markets[0]
+  const backup=markets.find(market=>market.label==='backup'&&market.id!==live?.id)
   return <div className="vault-detail">
     <div className="vault-detail-heading"><a href="#connect">← Vaults</a>{vault && <PrototypeButton disabled={!current} onClick={() => setRevision(value => value + 1)}>Refresh</PrototypeButton>}</div>
     {vault&&<VaultRecovery key={`recovery:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/>}
@@ -80,9 +89,9 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
       {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
       <PrototypeSurface><h3>Free vault balances</h3>{current.position.freeBalances?.map(token => <p key={token.token}>{formatUnits(token.balance,token.decimals)} {token.symbol} · available to withdraw</p>)}<p>Gas reserve: {current.position.gasBalance === undefined ? 'Unavailable' : `${formatUnits(current.position.gasBalance,18)} test ETH`}</p><p>Free tokens are separate from collateral locked in Morpho.</p></PrototypeSurface>
-      {vault && <details><summary>Inspect / repair vault setup</summary><VaultSetup key={`${vault.accountId}:${vault.owner}`} vault={vault} onComplete={() => setRevision(value => value + 1)} /></details>}
+      {live&&<VaultRules key={`${vault.accountId}:${live.id}`} vault={vault} live={live} backup={backup} onRefresh={()=>setRevision(value=>value+1)}/>}
       {current.position.errors?.map(error => <p role="alert" key={error}>{error}</p>)}
-      {current.position.markets.length ? current.position.markets.map(market => <MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}
+      {current.position.markets.length ? current.position.markets.map(market => market.id===backup?.id?<BackupMarket key={market.id} market={market} vault={vault!} onRefresh={()=>setRevision(value=>value+1)}/>:<MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}
     </>}
   </div>
 }
