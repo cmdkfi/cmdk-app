@@ -9,7 +9,7 @@ const morphoAbi = parseAbi([
   'function idToMarketParams(bytes32 id) view returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)',
 ])
 const oracleAbi = parseAbi(['function price() view returns (uint256)'])
-const executorAbi = parseAbi(['function soldInWindow(address user,address token) view returns (uint256)', 'function movesInWindow(address user) view returns (uint256)', 'function sessionStart(address user,bytes32 id) view returns (uint256)', 'function lastAgentCall(address user) view returns (uint256)', 'function COOLDOWN() view returns (uint256)', 'function closedForAgent(address user, bytes32 id) view returns (bool)', 'function corridors(address user, bytes32 id) view returns (uint64 target, uint64 act, uint64 floor, uint64 sellBudget, bool migrateAllowed, bool exitAllowed, bool set)'])
+const executorAbi = parseAbi(['function marketCount() view returns (uint256)', 'function marketIds(uint256) view returns (bytes32)', 'function soldInWindow(address user,address token) view returns (uint256)', 'function movesInWindow(address user) view returns (uint256)', 'function sessionStart(address user,bytes32 id) view returns (uint256)', 'function lastAgentCall(address user) view returns (uint256)', 'function COOLDOWN() view returns (uint256)', 'function closedForAgent(address user, bytes32 id) view returns (bool)', 'function corridors(address user, bytes32 id) view returns (uint64 target, uint64 act, uint64 floor, uint64 sellBudget, bool migrateAllowed, bool exitAllowed, bool set)'])
 const tokenAbi = parseAbi(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
 const irmAbi = parseAbi(['function borrowRateView((address loanToken,address collateralToken,address oracle,address irm,uint256 lltv),(uint128 totalSupplyAssets,uint128 totalSupplyShares,uint128 totalBorrowAssets,uint128 totalBorrowShares,uint128 lastUpdate,uint128 fee)) view returns (uint256)'])
 const WAD = 10n ** 18n
@@ -17,6 +17,7 @@ const WAD = 10n ** 18n
 export type MarketPosition = {
   id: Hex
   readOnly?: boolean
+  policyUnavailable?: boolean
   priceUnavailable?: boolean
   collateral: bigint
   debt: bigint
@@ -34,7 +35,7 @@ export type MarketPosition = {
   floor?: bigint | null
   migrateAllowed?: boolean
   exitAllowed?: boolean
-  telemetry?: { sold: bigint; moves: bigint; sessionStart: bigint; lastCall: bigint; cooldown: bigint; closed: boolean }
+  telemetry?: { sold: bigint; moves: bigint; sessionStart: bigint; lastCall: bigint; cooldown: bigint; closed: boolean; budget?: {activeCollateral:bigint;fraction:bigint;remaining:bigint}; cooldownRemaining:bigint }
   dailyBudget?: bigint | null
   agentTarget: bigint | null
   agentTrigger: bigint | null
@@ -88,6 +89,31 @@ async function readPositionSnapshot(config: AppConfig, vaultId: string, expected
   if (await client.getChainId() !== 84532) throw new Error('RPC is not Base Sepolia.')
   const blockNumber = await client.getBlockNumber()
   const block = await client.getBlock({blockNumber})
+  const budgetReads=new Map<string,Promise<{activeCollateral:bigint;fraction:bigint;remaining:bigint}>>()
+  function sharedBudget(executor:Address,token:Address,sold:bigint){
+    const key=`${executor.toLowerCase()}:${token.toLowerCase()}`
+    const existing=budgetReads.get(key);if(existing)return existing
+    const task=(async()=>{
+      const count=await client.readContract({address:executor,abi:executorAbi,functionName:'marketCount',blockNumber})
+      if(count>1000n)throw Error('Executor market list exceeds the telemetry reader limit.')
+      const entries=await Promise.all(Array.from({length:Number(count)},async(_,index)=>{
+        const id=await client.readContract({address:executor,abi:executorAbi,functionName:'marketIds',args:[BigInt(index)],blockNumber})
+        const [params,corridor,closed,position]=await Promise.all([
+          client.readContract({address:morpho,abi:morphoAbi,functionName:'idToMarketParams',args:[id],blockNumber}),
+          client.readContract({address:executor,abi:executorAbi,functionName:'corridors',args:[baseAddress,id],blockNumber}),
+          client.readContract({address:executor,abi:executorAbi,functionName:'closedForAgent',args:[baseAddress,id],blockNumber}),
+          client.readContract({address:morpho,abi:morphoAbi,functionName:'position',args:[id,baseAddress],blockNumber}),
+        ])
+        return {active:params[1].toLowerCase()===token.toLowerCase()&&corridor[6]&&!closed&&position[2]>0n,collateral:position[2],budget:corridor[3]}
+      }))
+      const active=entries.filter(entry=>entry.active)
+      const activeCollateral=active.reduce((sum,entry)=>sum+entry.collateral,0n)
+      const fraction=active.length?active.reduce((min,entry)=>entry.budget<min?entry.budget:min,active[0].budget):0n
+      return {activeCollateral,fraction,remaining:remainingSellBudget(activeCollateral,sold,fraction)}
+    })()
+    budgetReads.set(key,task);return task
+  }
+
   const reads = await Promise.allSettled(state.markets.map(async market => {
     if (!market.id || !/^0x[0-9a-fA-F]{64}$/.test(market.id) || !market.executor || !isAddress(market.executor)) {
       throw new Error('A vault market has an invalid address or ID.')
@@ -97,9 +123,9 @@ async function readPositionSnapshot(config: AppConfig, vaultId: string, expected
       client.readContract({ address: morpho, abi: morphoAbi, functionName: 'position', args: [id, baseAddress], blockNumber }),
       client.readContract({ address: morpho, abi: morphoAbi, functionName: 'market', args: [id], blockNumber }),
       client.readContract({ address: morpho, abi: morphoAbi, functionName: 'idToMarketParams', args: [id], blockNumber }),
-      client.readContract({ address: market.executor as Address, abi: executorAbi, functionName: 'corridors', args: [baseAddress, id], blockNumber }),
-      client.readContract({ address: market.executor as Address, abi: executorAbi, functionName: 'closedForAgent', args: [baseAddress, id], blockNumber }),
-      client.readContract({ address: morpho, abi: morphoAbi, functionName: 'isAuthorized', args: [baseAddress, market.executor as Address], blockNumber }),
+      client.readContract({ address: market.executor as Address, abi: executorAbi, functionName: 'corridors', args: [baseAddress, id], blockNumber }).catch(()=>null),
+      client.readContract({ address: market.executor as Address, abi: executorAbi, functionName: 'closedForAgent', args: [baseAddress, id], blockNumber }).catch(()=>null),
+      client.readContract({ address: morpho, abi: morphoAbi, functionName: 'isAuthorized', args: [baseAddress, market.executor as Address], blockNumber }).catch(()=>null),
     ])
     const computedId = keccak256(encodeAbiParameters([{type:'address'}, {type:'address'}, {type:'address'}, {type:'address'}, {type:'uint256'}], params))
     if (computedId.toLowerCase() !== id.toLowerCase()) throw new Error('Market parameters do not match the registered market ID.')
@@ -113,23 +139,24 @@ async function readPositionSnapshot(config: AppConfig, vaultId: string, expected
     const rate = params[3] === '0x0000000000000000000000000000000000000000' ? 0n : await client.readContract({address:params[3],abi:irmAbi,functionName:'borrowRateView',blockNumber,args:[{loanToken:params[0],collateralToken:params[1],oracle:params[2],irm:params[3],lltv:params[4]},{totalSupplyAssets:totals[0],totalSupplyShares:totals[1],totalBorrowAssets:totals[2],totalBorrowShares:totals[3],lastUpdate:totals[4],fee:totals[5]}]})
     const borrowAssets = accruedBorrowAssets(totals[2],rate,block.timestamp-totals[4])
     const values = marketMath(position[2], position[1], borrowAssets, totals[3], oraclePrice)
-    const telemetry = await Promise.all([
+    const telemetry = closed===null ? undefined : await Promise.all([
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'soldInWindow',args:[baseAddress,params[1]],blockNumber}),
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'movesInWindow',args:[baseAddress],blockNumber}),
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'sessionStart',args:[baseAddress,id],blockNumber}),
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'lastAgentCall',args:[baseAddress],blockNumber}),
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'COOLDOWN',blockNumber}),
-    ]).then(([sold,moves,sessionStart,lastCall,cooldown])=>({sold,moves,sessionStart,lastCall,cooldown,closed})).catch(()=>undefined)
+    ]).then(async([sold,moves,sessionStart,lastCall,cooldown])=>{const baseReady=lastCall===0n?0n:lastCall+cooldown;const nearReady=BigInt(state.last_agent_action??0)===0n?0n:BigInt(state.last_agent_action??0)+BigInt(state.cooldown_secs??0);const ready=baseReady>nearReady?baseReady:nearReady;return{sold,moves,sessionStart,lastCall,cooldown,closed,cooldownRemaining:ready>block.timestamp?ready-block.timestamp:0n,budget:await sharedBudget(market.executor as Address,params[1],sold).catch(()=>undefined)}}).catch(()=>undefined)
     return {
-      floor:corridor[6] ? corridor[2] : null, migrateAllowed:corridor[4],exitAllowed:corridor[5],telemetry,
+      policyUnavailable:corridor===null||closed===null||authorized===null,
+      floor:corridor?.[6] ? corridor[2] : null, migrateAllowed:corridor?.[4],exitAllowed:corridor?.[5],telemetry,
       readOnly: !config.createVault?.markets.some(item => item.id.toLowerCase() === id.toLowerCase() && item.executor.toLowerCase() === market.executor!.toLowerCase()),
       priceUnavailable: oraclePrice <= 0n,
-      executor: market.executor as Address, morpho, oracle: params[2], irm: params[3], liquidity: totals[0] > totals[2] ? totals[0] - totals[2] : 0n, borrowShares: position[1], dailyBudget: corridor[6] ? corridor[3] : null,
+      executor: market.executor as Address, morpho, oracle: params[2], irm: params[3], liquidity: totals[0] > totals[2] ? totals[0] - totals[2] : 0n, borrowShares: position[1], dailyBudget: corridor?.[6] ? corridor[3] : null,
       id, collateral: position[2], debt: values.debt, collateralValue: values.collateralValue,
       ltv: values.ltv, liquidationLtv: params[4], oraclePrice,
-      autopilot: protectionStatus(state.agent, market.corridor_set === true && corridor[6] && authorized, closed, watched, baseAddress, Date.now() / 1000),
-      agentTarget: corridor[6] ? corridor[0] : null,
-      agentTrigger: corridor[6] ? corridor[1] : null,
+      autopilot: corridor===null||closed===null||authorized===null ? 'Unavailable' : protectionStatus(state.agent, market.corridor_set === true && corridor[6] && authorized, closed, watched, baseAddress, Date.now() / 1000),
+      agentTarget: corridor?.[6] ? corridor[0] : null,
+      agentTrigger: corridor?.[6] ? corridor[1] : null,
       loanToken: params[0], collateralToken: params[1], loanSymbol, collateralSymbol, loanDecimals, collateralDecimals,
     }
   }))
@@ -158,4 +185,9 @@ export function protectionStatus(agent: { public_key?: string; expires_at?: numb
   if (observation?.agent_status !== 'active' || observation.base_address?.toLowerCase() !== baseAddress.toLowerCase() ||
     observation.expires_at !== agent.expires_at || typeof tick !== 'number' || tick > now + 30 || now - tick > 60) return 'Unavailable'
   return 'Active'
+}
+
+export function remainingSellBudget(activeCollateral:bigint,sold:bigint,fraction:bigint) {
+  const limit=(activeCollateral+sold)*fraction/WAD
+  return limit>sold?limit-sold:0n
 }
