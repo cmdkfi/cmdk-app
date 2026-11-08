@@ -4,6 +4,7 @@ import { coinbaseWallet, injected } from 'wagmi/connectors'
 
 export const walletConfig = createConfig({
   chains: [baseSepolia],
+  multiInjectedProviderDiscovery: true,
   connectors: [injected(), coinbaseWallet({ appName: 'cmdk', preference: { options: 'eoaOnly' } })],
   transports: { [baseSepolia.id]: http() },
 })
