@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
+import { baseSepolia } from 'wagmi/chains'
+import { accountKind } from './wallet-utils.ts'
 import { discoverVaults, loadConfig, selectedOwnedVault, type Vault } from './near.ts'
 
 type DiscoveryState =
@@ -14,8 +16,11 @@ const VaultSelectionContext = createContext<VaultSelection | null>(null)
 
 export function VaultSelectionProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount()
+  const client = usePublicClient({ chainId: baseSepolia.id })
   const [state, setState] = useState<DiscoveryState>(() => empty('disconnected'))
   const [stateOwner, setStateOwner] = useState<string | undefined>()
+  const [route, setRoute] = useState(window.location.hash)
+  useEffect(() => { const update = () => setRoute(window.location.hash); window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update) }, [])
   const [revision, setRevision] = useState(0)
   const owner = isConnected ? address?.toLowerCase() : undefined
   const current = stateOwner === owner ? state : empty(owner ? 'loading' : 'disconnected')
@@ -25,7 +30,12 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     if (!owner) { setState(empty('disconnected')); return }
     let active = true
     setState(empty('loading'))
-    loadConfig().then(async config => {
+    Promise.resolve().then(async () => {
+      if (!client || !address) throw new Error('Account verification is unavailable. Please retry.')
+      const code = await client.getCode({ address })
+      if (accountKind(code) === 'contract') throw new Error('This account type is not supported yet. Connect another wallet.')
+      return loadConfig()
+    }).then(async config => {
       if (!config.near.factory) { if (active) setState(empty('pending')); return }
       const result = await discoverVaults(config, owner)
       if (!active) return
@@ -38,7 +48,7 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
       if (active) setState({ ...empty('disconnected'), kind: 'error', message: error instanceof Error ? error.message : 'Vault search failed.' })
     })
     return () => { active = false }
-  }, [owner, revision])
+  }, [owner, revision, client, address])
 
   function select(accountId: string) {
     if (!owner || current.kind !== 'ready') return
@@ -50,7 +60,10 @@ export function VaultSelectionProvider({ children }: { children: ReactNode }) {
     }).catch(() => {})
   }
 
-  return <VaultSelectionContext.Provider value={{ ...current, refresh: () => setRevision(value => value + 1), select }}>{children}</VaultSelectionContext.Provider>
+  let routeId: string | null = null
+  try { routeId = route.startsWith('#vault/') ? decodeURIComponent(route.slice(7)) : new URLSearchParams(route.split('?')[1]).get('id') } catch { /* Invalid routes use the first owned vault. */ }
+  const routed = route.startsWith('#vault') ? selectedOwnedVault(current.vaults, routeId) : current.selected
+  return <VaultSelectionContext.Provider value={{ ...current, selected: routed, refresh: () => setRevision(value => value + 1), select }}>{children}</VaultSelectionContext.Provider>
 }
 
 export function useVaultSelection(): VaultSelection {

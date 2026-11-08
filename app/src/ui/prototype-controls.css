@@ -1,0 +1,18 @@
+/* Values from the final “x.ai reference elements” layer in the original prototype. */
+@font-face{font-family:CmdkReference;src:url('/prototype/xvf-reference.woff2') format('woff2');font-weight:200 800;font-style:normal;font-display:swap}
+.vault-app{--bg:#0a0a0a;--ink:#fff;--muted:#a3a3a3;--surface:#1a1a1a;--raised:#202020;--hover:#303030;--selected:#3b3b3b;--line:#303030;--accent:#fff;--accent-ink:#0a0a0a;font-family:CmdkReference,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:var(--ink)}
+:root[data-theme=light] .vault-app{--bg:#fff;--ink:#0a0a0a;--muted:#73716d;--surface:#f9f8f6;--raised:#f2f1ef;--hover:#e8e7e4;--selected:#e2e1de;--line:#e7e5e1;--accent:#0a0a0a;--accent-ink:#fff}
+.prototype-button,.prototype-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--raised);color:var(--ink);border-radius:9999px;min-height:44px;font-size:14px;font-weight:500;padding:12px 20px;touch-action:manipulation}
+.prototype-button.is-primary{background:var(--accent);color:var(--accent-ink)}
+.prototype-button:disabled{opacity:.45;cursor:not-allowed}
+.prototype-icon-button{width:44px;padding:0;flex-shrink:0;font-size:24px}
+.prototype-button:not(:disabled):active,.prototype-icon-button:active{transform:scale(.97)}
+.prototype-navigation{display:flex;gap:8px;align-items:center}
+.prototype-navigation a{display:flex;align-items:center;justify-content:center;border-radius:9999px;background:var(--raised);color:var(--muted);font-size:14px;font-weight:500;padding:10px 16px;min-height:44px}
+.prototype-navigation a[aria-current=page]{background:var(--ink);color:var(--bg)}
+.prototype-surface{background:var(--surface);border-radius:16px;padding:24px}
+@media(hover:hover) and (pointer:fine){.prototype-button:not(.is-primary):hover,.prototype-icon-button:hover,.prototype-navigation a:not([aria-current=page]):hover{background:var(--hover)}}
+@media(max-width:650px){.prototype-button{font-size:13px;padding:11px 16px}.prototype-navigation a{font-size:13px}.prototype-surface{padding:18px 14px}}
+@media(prefers-reduced-motion:reduce){.prototype-button:active,.prototype-icon-button:active{transform:none}}
+
+.prototype-button:focus-visible:active,.prototype-icon-button:focus-visible:active{transform:none}

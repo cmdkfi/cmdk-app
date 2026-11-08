@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { baseSepolia } from 'wagmi/chains'
 import { loadConfig, viewNear, type AppConfig } from './near.ts'
-import { useVaultSelection } from './VaultSelectionContext.tsx'
-import { useDemo } from './DemoContext.tsx'
+import type { Vault } from './near.ts'
 import { accountKind } from './wallet-utils.ts'
 import { checkSetupSignature, readSetupJob, setupMessage, startSetupJob, type SetupJob, SetupError } from './vault-setup.ts'
 
@@ -12,10 +11,10 @@ type VaultState = { owner: string; owner_nonce: number | string }
 const stages = ['accepted', 'vault_checked', 'base_sent', 'done'] as const
 const labels = ['Wallet signed', 'Vault checked on NEAR', 'Sent on Base', 'Setup complete']
 
-export function VaultSetup() {
+export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onComplete: () => void }) {
   const { address, isConnected } = useAccount()
-  const { selected, refresh } = useVaultSelection()
-  const { state: demo } = useDemo()
+  // Initial policy from backend scripts/test_scene.py, explicitly reviewed before signing.
+  const rules = { floor: 30, target: 50, act: 70, budget: 20, migrate: true, exit: true }
   const client = usePublicClient({ chainId: baseSepolia.id })
   const { signMessageAsync } = useSignMessage()
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -59,7 +58,7 @@ export function VaultSetup() {
         if (next.stage === 'done') {
           const receipts = next.receipts ?? []
           if (receipts.length !== 5 || receipts.some(item => item.status !== 1)) setState({ kind: 'uncertain', message: 'The relayer marked setup done, but five successful Base receipts were not confirmed. Check your vault.' })
-          else { setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); refresh() }
+          else { setState({ kind: 'done', message: 'Vault setup completed on both markets. The agent can register after it detects this version.' }); onComplete() }
         } else if (next.stage === 'failed') setState({ kind: next.http_status === 502 || next.base_sent?.length ? 'uncertain' : 'failed', message: next.error || 'Setup failed. Check the vault and transaction links before signing again.' })
         else { setState({ kind: 'working', message: 'The relayer is processing the owner-signed setup.' }); timer = window.setTimeout(poll, 1000) }
       } catch (error) {
@@ -82,7 +81,7 @@ export function VaultSetup() {
       if (vault.owner?.toLowerCase() !== address.toLowerCase()) throw new SetupError('The connected wallet is not this vault owner.')
       if (vault.owner_nonce !== 0 && vault.owner_nonce !== '0') throw new SetupError('This vault already has owner actions or its nonce is unavailable. Refresh its current setup before signing again.')
       const now = await client.getBlock().then(block => Number(block.timestamp)).catch(() => Math.floor(Date.now() / 1000))
-      const text = setupMessage(selected.accountId, 1, now + 600, config, demo.rules)
+      const text = setupMessage(selected.accountId, 1, now + 600, config, rules)
       setState({ kind: 'signing', message: 'Review and sign the exact setup message in your wallet.' })
       const signature = await signMessageAsync({ message: text })
       await checkSetupSignature(text, signature, address)
@@ -103,11 +102,12 @@ export function VaultSetup() {
     <p className="create-job__status" role="status">{state.message}</p>
     {selected && <p className="setup-live__detail">Vault: {selected.accountId}</p>}
     {config?.agent.measurement && <><p className="setup-live__detail">Agent fingerprint: <code>{config.agent.measurement.mrtd.slice(0, 12)}…{config.agent.measurement.mrtd.slice(-8)}</code></p><p className="setup-live__detail">Version: {config.agent.version ?? 'Published measurement'} · Source commit: {config.agent.sourceCommit ?? 'Not published'}</p></>}
-    {review && <div className="setup-live__review"><h3>Review before signing</h3><p>On both Morpho markets: Floor {demo.rules.floor}%, Target {demo.rules.target}%, Agent acts {demo.rules.act}%, daily sell budget {demo.rules.budget}%. Move to backup: {demo.rules.migrate ? 'allowed' : 'off'}. Exit: {demo.rules.exit ? 'allowed' : 'off'}.</p><p>Approves USDC and WETH allowances and authorizes the executor. The approved agent version may register its limited key. Nothing leaves your position address. The message expires in 10 minutes.</p><p><a href="https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md" target="_blank" rel="noreferrer">How to compare the agent measurement ↗</a></p></div>}
+    {config?.createVault && <p className="setup-live__detail">Executor: {config.createVault.markets[0]?.executor}</p>}
+    {review && <div className="setup-live__review"><h3>Review before signing</h3><p>On both Morpho markets: Floor {rules.floor}%, Target {rules.target}%, Agent acts {rules.act}%, daily sell budget {rules.budget}%. Move to backup: {rules.migrate ? 'allowed' : 'off'}. Exit: {rules.exit ? 'allowed' : 'off'}.</p><p>Grants unlimited USDC and WETH allowances from the vault to its registered Executor and authorizes that Executor on Morpho. The approved agent version may register its limited key. Nothing leaves your position address. The message expires in 10 minutes.</p><p><a href="https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md" target="_blank" rel="noreferrer">How to compare the agent measurement ↗</a></p></div>}
     {jobId && <div className="create-job__progress" aria-label="Setup progress">{labels.map((label, step) => <div key={label} className={step <= index ? 'is-reached' : ''}><span aria-hidden="true">{step < index || job?.stage === 'done' ? '✓' : step + 1}</span>{label}</div>)}</div>}
     {job?.near_tx && <p className="setup-live__detail"><a href={`https://testnet.nearblocks.io/txns/${encodeURIComponent(job.near_tx)}`} target="_blank" rel="noreferrer">View NEAR transaction ↗</a></p>}
     {job?.base_sent?.map(hash => <p className="setup-live__detail" key={hash}><a href={`https://sepolia.basescan.org/tx/${hash}`} target="_blank" rel="noreferrer">Base transaction {hash.slice(0, 12)}… ↗</a></p>)}
     <div className="card-actions">{!review ? <button className="button button--secondary" onClick={() => setReview(true)}>Review setup</button> : <button className="button" disabled={state.kind !== 'ready'} onClick={() => void signAndSubmit()}>Sign vault setup <span aria-hidden="true">→</span></button>}<a className="button button--secondary" href="#connect">View my vaults <span aria-hidden="true">→</span></a></div>
-    <p className="explain">The saved local demo rules are the values shown for review. A live signature is available only after the published deployment and agent measurement are loaded.</p>
+    <p className="explain">These initial rules match the backend setup policy. They are not stored on-chain until you sign and setup confirms.</p>
   </section>
 }
