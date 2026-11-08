@@ -56,7 +56,7 @@ export function marketMath(collateral: bigint, borrowShares: bigint, totalBorrow
   return { debt, collateralValue, ltv }
 }
 
-export type VaultState = { owner?: string; owner_nonce?: number | string; approved?: Record<string, string>; base_address?: string; morpho?: string; agent?: { public_key?: string; expires_at?: number }; markets?: { id?: string; executor?: string; corridor_set?: boolean }[] }
+export type VaultState = { signer?: string; path?: string; cooldown_secs?: number; last_agent_action?: number; owner?: string; owner_nonce?: number | string; approved?: Record<string, string>; base_address?: string; morpho?: string; agent?: { public_key?: string; expires_at?: number }; markets?: { id?: string; executor?: string; corridor_set?: boolean }[] }
 
 export async function readLivePosition(config: AppConfig, vaultId: string, expectedOwner: string): Promise<LivePosition> {
   const state = await viewNear<VaultState>(config.nearRpcUrl, vaultId, 'get_state')
