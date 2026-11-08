@@ -31,8 +31,22 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
   })()
   return()=>controller.current?.abort()
  },[active,revision,vault.accountId,vault.baseAddress,vault.owner])
+ async function retry(source:'transcripts'|'index'){
+  if(!config||reading||checking||!controller.current)return
+  const run=generation.current;setReading(true)
+  try{
+   if(source==='transcripts'){
+    setTranscriptError('');const parsed=transcriptIndex(await readEvidenceJson(`${config.relayerUrl}/agent/transcripts`,controller.current.signal),vault.accountId)
+    const batch=await Promise.all(parsed.rows.slice(0,5).map(row=>readTranscript(config.relayerUrl,row,vault,controller.current!.signal)))
+    if(current(run)){setTranscriptBoot(parsed.boot);setRows(parsed.rows);setLoaded(batch);setProofs({})}
+   }else{
+    setIndexError('');const next=evidenceIndex(await readEvidenceJson(`${config.relayerUrl}/agent/`,controller.current.signal),vault.accountId)
+    if(current(run)){setIndex(next);setFiles({})}
+   }
+  }catch(error){if(current(run)){if(source==='transcripts')setTranscriptError((error as Error).message);else setIndexError((error as Error).message)}}finally{if(current(run))setReading(false)}
+ }
  async function earlier(){if(!config||reading||checking||!controller.current)return;const run=generation.current;setReading(true);setTranscriptError('');try{const batch=await Promise.all(rows.slice(loaded.length,loaded.length+5).map(row=>readTranscript(config.relayerUrl,row,vault,controller.current!.signal)));if(current(run))setLoaded(previous=>[...previous,...batch])}catch(error){if(current(run))setTranscriptError((error as Error).message)}finally{if(current(run))setReading(false)}}
- async function verifyFile(row:EvidenceFile){if(!config||!index||checking||!controller.current)return;const run=generation.current;setChecking(row.name);setCopied('');try{const text=await readBootFile(config.relayerUrl,index,row,vault,controller.current.signal);if(current(run))setFiles(previous=>({...previous,[row.name]:{text,checkedAt:Date.now()}}))}catch(error){if(current(run))setFiles(previous=>({...previous,[row.name]:{error:(error as Error).message}}))}finally{if(current(run))setChecking('')}}
+ async function verifyFile(row:EvidenceFile){if(!config||!index||checking||!controller.current)return;const run=generation.current;setChecking(row.name);setCopied('');try{const text=await readBootFile(config.relayerUrl,index,row,vault,controller.current.signal);if(current(run))setFiles(previous=>({...previous,[row.name]:{text,checkedAt:Date.now()}}))}catch(error){if(current(run)){const message=(error as Error).message;if(message.includes('boot or file changed')){setFiles({});setIndex(undefined);setIndexError(message)}else setFiles(previous=>({...previous,[row.name]:{error:message}}))}}finally{if(current(run))setChecking('')}}
  async function receipts(transcript:VerifiedTranscript,proposal:Json,key:string){if(!config||checking||!controller.current)return;const run=generation.current;setChecking(key);try{const result=await verifyAgentExecution(config,vault,transcript,proposal,controller.current.signal);if(current(run))setProofs(previous=>({...previous,[key]:{...result,checkedAt:Date.now()}}))}catch(error){if(current(run))setProofs(previous=>({...previous,[key]:{error:(error as Error).message}}))}finally{if(current(run))setChecking('')}}
  async function copy(text:string){try{await navigator.clipboard.writeText(text);setCopied('SHA-256 copied')}catch{setCopied('Copy unavailable; select the hash to copy.')}}
  const infoProof=files['info.json']
@@ -40,13 +54,21 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
  if(!active)return null
  if(readIdentity!==identity)return <section className="agent-evidence" aria-label="Agent evidence and telemetry"><p role="status">Reading the selected vault evidence…</p></section>
  const summary=transcriptSummary(loaded),snapshot=object(object(summary.successful?.data.inputs).snapshot)
+ const executionChecks=summary.attempt?attemptedProposals(summary.attempt).map((_,i)=>proofs[`${summary.attempt!.row.name}:${i}`]):[]
+ const executionStatus=executionChecks.some(proof=>proof&&'error'in proof)?'Receipt check failed':executionChecks.some(proof=>proof&&'base'in proof&&proof.base==='reverted')?'Base reverted · RPC checked':executionChecks.length&&executionChecks.every(proof=>proof&&'base'in proof&&proof.base==='confirmed'&&proof.near==='confirmed')?'Confirmed · RPC checked':executionChecks.some(Boolean)?'Receipts checked · inspect details':'Attempt found · receipts not checked'
  const infoMatches=measurementMatches(object(info.tcb_info),approved)
  const currentTranscript=loaded.find(row=>row.row.boot===index?.boot&&object(row.data.agent).public_key===agentKey)
  const matchingTranscript=!!currentTranscript&&measurementMatches(object(currentTranscript.data.agent).measurement,approved)
  return <section className="agent-evidence" aria-label="Agent evidence and telemetry">
-  <h3>Agent observations</h3><p>Hash-checked published transcripts, not a heartbeat or a continuous health guarantee. Failed ticks can end without a new transcript.</p>
-  <p className="position-read-status" role="status">{reading?'Reading published agent records…':checking?'Checking evidence…':copied||' '}</p>
-  {transcriptError&&<p role="alert">{transcriptError}</p>}
+  <dl className="verification-overview" aria-label="Agent verification summary">
+   <div><dt>Published snapshot</dt><dd>{summary.successful?(Number(snapshot.timestamp)<=now?`${(now-Number(snapshot.timestamp)).toFixed(1)}s ago`:'Clock mismatch'):transcriptError?'Unavailable':reading?'Reading…':`Not found · ${loaded.length} checked`}</dd></div>
+   <div><dt>Latest execution</dt><dd>{summary.attempt?executionStatus:transcriptError?'Unavailable':reading?'Reading…':`Not found · ${loaded.length} checked`}</dd></div>
+   <div><dt>Evidence files</dt><dd>{indexError?'Unavailable':!index?'Reading…':!index.files.length?'No files published':Object.values(files).some(proof=>proof.error)?'Check failed':Object.values(files).filter(proof=>proof.text!==undefined).length?`${Object.values(files).filter(proof=>proof.text!==undefined).length} of ${index.files.length} SHA-256 matched`:'Not checked'}</dd></div>
+  </dl>
+  <p className="verification-feedback" role="status">{checking?'Checking evidence…':copied||''}</p>
+  {transcriptError&&<div className="verification-source-error" role="alert"><strong>Published records unavailable</strong><p>{transcriptError}</p><PrototypeButton disabled={reading||!!checking} onClick={()=>void retry('transcripts')}>Retry published records</PrototypeButton></div>}
+  <details className="verification-disclosure"><summary>Snapshot & execution details</summary>
+  <p>Published records are not a heartbeat. Failed ticks can end without a new transcript.</p>
   {summary.latest&&<p>Latest transcript: {time(summary.latest.data.time_utc)} · {summary.latest.row.boot}. <a href={`${config?.relayerUrl}/agent/transcripts/${summary.latest.row.name}`} target="_blank" rel="noreferrer">Read transcript ↗</a></p>}
   {summary.latest&&snapshotIssue(summary.latest)&&<p role="alert">Latest published snapshot: {snapshotIssue(summary.latest)}</p>}
   {summary.successful?<dl><div><dt>Last successful published snapshot</dt><dd>{time(snapshot.timestamp)} · block {String(snapshot.block)}<small>{Number(snapshot.timestamp)<=now?`${(now-Number(snapshot.timestamp)).toFixed(1)}s ago`:'Timestamp is ahead of this browser clock.'}</small><small>{summary.successful.row.boot}</small></dd></div></dl>:!reading&&!transcriptError&&<p>No successful snapshot in the {loaded.length} checked records.</p>}
@@ -60,7 +82,9 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
   })}</>:!reading&&!transcriptError&&<p>No sent or NEAR-failed attempt in the {loaded.length} checked records.</p>}
   <p>Checked {loaded.length} of {rows.length} published non-twin transcripts for this vault. A missing attempt in this range does not mean the agent never acted.</p>
   {loaded.length<rows.length&&<PrototypeButton disabled={reading||!!checking} onClick={()=>void earlier()}>{transcriptError?'Retry transcript scan':'Inspect earlier transcripts'}</PrototypeButton>}
-  <h3>Published boot evidence</h3>{indexError&&<p role="alert">{indexError}</p>}
+  </details>
+  {indexError&&<div className="verification-source-error" role="alert"><strong>Boot evidence unavailable</strong><p>{indexError}</p><PrototypeButton disabled={reading||!!checking} onClick={()=>void retry('index')}>Retry boot evidence</PrototypeButton></div>}
+  <details className="verification-disclosure"><summary>Published boot evidence</summary>
   {index&&<><p><code>{index.boot}</code>. Worker cache: up to 10.0s. A matching SHA-256 proves consistency with this index, not independent TDX verification.</p>{transcriptBoot&&transcriptBoot!==index.boot&&<p role="alert">Indexes describe different boots. Refresh before comparing current-boot telemetry.</p>}
    {approved&&agentKey?<p>{matchingTranscript?'Current-boot transcript measurement matches the approved measurement and registered agent key.':'No checked current-boot transcript matches both the approved measurement and registered key.'}{registrationExpires!==undefined&&registrationExpires<=now?' The saved registration is expired.':''}</p>:<p>Approved measurement or registered key is unavailable; no contract binding is claimed.</p>}
    {infoProof?.text&&<p>{infoMatches?'Hash-checked info.json measurement fields match the approved measurement.':'info.json fields do not establish a match to the approved measurement.'} Quote signature and TCB validation are not performed in this browser.</p>}
@@ -69,5 +93,6 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
      {nearHash(registration.near_tx)&&<a href={`https://testnet.nearblocks.io/txns/${registration.near_tx}`} target="_blank" rel="noreferrer">Registration NEAR transaction ↗</a>}<details><summary>SHA-256 and file details</summary><code>{row.sha256}</code><PrototypeButton aria-label={`Copy SHA-256 ${row.name}`} onClick={()=>void copy(row.sha256)}>Copy hash</PrototypeButton>{proof?.text&&row.name!=='tdx_quote.hex'&&<pre>{proof.text}</pre>}</details></li>
    })}</ul></details>{!index.files.length&&<p>No allowed evidence files are listed for this vault and boot.</p>}
   </>}
+  </details>
  </section>
 }
