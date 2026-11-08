@@ -22,6 +22,7 @@ export type MarketPosition = {
   liquidationLtv: bigint
   oraclePrice: bigint
   autopilot: string
+  agentTarget: bigint | null
   agentTrigger: bigint | null
   loanToken: Address
   collateralToken: Address
@@ -80,6 +81,7 @@ export async function readLivePosition(config: AppConfig, vaultId: string, expec
       id, collateral: position[2], debt: values.debt, collateralValue: values.collateralValue,
       ltv: values.ltv, liquidationLtv: params[4], oraclePrice,
       autopilot: protectionStatus(state.agent, market.corridor_set === true && corridor[6] && authorized, closed, watched, baseAddress, Date.now() / 1000),
+      agentTarget: corridor[6] ? corridor[0] : null,
       agentTrigger: corridor[6] ? corridor[1] : null,
       loanToken: params[0], collateralToken: params[1], loanSymbol, collateralSymbol, loanDecimals, collateralDecimals,
     }

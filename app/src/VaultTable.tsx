@@ -5,7 +5,7 @@ import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 import './wallet-demo.css'
 
 export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; ltv: string; liquidation: string; protection: string; asset: string; assetId: string; detail: string; onOpen?: () => void }
-function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
+export function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
   const known = address === 'demo-weth' || address.toLowerCase() === '0x4200000000000000000000000000000000000006' ? 'WETH'
     : address === 'demo-usdc' || address.toLowerCase() === '0x036cbd53842c5426634e7929541ec2318f3dcf7e' ? 'USDC' : null
   return known ? <TokenIcon asset={known} /> : <span className="token-icon" aria-hidden="true">{symbol.slice(0, 1)}</span>

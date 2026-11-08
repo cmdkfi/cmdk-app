@@ -15,7 +15,7 @@ import { VaultSelectionProvider } from './VaultSelectionContext.tsx'
 import './styles.css'
 import { VaultHome } from './VaultHome.tsx'
 
-type Page = 'activity' | 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
+type Page = 'vault' | 'activity' | 'connect' | 'create' | 'agent' | 'deposit' | 'take' | 'dashboard' | 'change' | 'leave' | 'verify' | 'scenes'
 type Theme = 'dark' | 'light'
 
 const pages: { id: Page; name: string; group: string }[] = [
@@ -30,7 +30,7 @@ const pages: { id: Page; name: string; group: string }[] = [
   { id: 'verify', name: 'Verify', group: 'Explore' },
   { id: 'scenes', name: 'Demo scenes', group: 'Explore' },
 ]
-const pageIds = new Set<Page>([...pages.map(page => page.id), 'activity'])
+const pageIds = new Set<Page>([...pages.map(page => page.id), 'activity', 'vault'])
 
 function readPage(): Page {
   const hash = window.location.hash.slice(1)
@@ -224,7 +224,7 @@ function Scenes() {
 }
 
 const screen: Record<Page, React.ComponentType> = {
-  activity: Connect, connect: Connect, create: Create, agent: Agent, deposit: Deposit, take: Take,
+  vault: Connect, activity: Connect, connect: Connect, create: Create, agent: Agent, deposit: Deposit, take: Take,
   dashboard: LoanDashboard, change: Change, leave: Leave, verify: Verify, scenes: Scenes,
 }
 
@@ -238,7 +238,7 @@ function App() {
   }, [])
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('cmdk-theme', theme) }, [theme])
   const Screen = screen[page]
-  if (page === 'connect' || page === 'activity') return <VaultHome activity={page === 'activity'} />
+  if (page === 'connect' || page === 'activity' || page === 'vault') return <VaultHome activity={page === 'activity'} detail={page === 'vault'} />
   return <div className="layout">
     <aside className="sidebar"><a className="brand" href="#connect" aria-label="cmdk home">⌘ K</a><nav aria-label="App preview navigation">{['Start', 'Manage', 'Explore'].map(group => <div className="nav-group" key={group}><span className="nav-label">{group}</span>{pages.filter(item => item.group === group).map(item => <a key={item.id} href={`#${item.id}`} aria-current={page === item.id ? 'page' : undefined}>{item.name}</a>)}</div>)}</nav><div className="sidebar__bottom"><button className="theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼ Light appearance' : '☾ Dark appearance'}</button><span>App foundation · preview</span></div></aside>
     <div className="workspace"><header className="topbar"><span>{pages.find(item => item.id === page)?.name}</span><WalletStatus /></header><main id="main" className="content" key={page}><Screen /></main><footer className="footer"><span>NEAR testnet and Base Sepolia. Unaudited. No real money.</span><span>Live deposit and Open require a published vault; other loan actions are local examples</span></footer></div>
