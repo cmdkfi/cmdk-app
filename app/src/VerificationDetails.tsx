@@ -8,6 +8,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
   const dialog = useRef<HTMLDialogElement>(null)
   const [policy,setPolicy] = useState<MarketPosition>()
   const [readAt,setReadAt] = useState<number>()
+  const [evidenceUrl,setEvidenceUrl]=useState('')
   const [state,setState] = useState<VaultState>()
   const [published,setPublished] = useState<AgentMeasurement | null>(null)
   const [error,setError] = useState('')
@@ -19,6 +20,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
     if (!dialog.current?.open) dialog.current?.showModal(); setLoading(true); setError('');setState(undefined);setPolicy(undefined);setCopied('')
     try {
       const config = await loadConfig()
+      if(live.current)setEvidenceUrl(`${config.relayerUrl}/agent/transcripts`)
       const next = await viewNear<VaultState>(config.nearRpcUrl,vault.accountId,'get_state')
       if (next.owner?.toLowerCase() !== vault.owner.toLowerCase()) throw new Error('Vault owner changed.')
       const position = await readLivePosition(config,vault.accountId,vault.owner)
@@ -54,7 +56,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         {approved && Object.entries(approved).map(([key,value]) => field(key,value))}
         <div><dt>Target / Trigger / Daily sell budget</dt><dd>{[policy?.agentTarget ?? null,policy?.agentTrigger ?? null,policy?.dailyBudget ?? null].map(n => n === null ? 'Not configured' : `${(Number(n)/1e16).toFixed(1)}%`).join(' / ')}</dd></div>
       </dl><p>Policy values are read from the Base executor corridor for this NEAR vault’s Base address. Heartbeat interval and raw quote are not exposed by get_state.</p></>}
-      <RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
+      <p>{evidenceUrl && <a href={evidenceUrl} target="_blank" rel="noreferrer">Agent decision transcripts ↗</a>} Decision evidence is published by the agent. Confirm execution through chain receipts.</p><RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
     </dialog>
   </>
 }
