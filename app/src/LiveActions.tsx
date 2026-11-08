@@ -51,7 +51,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
   }, [action, token, client, address, vault.baseAddress, m])
   let value = 0n; let inputError = ''
   try { if (input) value = parseAmount(input, decimals) } catch (error) { inputError = (error as Error).message }
-  const max = action === 'Borrow' ? borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
+  const max = action === 'Borrow' ? m.priceUnavailable ? 0n : borrowCapacity(m) : action === 'Repay' ? balance === null ? 0n : balance < m.debt ? balance : m.debt : balance ?? 0n
   const quote = preview(m, action, value)
   const liquidationPrice = quote.collateral > 0n && m.liquidationLtv > 0n ? quote.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (quote.collateral * m.liquidationLtv) : null
   const currentLiquidationPrice = m.collateral > 0n && m.liquidationLtv > 0n ? m.debt * 10n ** BigInt(m.collateralDecimals) * 10n ** 18n / (m.collateral * m.liquidationLtv) : null
@@ -127,7 +127,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     } finally {inFlight.current = false;setBusy(false)}
   }
   async function execute(close = false) {
-    if (inFlight.current || busy || locked || localStorage.getItem(key) || !client || !address || chainId !== 84532 || !vault.baseAddress || (!close && (value <= 0n || value > max || inputError))) return
+    if (m.readOnly || inFlight.current || busy || locked || localStorage.getItem(key) || !client || !address || chainId !== 84532 || !vault.baseAddress || (!close && (value <= 0n || value > max || inputError))) return
     inFlight.current = true
     setBusy(true); setMessage('Checking the latest owner, chain and market…')
     let submitted = false
@@ -136,7 +136,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       const config = await loadConfig()
       const fresh = await readLivePosition(config, vault.accountId, address)
       const market = fresh.markets.find(item => item.id === m.id)
-      if (!market?.morpho || !market.executor || fresh.baseAddress.toLowerCase() !== vault.baseAddress.toLowerCase()) throw new Error('Vault or market changed. Refresh first.')
+      if (!market?.morpho || market.readOnly || !market.executor || fresh.baseAddress.toLowerCase() !== vault.baseAddress.toLowerCase()) throw new Error('Vault or market changed. Refresh first.')
       assertSession()
       if (!close && (action === 'Deposit' || action === 'Repay')) {
         const walletBalance = await client.readContract({address: token, abi: erc20, functionName:'balanceOf', args:[address]})
@@ -176,6 +176,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
           method = 'close'; args = {market:market.id}
           await client.simulateContract({account:fresh.baseAddress,address:market.executor,abi:executorActions,functionName:'close',args:[market.id,BigInt(expiry)]})
         } else if (action === 'Borrow') {
+          if (market.priceUnavailable) throw new Error('A live oracle price is required to borrow.')
           const target = borrowTarget(market,value)
           method = 'open'; args = {market:market.id,collateral_in:'0',target_ltv:target.toString()}
           await client.simulateContract({account:fresh.baseAddress,address:market.executor,abi:executorActions,functionName:'open',args:[market.id,0n,target,BigInt(expiry)]})
@@ -211,8 +212,10 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
       if (!submitted) setLocked(!!localStorage.getItem(key))
     } finally { inFlight.current = false; setBusy(false) }
   }
+  if (m.readOnly) return <PrototypeSurface className="live-actions"><h3>Read-only market</h3><p>This owned position uses an Executor outside the current deployment. Its balances remain visible. Verify the deployment with the protocol maintainer before executing actions.</p></PrototypeSurface>
   return <PrototypeSurface className="live-actions">
     <h3>Manage position</h3>
+    {m.priceUnavailable && <p role="alert">Oracle price unavailable. Risk preview and borrowing are unavailable. Repayment and free-token withdrawal remain available.</p>}
     <div className="live-action-tabs">{(['Deposit','Withdraw','Borrow','Repay'] as Action[]).map(tab => <PrototypeButton key={tab} primary={action === tab} disabled={busy || locked} onClick={() => {setAction(tab);setInput('');setMessage('');setRepayAll(false)}}>{tab}</PrototypeButton>)}</div>
     {action === 'Withdraw' && <><p>Withdraw free tokens only. Repay debt, then release collateral before withdrawing WETH.</p><label>Token <select disabled={busy} value={withdrawCollateral ? 'collateral' : 'loan'} onChange={e => {setWithdrawCollateral(e.target.value === 'collateral');setInput('')}}><option value="loan">{m.loanSymbol}</option><option value="collateral">{m.collateralSymbol}</option></select></label></>}
     {action === 'Borrow' && <p>Borrow to the vault via NEAR owner-call, then withdraw the free {m.loanSymbol}. The signed target determines the amount at execution; this is an estimate.</p>}
