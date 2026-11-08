@@ -16,7 +16,7 @@ const actions = [
 ]
 
 export function DemoVaults() {
-  return <VaultTable demo vaults={vaults.map((row, i) => ({ ...row, name: `Vault ${i + 1}`, asset: 'WETH', assetId: 'demo-weth', detail: `WETH / USDC · Demo market ${i + 1}`, collateral: `${i ? '2.00' : '5.00'} WETH`, value: `${i ? '5,600' : '14,000'} USDC at oracle`, liquidation: '86.0%', protection: i ? 'Not configured' : 'Active' }))} />
+  return <VaultTable demo vaults={vaults.map((row, i) => ({ ...row, name: 'USDC / WETH', loanSymbol: 'USDC', loanId: 'demo-usdc', vaultAddress: `0xdE0000000000000000000000000000000000000${i + 1}`,  asset: 'WETH', assetId: 'demo-weth', detail: `WETH / USDC · Demo market ${i + 1}`, collateral: `${i ? '2.00' : '5.00'} WETH`, value: `${i ? '5,600' : '14,000'} USDC at oracle`, liquidation: '86.0%', protection: i ? 'Not configured' : 'Active' }))} />
 }
 
 export function DemoActivity() {

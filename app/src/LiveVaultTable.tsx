@@ -26,7 +26,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
         if (read.status === 'rejected') { errors.push(`Vault ${vault.number}: position unavailable. ${read.reason instanceof Error ? read.reason.message : 'Please retry.'}`); return }
         if (!read.value.markets.length) errors.push(`Vault ${vault.number}: no configured markets.`)
         read.value.markets.forEach(market => rows.push({
-          name: `Vault ${vault.number}`, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
+          name: `${market.loanSymbol} / ${market.collateralSymbol}`, loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
           asset: market.collateralSymbol, assetId: market.collateralToken.toLowerCase(),
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
           value: `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
