@@ -30,7 +30,7 @@ export function VaultHome({ activity = false, detail = false, create = false }: 
   }
   return <div className="vault-app">
     <header className="vault-header">
-      <a className="vault-brand" href="#connect" aria-label="cmdk home">cmdk</a>
+      <a className="vault-brand" href="#connect" aria-label="cmdk home"><span aria-hidden="true">⌘ K</span></a>
       <PrototypeNavigation activity={activity} />
       <div className="vault-header-actions"><span className="testnet-label">Testnet</span><PrototypeButton primary={!isConnected} onClick={open} aria-haspopup="dialog">{isConnected && address ? shortAddress(address) : 'Connect wallet'}</PrototypeButton></div>
     </header>
