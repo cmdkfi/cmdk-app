@@ -6,7 +6,7 @@ import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 import './wallet-demo.css'
 
-export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; protectionValidUntil?:number;registrationExpires?:number; asset: string; assetId: string; detail: string; onOpen?: () => void }
+export type VaultTableRow = { marketLabel?:string; name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; protectionValidUntil?:number;registrationExpires?:number; asset: string; assetId: string; detail: string; onOpen?: () => void }
 export function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
   const known = address === 'demo-weth' || address.toLowerCase() === '0x4200000000000000000000000000000000000006' ? 'WETH'
     : address === 'demo-usdc' || address.toLowerCase() === '0x036cbd53842c5426634e7929541ec2318f3dcf7e' ? 'USDC' : null
@@ -14,7 +14,7 @@ export function AssetIcon({ symbol, address }: { symbol: string; address: string
 }
 function VaultTitle({ vault }: { vault: VaultTableRow }) {
   const pair = <span className="vault-token-pair"><span><AssetIcon symbol={vault.loanSymbol} address={vault.loanId} />{vault.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={vault.asset} address={vault.assetId} />{vault.asset}</span></span>
-  return <>{vault.onOpen ? <button className="vault-table-open" aria-label={`Open ${vault.loanSymbol} / ${vault.asset}, ${vault.vaultAddress}, ${vault.detail}`} onClick={vault.onOpen}>{pair}</button> : pair}</>
+  return <>{vault.onOpen ? <button className="vault-table-open" aria-label={`Open ${vault.loanSymbol} / ${vault.asset}, ${vault.vaultAddress}, ${vault.detail}`} onClick={vault.onOpen}>{pair}</button> : pair}{vault.marketLabel&&<small className="vault-market-role">{vault.marketLabel}</small>}</>
 }
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`
 
@@ -39,7 +39,7 @@ export function VaultTable({ vaults, demo = false }: { vaults: VaultTableRow[]; 
     {filtered.length === 0 && <PrototypeSurface className="demo-vault-no-results"><h2>No vaults found</h2><p>Try another name or clear your filters.</p><PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton></PrototypeSurface>}
     {filtered.length > 0 && <PrototypeSurface className="demo-vault-table"><table><caption className="demo-table-caption">Vault positions</caption>
       <thead><tr><th scope="col">Vault</th><th scope="col">Collateral</th><th scope="col">Debt</th><th scope="col">LTV / Liquidation</th><th scope="col">Autopilot</th></tr></thead>
-      <tbody>{filtered.map(vault => <tr key={`${vault.name}:${vault.detail}`}>
+      <tbody>{filtered.map(vault => <tr key={`${vault.name}:${vault.detail}`} onClick={event=>{if(!(event.target as HTMLElement).closest('button,a,input,select'))vault.onOpen?.()}}>
         <th scope="row"><VaultTitle vault={vault} /><small className="vault-address" title={`${vault.vaultAddress} · ${vault.detail}`}>{shortAddress(vault.vaultAddress)}</small></th>
         <td>{vault.collateral}<small>{vault.value}</small></td><td>{vault.debt}</td><td>{vault.ltv}<small>Liquidation {vault.liquidation}</small>{vault.health && <small>Health {vault.health}</small>}</td><td><span className="demo-autopilot">{vault.protection}</span></td>
       </tr>)}</tbody>

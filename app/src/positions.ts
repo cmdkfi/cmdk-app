@@ -15,6 +15,7 @@ const irmAbi = parseAbi(['function borrowRateView((address loanToken,address col
 const WAD = 10n ** 18n
 
 export type MarketPosition = {
+  label?: string
   id: Hex
   readOnly?: boolean
   policyUnavailable?: boolean
@@ -149,6 +150,7 @@ async function readPositionSnapshot(config: AppConfig, vaultId: string, expected
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'COOLDOWN',blockNumber}),
     ]).then(async([sold,moves,sessionStart,lastCall,cooldown])=>{const baseReady=lastCall===0n?0n:lastCall+cooldown;const nearReady=BigInt(state.last_agent_action??0)===0n?0n:BigInt(state.last_agent_action??0)+BigInt(state.cooldown_secs??0);const ready=baseReady>nearReady?baseReady:nearReady;return{sold,moves,sessionStart,lastCall,cooldown,closed,cooldownRemaining:ready>block.timestamp?ready-block.timestamp:0n,budget:await sharedBudget(market.executor as Address,params[1],sold).catch(()=>undefined)}}).catch(()=>undefined)
     return {
+      label:config.marketLabels?.[id.toLowerCase()],
       protectionValidUntil:typeof watched?.last_tick_unix==='number' ? Math.min(watched.last_tick_unix+60,state.agent?.expires_at??0) : undefined,
       registrationExpires:state.agent?.expires_at,
       policyUnavailable:corridor===null||closed===null||authorized===null,

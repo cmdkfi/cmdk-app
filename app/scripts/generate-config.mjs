@@ -30,6 +30,7 @@ const config = {
   relayerUrl: appValues.relayerUrl,
   relayerUrlFallback: appValues.relayerUrlFallback,
   near: { factory },
+  marketLabels: Object.fromEntries(Object.entries(deployment?.base?.markets ?? {}).filter(([,market]) => /^0x[0-9a-fA-F]{64}$/.test(market.id ?? '')).map(([name,market]) => [market.id.toLowerCase(),name])),
   agent: { measurement: approvedMeasurement, version: deployment?.agent?.version ?? null, sourceCommit: deployment?.agent?.sourceCommit ?? null },
   createVault: factory && deployment?.base?.executor && deployment?.base?.markets && deployment?.base?.tokens
     ? {
