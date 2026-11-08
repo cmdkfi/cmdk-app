@@ -3,7 +3,7 @@ import type { AgentMeasurement, AppConfig } from './near.ts'
 import type { DemoRules } from './demo.ts'
 import { validRules } from './demo.ts'
 
-export type SetupJob = { ok: boolean; job: string; kind: 'owner_call'; stage: 'accepted' | 'vault_checked' | 'base_sent' | 'done' | 'failed'; vault: string; near_tx?: string; base_sent?: string[]; receipts?: { hash: string; status: number }[]; error?: string; http_status?: number }
+export type SetupJob = { ok: boolean; job: string; kind: 'owner_call'; stage: 'accepted' | 'vault_checked' | 'base_sent' | 'done' | 'failed'; vault: string; near_tx?: string; base_sent?: string[]; signed?: { hash: string; nonce: number; from: string }[]; receipts?: { hash: string; status: number }[]; error?: string; http_status?: number }
 export class SetupError extends Error {
   readonly uncertain: boolean
   constructor(message: string, uncertain = false) { super(message); this.uncertain = uncertain }

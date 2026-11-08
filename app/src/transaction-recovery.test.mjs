@@ -37,3 +37,14 @@ test('delegated wallet recovery checks the actual Morpho caller, vault, market a
  assert.throws(()=>validateDepositReceipt([log],{kind:'owner'},owner,vault,m))
  assert.throws(()=>validateDepositReceipt([{...log,data:encodeAbiParameters([{type:'uint256'}],[1n])}],{to:market.morpho,data},owner,vault,m))
 })
+
+import {ownerTransactionsConsumed} from './transaction-recovery.ts'
+test('failed owner jobs unlock only after every signed nonce is consumed on the correct vault',()=>{
+ const signed=[{from:vault,nonce:8,hash:'0x'+'ab'.repeat(32)},{from:vault,nonce:9,hash:'0x'+'cd'.repeat(32)}]
+ assert.equal(ownerTransactionsConsumed(signed,vault,10),true)
+ assert.equal(ownerTransactionsConsumed(signed,vault,9),false)
+ assert.equal(ownerTransactionsConsumed(signed,owner,10),false)
+ assert.equal(ownerTransactionsConsumed([],vault,10),false)
+ assert.equal(ownerTransactionsConsumed([{...signed[0],nonce:-1}],vault,10),false)
+ assert.equal(ownerTransactionsConsumed([{...signed[0],hash:'invalid'}],vault,10),false)
+})

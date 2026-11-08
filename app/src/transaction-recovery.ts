@@ -2,7 +2,7 @@ import { decodeEventLog, parseAbi, decodeFunctionData, encodeFunctionData, type 
 import { morphoActions, params } from './live-actions.ts'
 import type { MarketPosition } from './positions.ts'
 
-export type PendingTransaction = { pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number }
+export type PendingTransaction = { ownerNonce?: string; expiry?: number; pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number }
 type Transaction = { from: string; to: string | null; input: Hex; value: bigint }
 
 // Legacy records have no intent. Only a manually identified collateral deposit can recover them.
@@ -42,3 +42,9 @@ export function validateDepositReceipt(logs: readonly {address:string; topics:re
 }
 
 const depositEvents=parseAbi(['event SupplyCollateral(bytes32 indexed id,address indexed caller,address indexed onBehalf,uint256 assets)'])
+
+export function ownerTransactionsConsumed(signed: readonly { nonce: number; from: string; hash: string }[], vault: string, confirmedNonce: number) {
+  return signed.length > 0 && Number.isSafeInteger(confirmedNonce) && signed.every(tx =>
+    Number.isSafeInteger(tx.nonce) && tx.nonce >= 0 && tx.nonce < confirmedNonce &&
+    tx.from.toLowerCase() === vault.toLowerCase() && /^0x[0-9a-fA-F]{64}$/.test(tx.hash))
+}
