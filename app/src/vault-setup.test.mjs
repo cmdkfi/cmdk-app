@@ -35,3 +35,14 @@ test('lost POST response and forgotten job are uncertain', async () => {
   await assert.rejects(startSetupJob(config, 'v1.factory.testnet', '{}', '0x', async () => { throw new Error('lost') }), error => error instanceof SetupError && error.uncertain)
   await assert.rejects(readSetupJob(config, '0123456789abcdef', async () => json(404, { ok: false })), error => error instanceof SetupError && error.uncertain)
 })
+
+import {repairSetupArgs} from './vault-setup.ts'
+test('repair preserves existing corridors and avoids repeating granted authorization',()=>{
+ const facts=[{id:'one',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:true,needsApproval:false,corridorSet:true},{id:'two',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:true,needsApproval:true,corridorSet:false}]
+ const existing={target:'510000000000000000',act:'720000000000000000',floor:'320000000000000000',sell_budget:'180000000000000000',migrate_allowed:false,exit_allowed:true}
+ const result=repairSetupArgs(config,rules,[facts[0],{...facts[1],corridor:existing}],true)
+ assert.equal(result.measurement,null);assert.equal(result.markets[0].corridor,null);assert.equal(result.markets[0].authorize,false);assert.equal(result.markets[1].authorize,false);assert.deepEqual(result.markets[1].corridor,existing)
+ assert.throws(()=>repairSetupArgs(config,rules,[facts[0]],true),/already complete/)
+ const initial=repairSetupArgs(config,rules,facts.map(f=>({...f,authorized:false,needsApproval:true,corridorSet:false})),false)
+ assert.deepEqual(initial.markets.map(m=>[m.approve,m.authorize]),[[true,true],[false,false]])
+})
