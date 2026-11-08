@@ -9,11 +9,14 @@ type FileProof={text:string;checkedAt:number;error?:never}|{error:string;text?:n
 function reported(proposal:Json){const base=object(proposal.base);if(proposal.near_error)return `NEAR error reported: ${String(proposal.near_error)}`;if(proposal.error)return `Agent error: ${String(proposal.error)}`;if(base.error)return `Base error reported: ${String(base.error)}`;if(base.status===1)return 'Agent reports Base success; receipts not checked here yet.';if(base.status===0)return 'Agent reports Base revert; receipts not checked here yet.';return 'Sent attempt; outcome not verified.'}
 const time=(value:unknown)=>typeof value==='number'?new Date(value*1000).toLocaleString():String(value??'Unavailable')
 export function AgentEvidence({vault,active,revision,approved,agentKey,registrationExpires}:Props){
+ const identity=`${vault.accountId}:${vault.baseAddress}:${vault.owner}`
+ const [readIdentity,setReadIdentity]=useState(identity)
  const now=useNow(),generation=useRef(0),controller=useRef<AbortController>()
  const [config,setConfig]=useState<AppConfig>(),[index,setIndex]=useState<EvidenceIndex>(),[transcriptBoot,setTranscriptBoot]=useState(''),[rows,setRows]=useState<TranscriptRow[]>([]),[loaded,setLoaded]=useState<VerifiedTranscript[]>([])
  const [reading,setReading]=useState(false),[checking,setChecking]=useState(''),[indexError,setIndexError]=useState(''),[transcriptError,setTranscriptError]=useState(''),[files,setFiles]=useState<Record<string,FileProof>>({}),[proofs,setProofs]=useState<Record<string,(ExecutionProof&{checkedAt:number})|{error:string}>>({}),[copied,setCopied]=useState('')
  function current(run:number){return generation.current===run&&!controller.current?.signal.aborted}
  useEffect(()=>{
+  setReadIdentity(identity)
   const run=++generation.current;controller.current?.abort();controller.current=new AbortController();const signal=controller.current.signal
   setConfig(undefined);setIndex(undefined);setTranscriptBoot('');setRows([]);setLoaded([]);setFiles({});setProofs({});setIndexError('');setTranscriptError('');setChecking('');setCopied('');setReading(active)
   if(!active)return()=>controller.current?.abort()
@@ -27,7 +30,7 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
    }catch(error){if(current(run)){setIndexError((error as Error).message);setTranscriptError((error as Error).message)}}finally{if(current(run))setReading(false)}
   })()
   return()=>controller.current?.abort()
- },[active,revision,vault.accountId,vault.baseAddress])
+ },[active,revision,vault.accountId,vault.baseAddress,vault.owner])
  async function earlier(){if(!config||reading||checking||!controller.current)return;const run=generation.current;setReading(true);setTranscriptError('');try{const batch=await Promise.all(rows.slice(loaded.length,loaded.length+5).map(row=>readTranscript(config.relayerUrl,row,vault,controller.current!.signal)));if(current(run))setLoaded(previous=>[...previous,...batch])}catch(error){if(current(run))setTranscriptError((error as Error).message)}finally{if(current(run))setReading(false)}}
  async function verifyFile(row:EvidenceFile){if(!config||!index||checking||!controller.current)return;const run=generation.current;setChecking(row.name);setCopied('');try{const text=await readBootFile(config.relayerUrl,index,row,vault,controller.current.signal);if(current(run))setFiles(previous=>({...previous,[row.name]:{text,checkedAt:Date.now()}}))}catch(error){if(current(run))setFiles(previous=>({...previous,[row.name]:{error:(error as Error).message}}))}finally{if(current(run))setChecking('')}}
  async function receipts(transcript:VerifiedTranscript,proposal:Json,key:string){if(!config||checking||!controller.current)return;const run=generation.current;setChecking(key);try{const result=await verifyAgentExecution(config,vault,transcript,proposal,controller.current.signal);if(current(run))setProofs(previous=>({...previous,[key]:{...result,checkedAt:Date.now()}}))}catch(error){if(current(run))setProofs(previous=>({...previous,[key]:{error:(error as Error).message}}))}finally{if(current(run))setChecking('')}}
@@ -35,6 +38,7 @@ export function AgentEvidence({vault,active,revision,approved,agentKey,registrat
  const infoProof=files['info.json']
  const info=useMemo(()=>{try{return infoProof?.text?object(JSON.parse(infoProof.text)):{} }catch{return{}}},[infoProof?.text])
  if(!active)return null
+ if(readIdentity!==identity)return <section className="agent-evidence" aria-label="Agent evidence and telemetry"><p role="status">Reading the selected vault evidence…</p></section>
  const summary=transcriptSummary(loaded),snapshot=object(object(summary.successful?.data.inputs).snapshot)
  const infoMatches=measurementMatches(object(info.tcb_info),approved)
  const currentTranscript=loaded.find(row=>row.row.boot===index?.boot&&object(row.data.agent).public_key===agentKey)
