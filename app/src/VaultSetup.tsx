@@ -1,3 +1,4 @@
+import {ownerPendingRecord} from './owner-recovery.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import {parseAbi} from 'viem'
@@ -109,7 +110,7 @@ export function VaultSetup({ vault: selected, onComplete }: { vault: Vault; onCo
       if(!mounted.current||session.current!==expected)throw new SetupError('Wallet or vault changed. Reopen setup.')
       setState({ kind: 'working', message: 'Submitting the signed setup once…' })
       if(localStorage.getItem(lock))throw new SetupError('Another vault action started.')
-      localStorage.setItem(lock,JSON.stringify({pending:true,kind:'owner',operation:'setup',ownerNonce:String(nonce),expiry,startedAt:Date.now()}))
+      localStorage.setItem(lock,JSON.stringify(ownerPendingRecord(text,{operation:'setup'})))
       const id = await startSetupJob(config, selected.accountId, text, signature)
       localStorage.setItem(lock,JSON.stringify({...JSON.parse(localStorage.getItem(lock)??'{}'),job:id}))
       sessionStorage.setItem(key, id)

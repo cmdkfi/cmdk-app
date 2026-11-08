@@ -1,3 +1,4 @@
+import {ownerPendingRecord} from './owner-recovery.ts'
 import {useRef,useState} from 'react'
 import {useAccount,useSignMessage} from 'wagmi'
 import {loadConfig,viewNear,type AgentMeasurement,type Vault} from './near.ts'
@@ -23,7 +24,7 @@ export function AgentApproval({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>v
  const signature=await signMessageAsync({message});await checkSetupSignature(message,signature,address)
  if(session.current!==expected)throw Error('Wallet changed. Reopen verification.')
  if(localStorage.getItem(key))throw Error('Another vault action started.')
- localStorage.setItem(key,JSON.stringify({pending:true,kind:'owner',operation:'approve_measurement',measurement,ownerNonce:String(nonce),expiry,startedAt:Date.now()}))
+ localStorage.setItem(key,JSON.stringify(ownerPendingRecord(message,{operation:'approve_measurement',measurement})))
  const job=await startSetupJob(config,vault.accountId,message,signature)
  localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key)??'{}'),job}));setStatus('Submitted to NEAR. Check approval status. No Base transaction is required.')
  }catch(e){setStatus((e as Error).message)}finally{flight.current=false;setBusy(false)}}

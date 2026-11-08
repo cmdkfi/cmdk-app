@@ -2,7 +2,7 @@ import { decodeEventLog, parseAbi, decodeFunctionData, encodeFunctionData, type 
 import { morphoActions, params } from './live-actions.ts'
 import type { MarketPosition } from './positions.ts'
 
-export type PendingTransaction = { ownerNonce?: string; expiry?: number; pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number }
+export type PendingTransaction = { message?: string; ownerNonce?: string; expiry?: number; pending?: boolean; kind?: 'owner'; hash?: Hex; job?: string; to?: string; data?: Hex; value?: string; startedAt?: number }
 type Transaction = { from: string; to: string | null; input: Hex; value: bigint }
 
 // Legacy records have no intent. Only a manually identified collateral deposit can recover them.

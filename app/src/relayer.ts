@@ -1,6 +1,7 @@
 import type { AppConfig } from './near.ts'
 
 export type RelayerHealth = {
+  sender?: string
   ok: boolean
   dry_run?: boolean
   factory: string | null
