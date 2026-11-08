@@ -1,3 +1,4 @@
+import {nearQuery} from './near-rpc.ts'
 export type CreateVaultPolicy = { cooldownSecs: number; depositNear: string; markets: { id: string; loan_token: string; collateral_token: string; executor: string; slice_max: string }[] }
 export type AgentMeasurement = { mrtd: string; rtmr0: string; rtmr1: string; rtmr2: string; compose_hash: string; os_image_hash: string }
 export type AppConfig = { baseChainId: number; nearNetwork: string; nearRpcUrl: string; baseRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null }; agent: { measurement: AgentMeasurement | null; version: string | null; sourceCommit: string | null }; createVault: CreateVaultPolicy | null }
@@ -38,17 +39,9 @@ export async function loadConfig(fetcher: typeof fetch = fetch): Promise<AppConf
 }
 
 export async function viewNear<T>(rpcUrl: string, accountId: string, methodName: string, fetcher: typeof fetch = fetch): Promise<T> {
-  const response = await fetcher(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(12000),
-    body: JSON.stringify({ jsonrpc: '2.0', id: 'cmdk', method: 'query', params: { request_type: 'call_function', finality: 'final', account_id: accountId, method_name: methodName, args_base64: 'e30=' } }),
-  })
-  if (!response.ok) throw new Error('NEAR RPC is unavailable.')
-  const data: unknown = await response.json()
-  const result = data as { error?: unknown; result?: { result?: number[] } }
-  if (result.error || !Array.isArray(result.result?.result)) throw new Error(`Could not read ${methodName} from ${accountId}.`)
-  return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result.result))) as T
+  const result = await nearQuery<{result?:number[]}>(rpcUrl,{request_type:'call_function',finality:'final',account_id:accountId,method_name:methodName,args_base64:'e30='},fetcher)
+  if(!Array.isArray(result.result))throw new Error(`Could not read ${methodName} from ${accountId}.`)
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result))) as T
 }
 
 export async function discoverVaults(config: AppConfig, address: string, fetcher: typeof fetch = fetch): Promise<{ vaults: Vault[]; failed: number }> {

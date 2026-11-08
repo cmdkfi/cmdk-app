@@ -64,7 +64,16 @@ export function marketMath(collateral: bigint, borrowShares: bigint, totalBorrow
 
 export type VaultState = { signer?: string; path?: string; cooldown_secs?: number; last_agent_action?: number; owner?: string; owner_nonce?: number | string; approved?: Record<string, string>; base_address?: string; morpho?: string; agent?: { public_key?: string; expires_at?: number }; markets?: { id?: string; executor?: string; corridor_set?: boolean }[] }
 
+const positionReads = new Map<string,Promise<LivePosition>>()
 export async function readLivePosition(config: AppConfig, vaultId: string, expectedOwner: string): Promise<LivePosition> {
+  const key=JSON.stringify([config.baseRpcUrl,config.nearRpcUrl,config.relayerUrl,config.createVault?.markets,vaultId,expectedOwner.toLowerCase()])
+  const existing=positionReads.get(key)
+  if(existing)return existing
+  const task=readPositionSnapshot(config,vaultId,expectedOwner)
+  positionReads.set(key,task)
+  try{return await task}finally{if(positionReads.get(key)===task)positionReads.delete(key)}
+}
+async function readPositionSnapshot(config: AppConfig, vaultId: string, expectedOwner: string): Promise<LivePosition> {
   const state = await viewNear<VaultState>(config.nearRpcUrl, vaultId, 'get_state')
   if (state.owner?.toLowerCase() !== expectedOwner.toLowerCase()) throw new Error('This vault is no longer owned by the connected wallet.')
   if (!state.base_address || !isAddress(state.base_address) || !state.morpho || !isAddress(state.morpho) || !Array.isArray(state.markets)) {
