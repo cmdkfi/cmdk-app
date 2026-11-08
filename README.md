@@ -50,10 +50,22 @@ pnpm test:bundle-boundary
 pnpm test:browser
 ```
 
-Playwright runs 14 scenarios in desktop and mobile Chromium (28 cases). Wallet rejection/retry/disconnection and unsupported-account discovery use the production entry. Network/account switching, Edit rules and recovery use the real React components in an isolated test entry. They do not mock component functions or protocol calculations.
+Playwright runs 21 scenarios in desktop and mobile Chromium (42 cases). Wallet rejection/retry/disconnection and unsupported-account discovery use the production entry. Network/account switching, Edit rules and recovery use the real React components in an isolated test entry. They do not mock component functions or protocol calculations.
 
 Only controlled EIP-1193, Base/NEAR RPC and relayer responses are used. Signatures come from public throwaway fixture keys. No real extension, live RPC, relayer POST or on-chain transaction is used. Unknown external requests fail the test; SDK analytics are swallowed locally. The fixture models the API/ABI shapes in cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (rechecked against `910811b`: relevant contracts and relayer are unchanged), not a chain emulator or contract execution proof.
 
 Coverage includes shared-rule Floor/permission preservation, exact signed payload bytes, nonce/account/corridor changes while signing, no-op/invalid/rejected saves, receipt/state mismatch, direct reverted receipt recovery, held suffixes across reload, lost cancellation jobs, mismatched NEAR evidence, and explicit exact-call rebroadcast. Browser TypeScript is checked separately. PR and deployment workflows run the suite before merge/publication; failure traces, screenshots and HTML reports are retained as CI artifacts for seven days.
 
 `e2e/harness.html` is dev/test-only. The production bundle boundary check rejects fixture markers or test entries in `dist/`. These tests supplement live signed rehearsals; they do not replace them. WebKit/Safari, real extensions and arbitrary protocol failures remain outside this suite.
+
+## Agent observations and boot evidence
+
+Verification reads /agent/ and /agent/transcripts from the configured Worker. It filters the selected vault, rejects twins, checks filename/boot/loop/vault/network identity and SHA-256, and scans five transcripts at a time with an explicit earlier-history control. Last successful published snapshot requires complete timestamp/block fields, no read_errors, no rpc_second_error and no rpc_disagree. Early failed ticks may write no transcript; this is not a heartbeat or continuous health guarantee.
+
+The current protocol puts the chosen proposal at transcript.proposal; nested decisions[].proposal is also accepted. sent:true and near_error identify attempts. Receipt verification is read-only: FINAL NEAR outcome, exact vault/key/method/args, validated Base Sepolia signed transaction, matching Base receipt and two block confirmations. Agent-reported success and RPC-confirmed success/revert remain separate.
+
+Boot file checks are size-bounded and compare bytes/SHA-256 against the index, then re-read the index to detect boot/file rollover. Registration files are restricted to the selected vault. info.json and current-boot transcript measurement/key comparisons use the loaded NEAR state. They do not independently validate the TDX quote signature, PCCS collateral/TCB or RTMR replay. Worker caching is up to ten seconds. Closing the drawer or changing vault aborts stale evidence work and discards old proofs.
+
+Protocol source checked against cmdkfi/app main 47fd4fb; relevant agent code remains unchanged from the preceding review. Factory enumeration is the supported owner discovery mechanism; no owner-index or new agent telemetry API is required before the deadline. NearBlocks remains the NEAR discovery source; job responses and transcripts provide call detail, receipts provide execution outcomes.
+
+A vault-wide background read failure preserves the same owner/vault’s last successful snapshot, visibly read-only, instead of unmounting Verification. Cached data is never carried to a different vault or owner; independent recovery remains available.

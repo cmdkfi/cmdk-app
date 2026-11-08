@@ -1,7 +1,8 @@
+import {createHash} from 'node:crypto'
 import {test as base,expect,type BrowserContext} from '@playwright/test'
 import {decodeFunctionData,encodeFunctionResult,encodeFunctionData,parseAbi,keccak256,hexToString,toHex,type Hex} from 'viem'
 import {privateKeyToAccount} from 'viem/accounts'
-import {OTHER,OWNER,BASE,EXECUTOR,MORPHO,LIVE,BACKUP,VAULT,KEY,NOW,config} from './data.ts'
+import {OTHER,OWNER,BASE,EXECUTOR,MORPHO,LIVE,BACKUP,VAULT,KEY,NOW,config,AGENT_BOOT,AGENT_KEY,AGENT_NEAR,measurement} from './data.ts'
 const owner=privateKeyToAccount(('0x'+'11'.repeat(32)) as Hex),baseAccount=privateKeyToAccount(('0x'+'22'.repeat(32)) as Hex)
 const HASH='0x'+'77'.repeat(32),ORIGINAL_NEAR='1'.repeat(44)
 const ABI=parseAbi(['function corridors(address,bytes32) view returns(uint64,uint64,uint64,uint64,bool,bool,bool)','function setCorridor(bytes32,(uint64 target,uint64 act,uint64 floor,uint64 sellBudget,bool migrateAllowed,bool exitAllowed,bool set),uint256)','function allowance(address,address) view returns(uint256)','function isAuthorized(address,address) view returns(bool)','function balanceOf(address) view returns(uint256)','function getEthBalance(address) view returns(uint256)'])
@@ -20,10 +21,12 @@ export class ProtocolFixture {
  originalRecord:Record<string,unknown>={};originalSigned:Signed[]=[]
  nearResults=new Map<string,{message:string;signature:Hex;signed:Signed[]}>()
  jobs=new Map<string,Record<string,unknown>>()
+ evidenceBoot=AGENT_BOOT;evidenceCount=2;evidenceStamp=Math.floor(Date.now()/1000)-60;corruptEvidence='';corruptTranscript=false;wrongTranscriptVault=false;secondaryError=false;rotateEvidence=false;agentWrongArgs=false;agentReceiptStatus='0x1';agentSigned?:Signed
  directReceipt=false;lastCancelNear='';lastCancel?:Signed
  async signed(nonce:number,to:Hex,data:Hex='0x'):Promise<Signed>{const raw=await baseAccount.signTransaction({chainId:84532,type:'eip1559',nonce,to,data,value:0n,gas:300000n,maxFeePerGas:1000000000n,maxPriorityFeePerGas:1n});return{raw,hash:keccak256(raw),from:BASE,nonce}}
  async setup(){
   for(const [index,id] of [LIVE,BACKUP].entries()){const c=this.corridors.get(id)!;this.originalSigned.push(await this.signed(8+index,EXECUTOR,encodeFunctionData({abi:ABI,functionName:'setCorridor',args:[id,{target:c[0] as bigint,act:c[1] as bigint,floor:c[2] as bigint,sellBudget:c[3] as bigint,migrateAllowed:c[4] as boolean,exitAllowed:c[5] as boolean,set:false},BigInt(NOW+600)]})))}
+  this.agentSigned=await this.signed(8,EXECUTOR,encodeFunctionData({abi:parseAbi(['function reduce(bytes32,uint256,uint256)']),functionName:'reduce',args:[LIVE,100n,BigInt(NOW+600)]}))
   this.nearResults.set(ORIGINAL_NEAR,{message:this.originalMessage,signature:await owner.signMessage({message:this.originalMessage}),signed:this.originalSigned})
   this.originalRecord={pending:true,kind:'owner',message:this.originalMessage,ownerNonce:'3',expiry:NOW-60,startedAt:1,job:'a'.repeat(16)}
   this.jobs.set('a'.repeat(16),{kind:'owner_call',job:'a'.repeat(16),stage:'failed',vault:VAULT,near_tx:ORIGINAL_NEAR,base_sent:[],error:'fixture: broadcast stopped'})
@@ -39,9 +42,10 @@ export class ProtocolFixture {
    case 'eth_getTransactionCount':return toHex(params[1]==='pending'?this.pending:this.confirmed)
    case 'eth_getTransactionReceipt':{
     const hash=params[0] as Hex
+    const agent=hash===this.agentSigned?.hash
     const direct=this.directReceipt&&hash==='0x'+'dd'.repeat(32)
-    if(!direct&&!(this.finishCancel&&hash===this.lastCancel?.hash)&&!(this.finishRules&&this.ruleSigned.some(tx=>tx.hash===hash)))return null
-    return {transactionHash:hash,transactionIndex:'0x0',blockHash:HASH,blockNumber:'0x63',from:direct?OWNER:BASE,to:direct?MORPHO:BASE,cumulativeGasUsed:'0x5208',gasUsed:'0x5208',effectiveGasPrice:'0x1',contractAddress:null,logs:[],logsBloom:'0x'+'00'.repeat(256),status:direct?'0x0':'0x1',type:'0x2'}
+    if(!agent&&!direct&&!(this.finishCancel&&hash===this.lastCancel?.hash)&&!(this.finishRules&&this.ruleSigned.some(tx=>tx.hash===hash)))return null
+    return {transactionHash:hash,transactionIndex:'0x0',blockHash:HASH,blockNumber:'0x63',from:direct?OWNER:BASE,to:agent?EXECUTOR:direct?MORPHO:BASE,cumulativeGasUsed:'0x5208',gasUsed:'0x5208',effectiveGasPrice:'0x1',contractAddress:null,logs:[],logsBloom:'0x'+'00'.repeat(256),status:agent?this.agentReceiptStatus:direct?'0x0':'0x1',type:'0x2'}
    }
    case 'eth_sendRawTransaction':{
     if(params[0]!==this.lastCancel?.raw)throw Error('Only exact verified cancellation rebroadcast is permitted by this fixture.')
@@ -56,6 +60,18 @@ export class ProtocolFixture {
    }
    default:throw Error(`Unexpected RPC ${method}`)
   }
+ }
+ evidenceFiles(){
+  const values:Record<string,unknown>={'info.json':{tcb_info:measurement},'event_log.json':[],'app-compose.json':{services:{}},'vm_config.json':{},'tdx_quote.hex':'deadbeef','registration-v1.json':{vault:VAULT,registered:true,vault_agent:{public_key:AGENT_KEY},near_tx:'5'.repeat(44)},'registration-v2.json':{vault:'v2.fixture.testnet',registered:true,vault_agent:{public_key:AGENT_KEY}}}
+  return Object.entries(values).map(([name,value])=>{const text=typeof value==='string'?value:JSON.stringify(value);return{name,text,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')}})
+ }
+ evidenceTranscripts(){
+  return Array.from({length:this.evidenceCount},(_,index)=>{
+   const loop=index+1,name=`${this.evidenceBoot}-v1-${String(loop).padStart(4,'0')}.json`
+   const data:Record<string,unknown>={agent:{boot:this.evidenceBoot,public_key:AGENT_KEY,measurement},vault:{id:this.wrongTranscriptVault?'v2.fixture.testnet':VAULT},network:'Base Sepolia',twin:false,loop,time_utc:new Date((this.evidenceStamp+loop)*1000).toISOString(),inputs:{snapshot:{timestamp:this.evidenceStamp+loop,block:100,user:BASE,read_errors:[],rpc_disagree:[],rpc_second_error:this.secondaryError&&loop===this.evidenceCount?'secondary RPC timeout':null}},decisions:[]}
+   if(loop===1)data.proposal={sent:true,method:'reduce',args:{market:LIVE,amount:'100'},near_tx:AGENT_NEAR,base:{hash:this.agentSigned!.hash,status:1}}
+   const text=JSON.stringify(data);return{name,text,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex'),boot:this.evidenceBoot,vault:'v1',twin:false,loop}
+  })
  }
  confirmRules(){
   const intent=JSON.parse(this.posts.at(-1)!.message);const updates=intent.method==='setup'?intent.args.markets.map((m:{market:string;corridor:Record<string,unknown>})=>({market:m.market,...m.corridor})):[intent.args]
@@ -103,6 +119,7 @@ export class ProtocolFixture {
       const state=req.params.method_name==='get_config'?{count:0}:{owner:OWNER,owner_nonce:this.ownerNonce,base_address:BASE,markets:[LIVE,BACKUP].map(id=>({id,executor:EXECUTOR,corridor_set:true}))}
       result={block_hash:HASH,result:[...Buffer.from(JSON.stringify(state))]}
      }else if(req.method==='tx'){
+      if(req.params.tx_hash===AGENT_NEAR){return route.fulfill({json:{result:{final_execution_status:'FINAL',receipts_outcome:[{outcome:{status:{SuccessValue:''}}}],transaction:{hash:AGENT_NEAR,receiver_id:VAULT,signer_id:VAULT,public_key:AGENT_KEY,actions:[{FunctionCall:{method_name:'reduce',args:encode({market:LIVE,amount:this.agentWrongArgs?'101':'100',tx:{}})}}]},status:{SuccessValue:encode([this.agentSigned])}}}})}
       const entry=this.nearResults.get(req.params.tx_hash);if(!entry)throw Error('Unknown fixture NEAR hash')
       result={transaction:{hash:req.params.tx_hash,receiver_id:VAULT,signer_id:'relayer.fixture.testnet',actions:[{FunctionCall:{method_name:'owner_call',args:encode({message:entry.message,signature:entry.signature})}}]},status:{SuccessValue:encode(entry.signed)}}
      }else if(req.method==='block')result={header:{hash:HASH,timestamp_nanosec:String(BigInt(NOW)*1000000000n)}}
@@ -110,6 +127,10 @@ export class ProtocolFixture {
      return route.fulfill({json:{jsonrpc:'2.0',id:req.id,result}})
     }
     if(['relayer.fixture.test','fallback.fixture.test'].includes(url.hostname)){
+     if(url.pathname==='/agent/')return route.fulfill({json:{boot:this.evidenceBoot,files:this.evidenceFiles().map(({text,...row})=>row)}})
+     if(url.pathname==='/agent/transcripts')return route.fulfill({json:{boot:this.evidenceBoot,transcripts:this.evidenceTranscripts().map(({text,...row})=>row)}})
+     if(url.pathname.startsWith('/agent/transcripts/')){const row=this.evidenceTranscripts().find(row=>row.name===url.pathname.split('/').pop());if(!row)throw Error('Unknown fixture transcript');return route.fulfill({contentType:'application/json',body:row.text+(this.corruptTranscript?'x':'')})}
+     if(url.pathname.startsWith('/agent/evidence/')){const row=this.evidenceFiles().find(row=>row.name===url.pathname.split('/').pop());if(!row)throw Error('Unknown fixture evidence');if(this.rotateEvidence){this.rotateEvidence=false;this.evidenceBoot='boot-2000000001-abcdef34'}return route.fulfill({contentType:'text/plain',body:row.text+(this.corruptEvidence===row.name?'x':'')})}
      if(url.pathname==='/health')return route.fulfill({json:{ok:true,chain_id:84532,near_network:'testnet',factory:'fixture.testnet',factory_exists:true,sender:'relayer.fixture.testnet',eth_float_wei:'0'}})
      if(url.pathname.startsWith('/job/')){const job=this.jobs.get(url.pathname.split('/').pop()!);return route.fulfill({status:job?200:404,json:job??{error:'lost'}})}
      if(url.pathname==='/owner-call'){

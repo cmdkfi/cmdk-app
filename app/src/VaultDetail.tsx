@@ -1,3 +1,4 @@
+import {failedVaultRead} from './vault-read-state.ts'
 import {HeldCancellation} from './HeldCancellation.tsx'
 import {VaultRecovery} from './VaultRecovery.tsx'
 import {VaultFunding} from './VaultFunding.tsx'
@@ -73,8 +74,8 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     let active = true
     if (!vault) return
     loadConfig().then(config => readLivePosition(config, vault.accountId, vault.owner))
-      .then(position => { if (active) setRead({ key, position }) })
-      .catch(error => { if (active) setRead({ key, error: error instanceof Error ? error.message : 'Could not read vault.' }) })
+      .then(position => { if(!position.markets.length&&position.errors?.length)throw Error(position.errors.join('; '));if (active) setRead({ key, position }) })
+      .catch(error => { if (active) setRead(previous=>failedVaultRead(previous,key,error instanceof Error ? error.message : 'Could not read vault.')) })
     return () => { active = false }
   }, [key, revision])
   useEffect(() => {
@@ -82,20 +83,21 @@ export function VaultDetail({ vault }: { vault: Vault | null }) {
     return () => window.clearInterval(timer)
   }, [key])
   const current = read?.key === key ? read : null
-  const markets=current?.position?.markets??[]
+  const markets=(current?.position?.markets??[]).map(market=>current?.error?{...market,readOnly:true,policyUnavailable:true,autopilot:'Unavailable'}:market)
   const live=markets.find(market=>market.label==='live')??markets.find(market=>market.label!=='backup')??markets[0]
   const backup=markets.find(market=>market.label==='backup'&&market.id!==live?.id)
   return <div className="vault-detail">
     <div className="vault-detail-heading"><a href="#connect">← Vaults</a>{vault && <PrototypeButton disabled={!current} onClick={() => setRevision(value => value + 1)}>Refresh</PrototypeButton>}</div>
     {vault&&<VaultRecovery key={`recovery:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/>}
     {vault&&<HeldCancellation key={`cancel:${vault.accountId}:${vault.owner}`} vault={vault} onRefresh={()=>setRevision(value=>value+1)}/> }
-    {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : current.error ? <p role="alert">{current.error}</p> : current.position && <>
+    {!vault ? <p role="status">Select a vault from the Vaults list. If discovery is still loading, return to the list to see its status.</p> : !current ? <p role="status">Reading vault and market rules…</p> : !current.position ? <p role="alert">{current.error??'Vault data unavailable.'}</p> : <>
+      {current.error&&<p role="alert">{current.error} Showing the last successful snapshot. Position actions are read-only; independent recovery remains available.</p>}
       <p className="vault-detail-address">{current.position.baseAddress}<small>{current.position.vault} · Base Sepolia</small></p>
-      {<p className="demo-summary">Read {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
+      {<p className="demo-summary">{current.error?'Last successful read':'Read'} {new Date(current.position.readAt).toLocaleTimeString()}. Debt and LTV include accrued interest at the read block. Updates every 30 seconds while visible. Refresh for a new snapshot.</p>}
       <PrototypeSurface><h3>Free vault balances</h3>{current.position.freeBalances?.map(token => <p key={token.token}>{formatUnits(token.balance,token.decimals)} {token.symbol} · available to withdraw</p>)}<p>Gas reserve: {current.position.gasBalance === undefined ? 'Unavailable' : `${formatUnits(current.position.gasBalance,18)} test ETH`}</p><p>Free tokens are separate from collateral locked in Morpho.</p></PrototypeSurface>
       {live&&<VaultRules key={`${vault.accountId}:${live.id}`} vault={vault} live={live} backup={backup} onRefresh={()=>setRevision(value=>value+1)}/>}
       {current.position.errors?.map(error => <p role="alert" key={error}>{error}</p>)}
-      {current.position.markets.length ? current.position.markets.map(market => market.id===backup?.id?<BackupMarket key={market.id} market={market} vault={vault!} onRefresh={()=>setRevision(value=>value+1)}/>:<MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}
+      {markets.length ? markets.map(market => market.id===backup?.id?<BackupMarket key={market.id} market={market} vault={vault!} onRefresh={()=>setRevision(value=>value+1)}/>:<MarketDetail key={market.id} market={market} vault={vault!} onRefresh={() => setRevision(value => value + 1)}/>) : <p>{current.position.errors?.length ? 'Market reads are incomplete. Retry to load missing positions.' : 'No markets configured for this vault.'}</p>}
     </>}
   </div>
 }
