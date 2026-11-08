@@ -1,9 +1,9 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import './prototype-controls.css'
 
 /** React versions of the final pill-btn, icon-btn, tabs and card in index.html. */
-export function PrototypeButton({ primary = false, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean }) {
-  return <button {...props} className={`prototype-button ${primary ? 'is-primary' : ''} ${className}`} />
+export function PrototypeButton({ primary = false, className = '', buttonRef, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; buttonRef?: Ref<HTMLButtonElement> }) {
+  return <button ref={buttonRef} {...props} className={`prototype-button ${primary ? 'is-primary' : ''} ${className}`} />
 }
 
 export function PrototypeIconButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
