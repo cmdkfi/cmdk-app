@@ -8,3 +8,4 @@
 .verification-field { margin-block: 20px; }
 .verification-field dd { margin: 8px 0; display: grid; gap: 8px; overflow-wrap: anywhere; }
 .verification-field code { white-space: normal; }
+.edit-rules{inset:16px 16px 16px auto;width:420px;max-height:calc(100dvh - 32px);border-radius:16px;background:#0a0a0c}.edit-rules label{display:grid;gap:8px;margin:20px 0}.edit-rules input{font:inherit;font-size:16px;min-height:48px;padding:12px;background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:12px}.edit-rules p{margin:16px 0;color:var(--muted)}.edit-rules h2{margin-top:16px}@media(max-width:700px){.edit-rules{inset:auto 0 0;width:100%;max-height:90dvh;border-radius:16px 16px 0 0}}
