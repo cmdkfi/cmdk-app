@@ -80,3 +80,8 @@ export function repairSetupArgs(config: AppConfig, rules: InitialRules, facts: {
   if(measurementMatches&&markets.every(m=>!m.approve&&!m.authorize&&!m.corridor))throw new SetupError('Setup is already complete. No unchanged rules need to be saved.')
   return {markets,measurement:measurementMatches?null:initial.measurement}
 }
+
+export function needsSetupApproval(loanAllowance:bigint,collateralAllowance:bigint) {
+ const unlimited=(1n<<256n)-1n
+ return loanAllowance!==unlimited||collateralAllowance!==unlimited
+}

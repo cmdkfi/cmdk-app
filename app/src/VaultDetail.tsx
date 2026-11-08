@@ -19,6 +19,7 @@ const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 
 function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
   const now=useNow()
+  const [requestedAction,setRequestedAction]=useState<{action:'Deposit'|'Repay';request:number}>()
   const empty = market.collateral === 0n && market.debt === 0n
   const current = market.ltv === null ? null : Number(market.ltv) / 1e16
   const thresholds = [{ name: 'Target', value: market.agentTarget, tone: 'target' }, { name: 'Act', value: market.agentTrigger, tone: 'act' }, { name: 'Liquidation', value: market.liquidationLtv, tone: 'liquidation' }]
@@ -49,8 +50,9 @@ function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; va
       </details>
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
+    {!market.readOnly&&market.debt>0n&&(market.ltv===null||market.agentTrigger!==null&&market.ltv>=market.agentTrigger)&&<div className="live-action-tabs risk-actions"><PrototypeButton onClick={()=>setRequestedAction(previous=>({action:'Deposit',request:(previous?.request??0)+1}))}>Add collateral</PrototypeButton><PrototypeButton onClick={()=>setRequestedAction(previous=>({action:'Repay',request:(previous?.request??0)+1}))}>Repay debt</PrototypeButton></div>}
     <VerificationDetails vault={vault} market={market} />
-    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} />{!market.readOnly&&<VaultFunding key={`funding:${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh}/>}</aside></div>
+    </div><aside className="cockpit-actions"><LiveActions key={`${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh} requestedAction={requestedAction}/>{!market.readOnly&&<VaultFunding key={`funding:${vault.accountId}:${vault.owner}:${market.id}`} market={market} vault={vault} onRefresh={onRefresh}/>}</aside></div>
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
 }

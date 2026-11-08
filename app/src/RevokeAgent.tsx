@@ -11,7 +11,7 @@ export function RevokeAgent({vault,onConfirmed}:{vault:Vault;onConfirmed:()=>voi
  const {address,chainId}=useAccount(),{signMessageAsync}=useSignMessage()
  const [busy,setBusy]=useState(false),[status,setStatus]=useState(''),[review,setReview]=useState(false)
  const reviewStart=useRef<HTMLButtonElement>(null),cancelButton=useRef<HTMLButtonElement>(null)
- useEffect(()=>{if(review)cancelButton.current?.focus();else if(reviewStart.current?.closest('dialog')?.open) reviewStart.current?.focus()},[review])
+ useEffect(()=>{if(busy)return;if(review)cancelButton.current?.focus();else if(reviewStart.current?.closest('dialog')?.open) reviewStart.current?.focus()},[review,busy])
  const flight=useRef(false),session=useRef('');session.current=`${address}:${vault.accountId}:${chainId}`
  const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[])
  const key=`cmdk-live-action:${vault.accountId}:${address}`
