@@ -46,3 +46,7 @@ test('repair preserves existing corridors and avoids repeating granted authoriza
  const initial=repairSetupArgs(config,rules,facts.map(f=>({...f,authorized:false,needsApproval:true,corridorSet:false})),false)
  assert.deepEqual(initial.markets.map(m=>[m.approve,m.authorize]),[[true,true],[false,false]])
 })
+
+test('repair validates new corridors against the actual market LLTV rather than a demo constant',()=>{
+ assert.throws(()=>repairSetupArgs(config,rules,[{id:'one',executor:'exec',loanToken:'loan',collateralToken:'coll',authorized:true,needsApproval:false,corridorSet:false,liquidationLtv:650000000000000000n}],true),/actual market/)
+})
