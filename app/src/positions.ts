@@ -18,6 +18,7 @@ export type MarketPosition = {
   label?: string
   id: Hex
   readOnly?: boolean
+  snapshotUnavailable?: boolean
   policyUnavailable?: boolean
   priceUnavailable?: boolean
   collateral: bigint

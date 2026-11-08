@@ -274,7 +274,7 @@ export function LiveActions({ market: m, vault, onRefresh, requestedAction }: { 
       if (!submitted) setLocked(!!localStorage.getItem(key))
     } finally { inFlight.current = false; setBusy(false) }
   }
-  if (m.readOnly) return <PrototypeSurface className="live-actions"><h3>Read-only market</h3><p>This owned position uses an Executor outside the current deployment. Its balances remain visible. Verify the deployment with the protocol maintainer before executing actions.</p></PrototypeSurface>
+  if (m.readOnly) return <PrototypeSurface className="live-actions"><h3>{m.snapshotUnavailable?'Live snapshot unavailable':'Read-only market'}</h3><p>{m.snapshotUnavailable?'Showing the last successful snapshot. Refresh live position data before managing this market; independent recovery remains available.':'This owned position uses an Executor outside the current deployment. Its balances remain visible. Verify the deployment with the protocol maintainer before executing actions.'}</p></PrototypeSurface>
   return <PrototypeSurface className="live-actions">
     <h3>Manage position</h3>
     {m.priceUnavailable && <p role="alert">Oracle price unavailable. Risk preview and borrowing are unavailable. Repayment and free-token withdrawal remain available.</p>}
