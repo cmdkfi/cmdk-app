@@ -1,4 +1,3 @@
-import { LtvSimulation } from './LtvSimulation.tsx'
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
 import { loadConfig, type Vault } from './near.ts'
@@ -34,7 +33,6 @@ function MarketDetail({ market }: { market: MarketPosition }) {
       <dl className="vault-ltv-legend">{thresholds.map(t => <div key={t.name}><dt><i className={t.tone}/>{t.name}</dt><dd>{pct(t.value)}</dd></div>)}</dl>
       <p className="vault-ltv-explanation">Target is the protective repayment goal. Above Act, a protective session can start. Liquidation is the market’s liquidation threshold. Agent execution is not guaranteed.</p>
     </PrototypeSurface>
-    <LtvSimulation market={market} />
     <details className="vault-market-id"><summary>Market details</summary><p>{market.id}</p><p>Collateral token: {market.collateralToken}</p><p>Loan token: {market.loanToken}</p></details>
   </section>
 }
