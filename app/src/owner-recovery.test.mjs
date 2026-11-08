@@ -33,3 +33,24 @@ test('lost jobs recover only from the exact finalized NEAR owner-call intent',as
  await assert.rejects(readOwnerRecovery(config,vault,{...ownerPendingRecord(message),message:message+' '},hash,fetcher),/does not match/)
  await assert.rejects(readOwnerRecovery(config,vault,{pending:true},hash,fetcher),/legacy/)
 })
+import {verifyOwnerJob,unsubmittedOwnerExpired} from './owner-recovery.ts'
+test('an unsubmitted intent unlocks only after the same final NEAR block proves expiry and an unused nonce',async()=>{
+ const vault={accountId:'v3.factory.testnet',owner:account.address,baseAddress:account.address},config={nearRpcUrl:'https://near'}
+ const message=JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault:vault.accountId,nonce:4,expiry:2000000000}),record=ownerPendingRecord(message),block='A'.repeat(44)
+ function rpc(nonce,time,hash=block){return async(_url,options)=>JSON.parse(options.body).method==='query'?Response.json({result:{block_hash:block,result:[...new TextEncoder().encode(JSON.stringify({owner:vault.owner,base_address:vault.baseAddress,owner_nonce:nonce}))]}}):Response.json({result:{header:{hash,timestamp_nanosec:(BigInt(time)*1000000000n).toString()}}})}
+ assert.equal(await unsubmittedOwnerExpired(config,vault,record,rpc(3,2000000001)),true)
+ assert.equal(await unsubmittedOwnerExpired(config,vault,record,rpc(4,2000000001)),false)
+ assert.equal(await unsubmittedOwnerExpired(config,vault,record,rpc(3,2000000000)),false)
+ await assert.rejects(unsubmittedOwnerExpired(config,vault,record,rpc(3,2000000001,'B'.repeat(44))),/timestamp/)
+ assert.equal(await unsubmittedOwnerExpired(config,vault,{pending:true},rpc(3,2000000001)),false)
+})
+test('job confirmation is bound to its exact NEAR result, including NEAR-only owner calls',async()=>{
+ const vault={accountId:'v3.factory.testnet',owner:account.address,baseAddress:account.address},config={relayerUrl:'https://relayer',nearRpcUrl:'https://near',near:{factory:'factory.testnet'}},hash='1'.repeat(44),sender='relayer.testnet'
+ const message=JSON.stringify({protocol:'cmdk-vault/1',network:'testnet',vault:vault.accountId,nonce:4,expiry:2000000000,method:'revoke_agent',args:{}}),signature=await account.signMessage({message}),record=ownerPendingRecord(message)
+ const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64')
+ const fetcher=async url=>url.endsWith('/health')?Response.json({chain_id:84532,near_network:'testnet',factory:config.near.factory,sender}):Response.json({result:{transaction:{hash,receiver_id:vault.accountId,signer_id:sender,actions:[{FunctionCall:{method_name:'owner_call',args:encode({message,signature})}}]},status:{SuccessValue:encode([])}}})
+ const job={vault:vault.accountId,near_tx:hash,stage:'done',base_sent:[]}
+ assert.deepEqual(await verifyOwnerJob(config,vault,record,job,fetcher),[])
+ await assert.rejects(verifyOwnerJob(config,vault,record,{...job,base_sent:['0x'+'aa'.repeat(32)]},fetcher),/Base hashes/)
+ await assert.rejects(verifyOwnerJob(config,vault,record,{...job,vault:'other.testnet'},fetcher),/matching NEAR/)
+})

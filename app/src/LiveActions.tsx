@@ -1,4 +1,4 @@
-import {ownerPendingRecord,readOwnerRecovery,type SignedOwnerTransaction} from './owner-recovery.ts'
+import {ownerPendingRecord,readOwnerRecovery,verifyOwnerJob,unsubmittedOwnerExpired,type SignedOwnerTransaction} from './owner-recovery.ts'
 import { useEffect, useRef, useState } from 'react'
 import { encodeFunctionData, formatUnits, parseAbi, type Hex } from 'viem'
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
@@ -89,14 +89,21 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
         for(const tx of signed)setHashes(previous=>[...previous,tx.hash])
       } else if (record.hash) { await receipt(record.hash) }
       else if (record.job) {
-        const job = await readSetupJob(await loadConfig(), record.job)
+        const config=await loadConfig()
+        const job = await readSetupJob(config, record.job)
         if (job.vault !== vault.accountId) throw new Error('Recovery job belongs to another vault.')
         setHashes(job.base_sent ?? []); setNearTx(job.near_tx)
-        if (job.stage === 'failed' && ownerTransactionsConsumed(job.signed ?? [], vault.baseAddress!, await client.getTransactionCount({address:vault.baseAddress as Hex,blockNumber:(await client.getBlockNumber()) - 1n}))) {
+        if(job.stage==='failed'&&!job.near_tx&&await unsubmittedOwnerExpired(config,vault,record)){assertSession();localStorage.removeItem(key);setLocked(false);onRefresh();setMessage('Owner intent expired without consuming its NEAR nonce. No signed Base calls were produced by this intent.');return}
+        if(!['done','failed'].includes(job.stage))throw new Error(job.error??'Owner action is still pending. Check again; do not resubmit.')
+        const signed=await verifyOwnerJob(config,vault,record,job)
+        setRecovered({signed,message:record.message!})
+        if (job.stage === 'failed' && ownerTransactionsConsumed(signed, vault.baseAddress!, await client.getTransactionCount({address:vault.baseAddress as Hex,blockNumber:(await client.getBlockNumber()) - 1n}))) {
           assertSession(); localStorage.removeItem(key); setLocked(false); onRefresh(); setMessage('Previous owner action ended. Its signed Base nonces are consumed; review the refreshed position before continuing.'); return
         }
-        if (job.stage !== 'done' || !job.base_sent?.length) throw new Error(job.error ?? 'Owner action is still pending. Check again; do not resubmit.')
-        for (const hash of job.base_sent) await receipt(hash as Hex)
+        if (job.stage !== 'done') throw new Error(job.error ?? 'Owner action is still pending. Check again; do not resubmit.')
+        for (const hash of job.base_sent??[]) await receipt(hash as Hex)
+      } else if(record.kind==='owner'){
+        if(!await unsubmittedOwnerExpired(await loadConfig(),vault,record))throw new Error('The owner intent may still be valid or was already consumed. Enter its NEAR transaction hash to reconcile the exact result.')
       } else {
         if (!/^0x[0-9a-fA-F]{64}$/.test(recoveryHash)) throw new Error('Paste the confirmed transaction hash from your wallet. Do not submit the action again.')
         const hash = recoveryHash as Hex
@@ -235,7 +242,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
           const result = await readSetupJob(config,job)
           assertSession(); setHashes(result.base_sent ?? []); setNearTx(result.near_tx)
           if (result.stage === 'failed') throw new Error(result.error ?? 'Owner action failed. Check transaction status.')
-          if (result.stage === 'done' && result.base_sent?.length) { for (const hash of result.base_sent) await receipt(hash as Hex); break }
+          if (result.stage === 'done') { await verifyOwnerJob(config,vault,JSON.parse(localStorage.getItem(key)??'{}'),result); for (const hash of result.base_sent??[]) await receipt(hash as Hex); break }
           if (i === 89) throw new Error('Still pending. Use Check transaction status; do not submit again.')
           await new Promise(resolve => window.setTimeout(resolve,2000))
         }
@@ -273,7 +280,7 @@ export function LiveActions({ market: m, vault, onRefresh }: { market: MarketPos
     {review !== null && <section className="prototype-surface" aria-label="Review transaction"><h3>Review {review ? 'close position' : action.toLowerCase()}</h3><p>Vault: {vault.accountId}</p><p>{review ? 'Repay all remaining debt using free vault USDC, then release all collateral into the vault. Tokens are not sent to your wallet.' : `${input} ${symbol} · ${action === 'Repay' ? repaySource === 'wallet' ? 'from your wallet to Morpho' : 'from free vault funds via owner-call' : action === 'Withdraw' ? 'from free vault balance to your connected wallet' : action === 'Borrow' ? 'borrowed USDC stays in the vault until you withdraw it' : 'from your wallet into Morpho collateral'}`}</p><p>Current LTV {pct(m.ltv)} → {review ? 'No debt' : pct(quote.ltv)}. The final state is checked again before signing.</p><PrototypeButton primary disabled={busy||locked||chainId!==84532} onClick={()=>void execute(review)}>Continue to wallet</PrototypeButton><PrototypeButton disabled={busy} onClick={()=>setReview(null)}>Cancel review</PrototypeButton></section>}
     {locked && <label>NEAR owner-call hash<input value={recoveryNearHash} disabled={busy} onChange={e=>{setRecoveryNearHash(e.target.value.trim());setRecovered(null)}} placeholder="NEAR transaction hash" autoComplete="off" spellCheck={false}/><small>For a lost owner-call job, match the exact signed intent and verify every Base nonce against the chain.</small></label>}
     {locked && <label>Confirmed transaction hash<input value={recoveryHash} disabled={busy} onChange={e => setRecoveryHash(e.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} /><small>If the wallet completed the transaction but this page lost its status, paste its hash. Legacy recovery accepts only a confirmed collateral deposit for this vault and market.</small></label>}
-    {locked && recovered && <section className="prototype-surface"><h3>Recovered owner intent</h3><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{recovered.message}</pre><p>Broadcast only the original signed Base calls below, in nonce order. This can execute the original action without a new wallet signature. No call, amount or destination is changed.</p>{recovered.signed.map(tx=><p key={tx.hash}>Nonce {tx.nonce} · <a href={`https://sepolia.basescan.org/tx/${tx.hash}`} target="_blank" rel="noreferrer">{tx.hash.slice(0,12)}… ↗</a></p>)}<PrototypeButton disabled={busy||!recovered.signed.length} onClick={()=>void resumeRecovered()}>Resume original signed Base calls</PrototypeButton></section>}
+    {locked && recovered && <section className="prototype-surface"><h3>Recovered owner intent</h3><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{recovered.message}</pre><p>Broadcast only the original signed Base calls below, in nonce order. This can execute the original action without a new wallet signature. No call, amount or destination is changed. NEAR message expiry does not expire already signed token transfers or approvals.</p>{recovered.signed.map(tx=><p key={tx.hash}>Nonce {tx.nonce} · <a href={`https://sepolia.basescan.org/tx/${tx.hash}`} target="_blank" rel="noreferrer">{tx.hash.slice(0,12)}… ↗</a></p>)}<PrototypeButton disabled={busy||!recovered.signed.length} onClick={()=>void resumeRecovered()}>Resume original signed Base calls</PrototypeButton></section>}
     {locked && <PrototypeButton disabled={busy} onClick={() => void recover()}>Check transaction status</PrototypeButton>}
     <p role="status">{message}</p>
     {nearTx && <a href={`https://testnet.nearblocks.io/txns/${encodeURIComponent(nearTx)}`} target="_blank" rel="noreferrer">NEAR transaction ↗</a>}
