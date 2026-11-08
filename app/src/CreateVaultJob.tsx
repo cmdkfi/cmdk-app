@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
+import { accountKind } from './wallet-utils.ts'
 import { CreateVaultError, readCreateJob, startCreateVault, type CreateJob } from './create-vault.ts'
 import { loadConfig, type AppConfig } from './near.ts'
 import { assessRelayer, readRelayerHealth, type Readiness } from './relayer.ts'
@@ -11,7 +12,8 @@ const labels = ['Request accepted', 'Vault created', 'Gas sent', 'Ready']
 
 export function CreateVaultJob() {
   const { address, isConnected } = useAccount()
-  const { refresh } = useVaultSelection()
+  const { refresh, kind: discoveryKind } = useVaultSelection()
+  const client = usePublicClient({chainId:84532})
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [view, setView] = useState<View>({ kind: 'checking', message: 'Checking the deployment and relayer…' })
   const [jobId, setJobId] = useState<string | null>(null)
@@ -21,6 +23,8 @@ export function CreateVaultJob() {
 
   useEffect(() => {
     let active = true
+    setJobId(null); setJob(null); setRetryAfter(null); setConfig(null)
+    setView({kind:'checking',message:'Checking the deployment and relayer…'})
     loadConfig().then(async next => {
       if (!active) return
       setConfig(next)
@@ -59,6 +63,7 @@ export function CreateVaultJob() {
         setJob(next)
         if (next.stage === 'done') {
           setView({ kind: 'working', message: 'Vault created. Protection rules still need your approval during setup.' })
+          if (key) sessionStorage.removeItem(key)
           refresh()
         } else if (next.stage === 'failed') {
           setView({ kind: 'error', message: next.vault ? 'Vault exists, but a later step failed. Check its status before continuing.' : next.error || 'Vault creation failed.' })
@@ -81,9 +86,10 @@ export function CreateVaultJob() {
   }, [config, jobId, job?.stage, view.kind])
 
   async function create() {
-    if (!config || !address || !key || view.kind !== 'ready') return
+    if (!config || !address || !key || !client || discoveryKind !== 'ready' || view.kind !== 'ready') return
     setView({ kind: 'working', message: 'Sending one create request…' })
     try {
+      if (accountKind(await client.getCode({address})) === 'contract') throw new CreateVaultError('This account type is not supported yet. Connect another wallet.')
       const id = await startCreateVault(config, address)
       sessionStorage.setItem(key, id)
       setJobId(id)
@@ -116,10 +122,13 @@ export function CreateVaultJob() {
     {jobId && <p className="create-job__address">Job ID: <code>{jobId}</code></p>}
     {retryAfter && <p className="explain">Rate limited. Wait at least {retryAfter} seconds before checking again.</p>}
     <div className="card-actions">
-      <button className="button" disabled={!isConnected || view.kind !== 'ready' || !!jobId} onClick={() => void create()}>Create testnet vault <span aria-hidden="true">→</span></button>
+      <button className="button" disabled={!isConnected || discoveryKind !== 'ready' || view.kind !== 'ready' || !!jobId} onClick={() => void create()}>Create testnet vault <span aria-hidden="true">→</span></button>
       {!jobId && view.kind !== 'ready' && <button className="button button--secondary" onClick={() => void checkAgain()}>Check readiness</button>}
+      {job?.stage === 'done' && job.vault && <a className="button" href={`#vault?id=${encodeURIComponent(job.vault)}`}>Continue to vault setup →</a>}
+      {job?.stage === 'done' && <button className="button button--secondary" onClick={() => {setJobId(null);setJob(null);void checkAgain()}}>Create another vault</button>}
       {(view.kind === 'uncertain' || job?.stage === 'failed') && <a className="button button--secondary" href="#connect">Check my vaults <span aria-hidden="true">→</span></a>}
     </div>
+    {isConnected && discoveryKind === 'error' && <p role="alert">Owner account verification failed. Return to Vaults and retry before creating a vault.</p>}
     {!isConnected && <p className="explain">Connect your owner wallet to create a testnet vault.</p>}
     <p className="explain">A successful creation only prepares the vault. Its protection rules are not active until you review and approve setup.</p>
   </section>

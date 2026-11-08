@@ -37,7 +37,7 @@ export function VaultHome({ activity = false, detail = false, create = false }: 
     </header>
     <main className="vault-main">
       <div className="vault-title"><h1>{activity ? 'Activity' : detail ? 'Vault overview' : 'Your vaults'}</h1></div>
-      {create ? <CreateVaultJob /> : detail && isConnected ? <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
+      {create ? <CreateVaultJob key={address?.toLowerCase() ?? 'disconnected'} /> : detail && isConnected ? <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
 
         <h2>{activity ? 'Your activity starts here' : 'Connect to find your vaults'}</h2>
         <p>{activity ? 'Connect your wallet to view activity for your address.' : 'Find your vaults or create your first one.'}</p>
