@@ -1,3 +1,5 @@
+import {useNow} from './use-now.ts'
+import {protectionLabel} from './protection-clock.ts'
 import {AgentApproval} from './AgentApproval.tsx'
 import {readNearSecurity} from './near-security.ts'
 import {RevokeAgent} from './RevokeAgent.tsx'
@@ -6,6 +8,7 @@ import { loadConfig, viewNear, type AgentMeasurement, type Vault } from './near.
 import { readLivePosition, type MarketPosition, type VaultState } from './positions.ts'
 import { PrototypeButton, PrototypeIconButton } from './ui/PrototypeControls.tsx'
 export function VerificationDetails({vault, market}: {vault:Vault;market:MarketPosition}) {
+  const now=useNow()
   const headingId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const [policy,setPolicy] = useState<MarketPosition>()
@@ -55,7 +58,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
         {state.base_address && field('Vault Base address',state.base_address,`https://sepolia.basescan.org/address/${state.base_address}`)}
         {state.cooldown_secs !== undefined && <div><dt>Agent cooldown</dt><dd>{state.cooldown_secs.toFixed(1)} seconds</dd></div>}
         {state.last_agent_action !== undefined && <div><dt>Last agent action recorded by NEAR</dt><dd>{state.last_agent_action===0?'None recorded':new Date(state.last_agent_action*1000).toLocaleString()}</dd></div>}
-        <div><dt>Current protection status</dt><dd>{policy?.autopilot ?? 'Unavailable'}</dd></div>
+        <div><dt>Current protection status</dt><dd>{policy ? protectionLabel(policy.autopilot,policy.protectionValidUntil,policy.registrationExpires,now) : 'Unavailable'}</dd></div>
         {state.agent?.public_key && field('Registered agent',state.agent.public_key)}
         {state.agent?.expires_at && <div><dt>Registration expires</dt><dd>{new Date(state.agent.expires_at*1000).toLocaleString()}</dd></div>}
         {approved && Object.entries(approved).map(([key,value]) => field(key,value))}

@@ -1,10 +1,12 @@
+import {useNow} from './use-now.ts'
+import {protectionLabel} from './protection-clock.ts'
 import { useState } from 'react'
 import { TokenIcon } from './ui/TokenIcon.tsx'
 import { PrototypeButton, PrototypeSurface } from './ui/PrototypeControls.tsx'
 import { PrototypeFilter } from './ui/PrototypeFilter.tsx'
 import './wallet-demo.css'
 
-export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; asset: string; assetId: string; detail: string; onOpen?: () => void }
+export type VaultTableRow = { name: string; loanSymbol: string; loanId: string; vaultAddress: string; collateral: string; value: string; debt: string; health?: string; ltv: string; liquidation: string; protection: string; protectionValidUntil?:number;registrationExpires?:number; asset: string; assetId: string; detail: string; onOpen?: () => void }
 export function AssetIcon({ symbol, address }: { symbol: string; address: string }) {
   const known = address === 'demo-weth' || address.toLowerCase() === '0x4200000000000000000000000000000000000006' ? 'WETH'
     : address === 'demo-usdc' || address.toLowerCase() === '0x036cbd53842c5426634e7929541ec2318f3dcf7e' ? 'USDC' : null
@@ -20,14 +22,16 @@ export function VaultTable({ vaults, demo = false }: { vaults: VaultTableRow[]; 
   const [query, setQuery] = useState('')
   const [asset, setAsset] = useState('all')
   const [autopilot, setAutopilot] = useState('all')
-  const filtered = vaults.filter(vault => `${vault.name} ${vault.detail} ${vault.vaultAddress}`.toLowerCase().includes(query.trim().toLowerCase()) && (asset === 'all' || vault.assetId === asset) && (autopilot === 'all' || vault.protection === autopilot))
+  const now=useNow()
+  const currentVaults=vaults.map(vault=>({...vault,protection:protectionLabel(vault.protection,vault.protectionValidUntil,vault.registrationExpires,now)}))
+  const filtered = currentVaults.filter(vault => `${vault.name} ${vault.detail} ${vault.vaultAddress}`.toLowerCase().includes(query.trim().toLowerCase()) && (asset === 'all' || vault.assetId === asset) && (autopilot === 'all' || vault.protection === autopilot))
   const hasFilters = query !== '' || asset !== 'all' || autopilot !== 'all'
   function clearFilters() { setQuery(''); setAsset('all'); setAutopilot('all') }
   return <><p className="demo-summary" role="status">{filtered.length} of {vaults.length} positions · Base Sepolia · {demo ? 'Demo' : 'On-chain'}</p>
     <PrototypeSurface className="demo-vault-tools">
       <div className="demo-vault-filter-row">
         <PrototypeFilter label="Collateral" value={asset} onChange={setAsset} icon="asset" options={[{ value: 'all', label: 'All collateral' }, ...Array.from(new Map(vaults.map(row => [row.assetId, { value: row.assetId, label: row.asset }])).values())]} />
-        <PrototypeFilter label="Autopilot" value={autopilot} onChange={setAutopilot} icon="status" options={[{ value: 'all', label: 'All statuses' }, ...Array.from(new Set(vaults.map(row => row.protection))).map(value => ({ value, label: value }))]} />
+        <PrototypeFilter label="Autopilot" value={autopilot} onChange={setAutopilot} icon="status" options={[{ value: 'all', label: 'All statuses' }, ...Array.from(new Set([...currentVaults.map(row => row.protection),...(autopilot==='all'?[]:[autopilot])])).map(value => ({ value, label: value }))]} />
         {hasFilters && <PrototypeButton onClick={clearFilters}>Clear filters</PrototypeButton>}
       </div>
       <label className="demo-vault-search"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" aria-label="Search vaults by token or address" placeholder="Filter by token or vault address" value={query} onChange={event => setQuery(event.target.value)} /></label>

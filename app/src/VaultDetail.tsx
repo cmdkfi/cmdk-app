@@ -1,4 +1,6 @@
 import {VaultFunding} from './VaultFunding.tsx'
+import {useNow} from './use-now.ts'
+import {protectionLabel} from './protection-clock.ts'
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
 import { loadConfig, type Vault } from './near.ts'
@@ -15,13 +17,14 @@ const pct = (value: bigint | null) => value === null ? 'Not set' : `${(Number(va
 const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 
 function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
+  const now=useNow()
   const empty = market.collateral === 0n && market.debt === 0n
   const current = market.ltv === null ? null : Number(market.ltv) / 1e16
   const thresholds = [{ name: 'Target', value: market.agentTarget, tone: 'target' }, { name: 'Act', value: market.agentTrigger, tone: 'act' }, { name: 'Liquidation', value: market.liquidationLtv, tone: 'liquidation' }]
   const position = (value: number) => `${Math.max(0, Math.min(100, value))}%`
   const risk = market.priceUnavailable ? 'Oracle unavailable · risk cannot be priced' : market.collateralValue === 0n && market.debt > 0n ? 'Critical · debt without collateral value' : empty ? 'No open position' : current === null ? 'LTV unavailable' : market.ltv! >= market.liquidationLtv ? 'At or above liquidation threshold' : market.agentTrigger !== null && market.ltv! > market.agentTrigger ? 'Above agent act line' : 'Below liquidation threshold'
   return <section className="vault-market-detail" aria-label={`${market.loanSymbol} / ${market.collateralSymbol} market`}>
-    <div className="vault-detail-heading"><h2 className="vault-token-pair"><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span></h2><span className="demo-autopilot">Autopilot · {market.autopilot}</span></div>
+    <div className="vault-detail-heading"><h2 className="vault-token-pair"><span><AssetIcon symbol={market.loanSymbol} address={market.loanToken}/>{market.loanSymbol}</span><span className="vault-pair-divider">/</span><span><AssetIcon symbol={market.collateralSymbol} address={market.collateralToken}/>{market.collateralSymbol}</span></h2><span className="demo-autopilot">Autopilot · {protectionLabel(market.autopilot,market.protectionValidUntil,market.registrationExpires,now)}</span></div>
     {market.policyUnavailable && <p role="alert">Executor policy telemetry unavailable. Position balances are still shown; borrowing and setup repair require a successful policy read.</p>}
     <div className="cockpit-columns"><div className="cockpit-monitor"><div className="vault-balance-grid">
       <PrototypeSurface><h3>Collateral</h3><strong>{amount(market.collateral, market.collateralDecimals)} <span>{market.collateralSymbol}</span></strong><p>{market.priceUnavailable ? 'Oracle unavailable' : `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`}</p></PrototypeSurface>
