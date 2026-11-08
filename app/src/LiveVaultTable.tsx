@@ -15,7 +15,6 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
   useEffect(() => {
     let active = true
     setLoading(true)
-    setResult(null)
     loadConfig().then(async config => {
       const reads = await Promise.allSettled(vaults.map(vault => readLivePosition(config, vault.accountId, vault.owner)))
       if (!active) return
@@ -24,14 +23,15 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
       reads.forEach((read, index) => {
         const vault = vaults[index]
         if (read.status === 'rejected') { errors.push(`Vault ${vault.number}: position unavailable. ${read.reason instanceof Error ? read.reason.message : 'Please retry.'}`); return }
-        if (!read.value.markets.length) errors.push(`Vault ${vault.number}: no configured markets.`)
+        errors.push(...(read.value.errors ?? []))
+        if (!read.value.markets.length && !read.value.errors?.length) errors.push(`Vault ${vault.number}: no configured markets.`)
         read.value.markets.forEach(market => rows.push({
           name: `${market.loanSymbol} / ${market.collateralSymbol}`, loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
           asset: market.collateralSymbol, assetId: market.collateralToken.toLowerCase(),
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
-          value: `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
+          value: market.priceUnavailable ? 'Oracle unavailable' : `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
           debt: `${amount(market.debt, market.loanDecimals)} ${market.loanSymbol}`,
-          health: market.debt===0n ? 'No debt' : market.ltv && market.ltv>0n ? (Number(market.liquidationLtv)/Number(market.ltv)).toFixed(1) : '—', ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
+          health: market.debt > 0n && market.collateralValue === 0n && !market.priceUnavailable ? 'Critical' : market.debt===0n ? 'No debt' : market.ltv && market.ltv>0n ? (Number(market.liquidationLtv)/Number(market.ltv)).toFixed(1) : '—', ltv: percent(market.ltv), liquidation: percent(market.liquidationLtv), protection: market.autopilot,
           onOpen: () => onOpen(vault.accountId),
         }))
       })
@@ -40,6 +40,10 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [vaults, revision])
+  useEffect(() => {
+    const timer = window.setInterval(() => { if (!document.hidden) setRevision(value => value + 1) }, 30000)
+    return () => window.clearInterval(timer)
+  }, [])
   const current = result?.source === vaults ? result : null
   return <div>
     <p className="demo-summary">Read from NEAR and Base Sepolia. Debt and LTV include interest calculated at the read block. Autopilot reflects registration, rules and a recent agent observation, not a guarantee of execution.</p>
@@ -47,6 +51,6 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
     {loading && <p role="status">Reading vault positions…</p>}
     {current?.errors.map(error => <p role="alert" key={error}>{error}</p>)}
     {current && current.rows.length > 0 && <VaultTable vaults={current.rows} />}
-    {current && <p className="demo-summary">Last read {new Date(current.time).toLocaleTimeString()} · Refresh to update balances and agent status.</p>}
+    {current && <p className="demo-summary">Last read {new Date(current.time).toLocaleTimeString()} · Updates every 30 seconds while visible.</p>}
   </div>
 }
