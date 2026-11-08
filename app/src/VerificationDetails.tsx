@@ -1,3 +1,4 @@
+import {AgentApproval} from './AgentApproval.tsx'
 import {readNearSecurity} from './near-security.ts'
 import {RevokeAgent} from './RevokeAgent.tsx'
 import { useEffect, useId, useRef, useState } from 'react'
@@ -63,7 +64,7 @@ export function VerificationDetails({vault, market}: {vault:Vault;market:MarketP
       </dl><p>Policy values are read from the Base executor corridor for this NEAR vault’s Base address. Heartbeat interval and raw quote are not exposed by get_state.</p></>}
       {securityError && <p role="alert">{securityError}</p>}
       {security && <><h3>NEAR account security</h3><p>{security.codeMatches ? 'Vault code hash matches the factory configuration.' : 'Vault code hash does not match the factory configuration.'}</p><p>{security.restricted ? 'Exactly one registered agent key, restricted to reduce / migrate / exit on this vault.' : 'Access-key restrictions do not match the expected single registered agent key. Inspect the raw permissions.'}</p><dl>{field('Vault code hash',security.account.global_contract_hash ?? security.account.code_hash)}{security.factoryCodeHash && field('Factory code hash',security.factoryCodeHash)}</dl><details><summary>Raw access-key permissions</summary><pre>{JSON.stringify(security.keys,null,2)}</pre></details></>}
-      <p>{evidenceUrl && <a href={evidenceUrl} target="_blank" rel="noreferrer">Agent decision transcripts ↗</a>} Decision evidence is published by the agent. Confirm execution through chain receipts.</p><RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
+      <p>{evidenceUrl && <a href={evidenceUrl} target="_blank" rel="noreferrer">Agent decision transcripts ↗</a>} Decision evidence is published by the agent. Confirm execution through chain receipts.</p>{state && !matches && !market.readOnly && <AgentApproval vault={vault} onConfirmed={()=>void open()} />}<RevokeAgent vault={vault} onConfirmed={()=>void open()} /><p role="status">{copied}</p>
     </dialog>
   </>
 }
