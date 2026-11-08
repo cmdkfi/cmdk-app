@@ -24,7 +24,7 @@ export function EditRules({vault,market,onRefresh}:{vault:Vault;market:MarketPos
  try{
  if(chainId!==84532||await client.getChainId()!==84532)throw Error('Switch to Base Sepolia.')
  if(localStorage.getItem(key))throw Error('A vault action is pending. Check its status before saving rules.')
- const c=await read();const edited=editedCorridor(c,values,market.liquidationLtv)
+ const c=await read();if(values.every((value,i)=>value===percent([c[0],c[1],c[3]][i]))){setMessage('No changes. Current rules are already stored on Base.');return}const edited=editedCorridor(c,values,market.liquidationLtv);if(edited.target===c[0].toString()&&edited.act===c[1].toString()&&edited.sell_budget===c[3].toString()){setMessage('No changes. Current rules are already stored on Base.');return}
  const config=await loadConfig(),state=await viewNear<VaultState>(config.nearRpcUrl,vault.accountId,'get_state')
  if(state.owner?.toLowerCase()!==address.toLowerCase())throw Error('Connected wallet is not the vault owner.')
  const expiry=Number((await client.getBlock()).timestamp)+600

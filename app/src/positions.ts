@@ -25,6 +25,8 @@ export type MarketPosition = {
   ltv: bigint | null
   liquidationLtv: bigint
   oraclePrice: bigint
+  protectionValidUntil?: number
+  registrationExpires?: number
   autopilot: string
   executor?: Address
   morpho?: Address
@@ -147,6 +149,8 @@ async function readPositionSnapshot(config: AppConfig, vaultId: string, expected
       client.readContract({address:market.executor as Address,abi:executorAbi,functionName:'COOLDOWN',blockNumber}),
     ]).then(async([sold,moves,sessionStart,lastCall,cooldown])=>{const baseReady=lastCall===0n?0n:lastCall+cooldown;const nearReady=BigInt(state.last_agent_action??0)===0n?0n:BigInt(state.last_agent_action??0)+BigInt(state.cooldown_secs??0);const ready=baseReady>nearReady?baseReady:nearReady;return{sold,moves,sessionStart,lastCall,cooldown,closed,cooldownRemaining:ready>block.timestamp?ready-block.timestamp:0n,budget:await sharedBudget(market.executor as Address,params[1],sold).catch(()=>undefined)}}).catch(()=>undefined)
     return {
+      protectionValidUntil:typeof watched?.last_tick_unix==='number' ? Math.min(watched.last_tick_unix+60,state.agent?.expires_at??0) : undefined,
+      registrationExpires:state.agent?.expires_at,
       policyUnavailable:corridor===null||closed===null||authorized===null,
       floor:corridor?.[6] ? corridor[2] : null, migrateAllowed:corridor?.[4],exitAllowed:corridor?.[5],telemetry,
       readOnly: !config.createVault?.markets.some(item => item.id.toLowerCase() === id.toLowerCase() && item.executor.toLowerCase() === market.executor!.toLowerCase()),
