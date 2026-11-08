@@ -5,7 +5,7 @@ import { readLivePosition } from './positions.ts'
 import { VaultTable, type VaultTableRow } from './VaultTable.tsx'
 import { PrototypeButton } from './ui/PrototypeControls.tsx'
 
-const amount = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })
+const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 const percent = (value: bigint | null) => value === null ? '—' : `${(Number(value) / 1e16).toFixed(1)}%`
 
 export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (id: string) => void }) {

@@ -10,7 +10,7 @@ import { LiveActions } from './LiveActions.tsx'
 import { VerificationDetails } from './VerificationDetails.tsx'
 
 const pct = (value: bigint | null) => value === null ? 'Not set' : `${(Number(value) / 1e16).toFixed(1)}%`
-const amount = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })
+const amount = (value: bigint, decimals: number) => formatUnits(value, decimals)
 
 function MarketDetail({ market, vault, onRefresh }: { market: MarketPosition; vault: Vault; onRefresh: () => void }) {
   const empty = market.collateral === 0n && market.debt === 0n
