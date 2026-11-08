@@ -45,4 +45,3 @@ export async function readActivity(config:AppConfig,vault:Vault,from:bigint,to:b
  return events.map(event=>({...event,timestamp:times.get(event.block)}))
 }
 export function eventTitle(name:string){return ({SupplyCollateral:'Deposit collateral',WithdrawCollateral:'Release collateral',Borrow:'Borrow',Repay:'Repay debt',Opened:'Open / borrow via vault',Closed:'Close position',Reduced:'Reduce debt',Migrated:'Migrate position',Exited:'Agent exit',SessionEnded:'Protection session ended',CorridorSet:'Update risk rules'} as Record<string,string>)[name]??name}
-
