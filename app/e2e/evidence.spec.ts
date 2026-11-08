@@ -129,3 +129,44 @@ test('verification: disclosure keyboard controls, link popover and compact heade
  await page.emulateMedia({reducedMotion:'reduce'});await activity.press('Enter');await expect(drawer.getByText('Last successful published snapshot',{exact:true})).not.toBeVisible()
  expect(protocol.posts).toEqual([]);expect(protocol.signs).toEqual([])
 })
+
+
+test('production: connected owner can open Verification when initial market loading fails',async({context,page,protocol})=>{
+ protocol.factoryCount=1;await protocol.install(context);await page.goto('/#connect')
+ await page.getByRole('button',{name:'Connect wallet',exact:true}).first().click()
+ await page.locator('.wallet-option').filter({hasText:'MetaMask'}).click()
+ await expect(page.getByRole('button',{name:'Verification details',exact:true})).toBeVisible()
+ await page.getByRole('link',{name:'View vault details',exact:true}).click()
+ await expect(page.getByRole('alert').filter({hasText:'incomplete position data'})).toBeVisible()
+ protocol.failNearState=true
+ await page.getByRole('button',{name:'Vault verification',exact:true}).click()
+ const drawer=page.getByRole('dialog',{name:'Verification details',exact:true})
+ await expect(drawer).toBeVisible();await expect(drawer.getByRole('alert')).toContainText('NEAR state couldn’t be verified.')
+ await expect(drawer.getByRole('definition').filter({hasText:'Attempt found · receipts not checked'})).toBeVisible()
+ await drawer.getByText('Advanced',{exact:true}).click();await drawer.getByText('Agent permissions',{exact:true}).click()
+ await expect(drawer.getByRole('button',{name:'Revoke agent',exact:true})).toHaveCount(0)
+ expect(protocol.posts).toEqual([]);expect(protocol.signs).toEqual([])
+})
+
+test('production: direct public verification works without a wallet and stays read-only during NEAR failure',async({context,page,protocol})=>{
+ protocol.failNearState=true;await protocol.install(context);await page.goto('/#verify?vault=v1.fixture.testnet')
+ const drawer=page.getByRole('dialog',{name:'Verification details',exact:true})
+ await expect(drawer).toBeVisible();await expect(drawer.getByRole('alert')).toContainText('NEAR state couldn’t be verified.')
+ await expect(drawer.getByRole('definition').filter({hasText:'Attempt found · receipts not checked'})).toBeVisible()
+ await drawer.getByText('Advanced',{exact:true}).click();await drawer.getByText('Agent permissions',{exact:true}).click()
+ await expect(drawer.getByText('Read-only inspection. Manage agent permissions from your vault cockpit.',{exact:true})).toBeVisible()
+ await expect(drawer.getByRole('button',{name:'Revoke agent',exact:true})).toHaveCount(0)
+ await expect(drawer.getByRole('button',{name:'Sign measurement approval',exact:true})).toHaveCount(0)
+ await drawer.press('Escape');await page.getByRole('button',{name:'Verification details',exact:true}).click();await expect(drawer).toBeVisible()
+ expect(protocol.walletCalls).not.toContain('eth_requestAccounts');expect(protocol.posts).toEqual([]);expect(protocol.signs).toEqual([])
+})
+
+test('production: public verification rejects unrelated vault identity and can retry an unavailable relayer',async({context,page,protocol})=>{
+ protocol.publicVaultUnavailable=true;await protocol.install(context);await page.goto('/#verify?vault=v1.fixture.testnet')
+ await expect(page.getByRole('alert')).toContainText('HTTP 503')
+ protocol.publicVaultUnavailable=false;protocol.wrongPublicVault=true
+ await page.getByRole('button',{name:'Retry public vault read',exact:true}).click()
+ await expect(page.getByRole('alert')).toContainText('another vault')
+ await expect(page.getByRole('dialog',{name:'Verification details',exact:true})).not.toBeVisible()
+ expect(protocol.posts).toEqual([])
+})

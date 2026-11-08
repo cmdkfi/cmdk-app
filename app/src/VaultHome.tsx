@@ -1,3 +1,4 @@
+import {VerificationPage} from './VerificationPage.tsx'
 import { Activity } from './Activity.tsx'
 import { VaultDetail } from './VaultDetail.tsx'
 import { useEffect, useRef } from 'react'
@@ -10,7 +11,7 @@ import { shortAddress } from './wallet-utils.ts'
 import './vault-home.css'
 import { PrototypeButton, PrototypeIconButton, PrototypeNavigation, PrototypeSurface } from './ui/PrototypeControls.tsx'
 
-export function VaultHome({ activity = false, detail = false, create = false }: { activity?: boolean; detail?: boolean; create?: boolean }) {
+export function VaultHome({ activity = false, detail = false, create = false, verification }: { activity?: boolean; detail?: boolean; create?: boolean; verification?:string }) {
   const { address, isConnected } = useAccount()
   const discovery = useVaultSelection()
   const wasConnected = useRef(isConnected)
@@ -36,8 +37,8 @@ export function VaultHome({ activity = false, detail = false, create = false }: 
       <div className="vault-header-actions"><span className="testnet-label">Testnet</span><PrototypeButton primary={!isConnected} onClick={open} aria-haspopup="dialog">{isConnected && address ? shortAddress(address) : 'Connect wallet'}</PrototypeButton></div>
     </header>
     <main className="vault-main">
-      <div className="vault-title"><h1>{activity ? 'Activity' : detail ? 'Vault overview' : 'Your vaults'}</h1></div>
-      {create ? <CreateVaultJob key={address?.toLowerCase() ?? 'disconnected'} /> : detail && isConnected ? <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
+      <div className="vault-title"><h1>{verification!==undefined?'Verification':activity ? 'Activity' : detail ? 'Vault overview' : 'Your vaults'}</h1></div>
+      {verification!==undefined?<VerificationPage accountId={verification}/>:create ? <CreateVaultJob key={address?.toLowerCase() ?? 'disconnected'} /> : detail && isConnected ? <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
 
         <h2>{activity ? 'Your activity starts here' : 'Connect to find your vaults'}</h2>
         <p>{activity ? 'Connect your wallet to view activity for your address.' : 'Find your vaults or create your first one.'}</p>

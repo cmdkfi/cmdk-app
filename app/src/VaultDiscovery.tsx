@@ -1,3 +1,4 @@
+import {VerificationDetails} from './VerificationDetails.tsx'
 import { LiveVaultTable } from './LiveVaultTable.tsx'
 import { useVaultSelection } from './VaultSelectionContext.tsx'
 
@@ -13,6 +14,7 @@ export function VaultDiscovery() {
       {state.vaults.length === 0 && <div className="vault-empty"><p>{state.failed ? 'No vault was confirmed for this address.' : 'No vault belongs to this address yet.'}</p><a className="button" href="#create">Create vault <span aria-hidden="true">→</span></a></div>}
       {state.vaults.length > 0 && <a className="button button--secondary" href="#create">Create vault</a>}
       {state.vaults.length > 0 && <LiveVaultTable vaults={state.vaults} onOpen={id => { state.select(id); window.location.hash = `vault?id=${encodeURIComponent(id)}` }} />}
+      {state.selected&&<VerificationDetails key={state.selected.accountId} vault={state.selected} inspectionOnly/>}
       {state.selected && <p className="vault-selection" role="status">Selected: {state.selected.accountId}. <a href={`#vault?id=${encodeURIComponent(state.selected.accountId)}`}>View vault details</a>.</p>}
     </>}
   </section>
