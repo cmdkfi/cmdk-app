@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S2 Your protection in one picture</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 980px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip">Testnet · Base Sepolia · no real funds</span></div>
+  </header>
+  <main class="main" style="display: grid; gap: 28px">
+    <div style="display: grid; gap: 8px; max-width: 640px">
+      <h1>Your protection, in one picture</h1>
+      <p class="muted">Fixed for this prototype. You borrow at 50% of your collateral's value. If the price falls and the ratio climbs past 70%, the agent sells a little collateral to bring it back to 50%, never more than 20% of your collateral per day.</p>
+    </div>
+    <section class="surface" aria-label="Risk corridor">
+      <div class="ltv-track" role="img" aria-label="Corridor: floor 30%, target 50%, reduce trigger 70%, liquidation 86%" style="margin-top: 36px">
+        <div class="ltv-fill" style="width: 58.1%; background: #303030"></div>
+        <span class="tick floor" style="left: 34.9%"></span>
+        <span class="tick target" style="left: 58.1%"></span>
+        <span class="tick act" style="left: 81.4%"></span>
+        <span class="tick liq" style="left: 100%"></span>
+        <span class="cur" style="left: 58.1%"></span>
+      </div>
+      <dl class="legend">
+        <div><dt><i class="floor"></i>Floor 30%</dt><dd class="small muted" style="font-size: 13px">The agent never reduces below this.</dd></div>
+        <div><dt><i class="target"></i>Target 50%</dt><dd class="small muted" style="font-size: 13px">You open here. The agent brings you back here.</dd></div>
+        <div><dt><i class="act"></i>Reduce above 70%</dt><dd class="small muted" style="font-size: 13px">The agent sells collateral to repay part of the debt.</dd></div>
+        <div><dt><i class="liq"></i>Liquidation 86%</dt><dd class="small muted" style="font-size: 13px">Morpho's rule, not ours. Protection is not a guarantee.</dd></div>
+      </dl>
+    </section>
+    <section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px" aria-label="What the agent may do">
+      <div class="surface" style="display: grid; gap: 12px; align-content: start">
+        <h3>The agent will</h3>
+        <ul style="margin: 0; padding-left: 18px; display: grid; gap: 8px; color: #fff">
+          <li>Reduce your debt when the ratio passes 70%.</li>
+          <li>Move the position to the approved backup Morpho market if the live one becomes unsafe.</li>
+          <li>Exit, repaying everything from collateral, if nothing else works.</li>
+        </ul>
+        <p class="muted small">At most one action per 120 seconds.</p>
+      </div>
+      <div class="surface" style="display: grid; gap: 12px; align-content: start">
+        <h3>The agent can never</h3>
+        <ul style="margin: 0; padding-left: 18px; display: grid; gap: 8px; color: #fff">
+          <li>Increase your debt on this venue.</li>
+          <li>Sell more than 20% of your collateral in a day.</li>
+          <li>Send funds anywhere except repaying your loan.</li>
+          <li>Change these limits.</li>
+        </ul>
+        <p class="muted small">Enforced by the vault's key restrictions and the Executor contract, not by the agent's good will.</p>
+      </div>
+      <div class="surface" style="display: grid; gap: 12px; align-content: start">
+        <h3>You keep</h3>
+        <ul style="margin: 0; padding-left: 18px; display: grid; gap: 8px; color: #fff">
+          <li>Every other action: only your signature moves funds.</li>
+          <li>The right to close at any time by repaying.</li>
+          <li>A 10-minute expiry on every message you sign.</li>
+        </ul>
+        <p class="muted small">Which agent build you approve is checked for you on the next screens, against the values published on GitHub.</p>
+      </div>
+    </section>
+    <div class="notice" style="display: grid; gap: 10px">
+      <label style="display: flex; align-items: flex-start; gap: 12px; color: #fff; cursor: pointer"><input type="checkbox" style="width: 20px; height: 20px; margin: 2px 0 0; accent-color: #fff"><span>I understand this is a testnet prototype. Protection is risk management, not insurance against liquidation. No real funds are involved.</span></label>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+      <a class="btn ghost" href="Main.dc.html">Back</a>
+      <a class="btn primary" href="S3-Connect.dc.html">Continue to wallet</a>
+    </div>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

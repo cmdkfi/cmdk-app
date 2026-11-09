@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S1 Choose collateral and debt</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 980px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip">Testnet · Base Sepolia · no real funds</span></div>
+  </header>
+  <main class="main" style="display: grid; gap: 28px">
+    <div style="display: grid; gap: 8px; max-width: 640px">
+      <h1>Borrow USDC against ETH. Keep risk on autopilot.</h1>
+      <p class="muted">Choose what you deposit, what you borrow and where. An agent watches the position and reduces risk within fixed limits. It can never increase your debt on this venue.</p>
+    </div>
+    <section class="surface" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px" aria-label="Catalogue">
+      <div style="display: grid; gap: 10px; align-content: start">
+        <h3 class="muted">Collateral</h3>
+        <button class="tile selected" type="button" aria-pressed="true"><span class="token eth" aria-hidden="true">Ξ</span><span class="label">ETH<span>Wrapped to WETH on Base</span></span><span class="tag ok">Selected</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token btc" aria-hidden="true">₿</span><span class="label">BTC<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token near" aria-hidden="true">N</span><span class="label">NEAR<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token gold" aria-hidden="true">Au</span><span class="label">Gold<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token aapl" aria-hidden="true">A</span><span class="label">AAPL<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+      </div>
+      <div style="display: grid; gap: 10px; align-content: start">
+        <h3 class="muted">Borrow</h3>
+        <button class="tile selected" type="button" aria-pressed="true"><span class="token usdc" aria-hidden="true">$</span><span class="label">USDC<span>Circle test USDC on Base Sepolia</span></span><span class="tag ok">Selected</span></button>
+      </div>
+      <div style="display: grid; gap: 10px; align-content: start">
+        <h3 class="muted">Venue</h3>
+        <button class="tile selected" type="button" aria-pressed="true"><span class="token venue" aria-hidden="true">M</span><span class="label">Morpho · Base<span>Live market + approved backup market</span></span><span class="tag ok">Selected</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token venue" aria-hidden="true">R</span><span class="label">Rhea · NEAR<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token venue" aria-hidden="true">Aa</span><span class="label">Aave · Ethereum<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+        <button class="tile disabled" type="button" disabled><span class="token venue" aria-hidden="true">K</span><span class="label">Kamino · Solana<span>Not available yet</span></span><span class="tag">Coming soon</span></button>
+      </div>
+    </section>
+    <section class="surface" style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px" aria-label="Amount">
+      <div style="display: grid; gap: 12px">
+        <label for="amount" class="muted">Amount to deposit</label>
+        <div class="input"><input id="amount" type="text" inputmode="decimal" value="0.05" aria-describedby="amount-usd"><span class="token eth" aria-hidden="true">Ξ</span><span style="font-weight: 500">ETH</span></div>
+        <p id="amount-usd" class="muted small">≈ $160.40 at the live market oracle · minimum 0.001 ETH · wallet balance shown after connecting</p>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k">You borrow at 50% LTV</span><span class="v">about 80.20 USDC</span></div>
+        <div class="row"><span class="k">Borrow rate</span><span class="v">3.1% / year</span></div>
+        <div class="row"><span class="k">Collateral yield</span><span class="v">None <span class="muted small">· Morpho collateral is idle</span></span></div>
+        <div class="row"><span class="k">Agent protection</span><span class="v">On · fixed limits</span></div>
+      </div>
+    </section>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+      <p class="muted small">Estimates update every 30 s from the market read. A value that cannot be read is shown as unavailable. If the market cannot lend the full amount, a warning replaces the estimate with what it can lend and the resulting LTV.</p>
+      <a class="btn primary" href="S2-Settings.dc.html">Continue</a>
+    </div>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

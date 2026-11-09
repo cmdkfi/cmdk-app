@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S6 Closing your position</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 1180px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">0x19E7…ff2A · Base Sepolia</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main wide" style="display: grid; gap: 28px">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+      <div style="display: grid; gap: 8px; max-width: 680px">
+        <h1>Closing your position</h1>
+        <p class="muted">Repays the debt from USDC held at your position address, then returns your WETH. If the position address is short of USDC, the first step sends the difference from your wallet.</p>
+      </div>
+      <span class="tag warn">Step 1 of 4 · waiting for funds</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 24px; align-items: start">
+      <section class="surface" aria-label="Steps">
+        <div class="rows" style="margin-bottom: 8px">
+          <div class="row"><span class="k">Debt incl. interest (fresh read)</span><span class="v">80.34 USDC</span></div>
+          <div class="row"><span class="k">Relayer headroom (1%, returned as leftover)</span><span class="v">0.80 USDC</span></div>
+          <div class="row"><span class="k">USDC at position address</span><span class="v">0.00 USDC</span></div>
+          <div class="row"><span class="k">USDC in your wallet</span><span class="v">80.20 USDC</span></div>
+          <div class="row"><span class="k"><strong>Still needed</strong></span><span class="v"><strong>0.94 USDC</strong></span></div>
+        </div>
+        <div class="step active">
+          <span class="n" aria-hidden="true">1</span>
+          <div class="body"><strong>Send 81.14 USDC to your position address</strong><span class="why">1 transaction. Your wallet holds 80.20 USDC, 0.94 short. Get test USDC on the right; this step continues on its own when the balance covers it.</span></div>
+          <span class="st"><span class="pulse" aria-hidden="true"></span>Waiting for funds</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">2</span>
+          <div class="body"><strong>Close position</strong><span class="why">1 signature. Repays all debt on the live market and moves 0.05 WETH back to the position address. Confirmed by the Closed event and a zero-debt read.</span></div>
+          <span class="st">Next</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">3</span>
+          <div class="body"><strong>Return 0.05 WETH to your wallet</strong><span class="why">1 signature. Unwrapping to ETH is up to you afterwards.</span></div>
+          <span class="st">Pending</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">4</span>
+          <div class="body"><strong>Return leftover USDC to your wallet</strong><span class="why">1 signature, only if more than 0.01 USDC is left (the 1% headroom).</span></div>
+          <span class="st">Pending</span>
+        </div>
+        <div class="notice" style="margin-top: 20px"><strong>Review before the first signature:</strong> debt 80.34 USDC · headroom 0.80 USDC · collateral returned 0.05 WETH · destination 0x19E7…ff2A · each signature expires in 10 minutes. There is no "close without repaying": the protocol releases collateral only when the debt is paid.</div>
+      </section>
+      <aside class="help" aria-label="Get test USDC">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2>Get test USDC</h2><span class="tag warn">0.94 USDC missing</span></div>
+        <p class="muted small">Test USDC is free from Circle's faucet. Choose <strong style="color: #fff; font-weight: 500">Base Sepolia</strong> in its network dropdown; USDC sent on another network cannot reach this wallet.</p>
+        <div class="addr"><span>0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A</span><button type="button">Copy</button></div>
+        <ol>
+          <li><a href="https://faucet.circle.com">Circle USDC faucet</a> <span class="muted small">— no account needed</span></li>
+          <li><a href="https://portal.cdp.coinbase.com/products/faucet">Coinbase Developer Platform faucet</a> <span class="muted small">— also dispenses test USDC on Base Sepolia</span></li>
+        </ol>
+        <p class="muted small">Why more than you borrowed: interest since opening (0.14 USDC) plus the relayer's 1% headroom, which comes back in step 4.</p>
+        <p class="small"><span class="pulse" aria-hidden="true"></span>Waiting for funds… last checked 6 s ago</p>
+      </aside>
+    </div>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. A submitted transaction is not a completed one; each step shows its own evidence.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

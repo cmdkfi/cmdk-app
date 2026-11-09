@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S8 Sandbox mode</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 900px; display: flex; flex-direction: column">
+  <div class="banner" role="status">Sandbox · simulated wallet and simulated protocol · nothing touches Base Sepolia or NEAR · <a href="S3-Connect.dc.html">Leave sandbox</a></div>
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">Sandbox wallet · simulated</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main wide" style="display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 32px; align-items: start">
+    <section style="display: grid; gap: 24px" aria-label="Sandbox position preview">
+      <div style="display: grid; gap: 8px">
+        <h1>Your position <span class="tag warn" style="vertical-align: middle">Simulated</span></h1>
+        <p class="muted small">Same screens, same steps, same copy as the live app. Numbers are illustrative, every signature and transaction completes instantly, and verification rows read "Simulated (not checked)".</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+        <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">Debt</h3><div class="big">1,000.00 <span>USDC</span></div><p class="muted small">Simulated interest accrues while you watch.</p></div>
+        <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">Collateral</h3><div class="big">0.62 <span>WETH</span></div><p class="muted small">Simulated price: $3,210 per ETH.</p></div>
+        <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">LTV</h3><div class="big">50.2<span>%</span></div><p class="muted small">A scripted price drop will push this past 70% so you can watch the agent reduce.</p></div>
+      </div>
+      <div class="surface" aria-label="Simulated recent actions">
+        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><h3>Recent actions</h3><span class="tag">Simulated</span></div>
+        <div style="margin-top: 8px">
+          <div class="event"><span class="who agent">Agent</span><span>Reduced: sold 0.05 WETH, LTV 71.0% → 50.0% <span class="muted">· link disabled in sandbox</span></span><span class="when">+2 min</span></div>
+          <div class="event"><span class="who you">You</span><span>Opened position: 0.62 WETH supplied, 1,000 USDC borrowed <span class="muted">· link disabled in sandbox</span></span><span class="when">now</span></div>
+        </div>
+      </div>
+      <div class="notice"><strong>Rules:</strong> sandbox state lives in session storage only and is wiped on Leave sandbox · routes carry the #sandbox/ prefix so a reload or shared link stays honest · the live wallet and protocol adapters are never constructed while the sandbox is active · the same adapter interfaces drive the browser tests.</div>
+    </section>
+    <aside class="sheet" aria-label="Try in sandbox">
+      <h2>Try in sandbox</h2>
+      <p class="muted">A risk-free walk through the whole flow: create a position, deposit, borrow, watch the agent act, repay and close. No wallet, no signatures, no real assets.</p>
+      <div class="rows">
+        <div class="row"><span class="k">Wallet</span><span class="v">Simulated, 10 ETH · 5,000 USDC</span></div>
+        <div class="row"><span class="k">Protocol</span><span class="v">Simulated in your browser</span></div>
+        <div class="row"><span class="k">Network calls</span><span class="v">None</span></div>
+        <div class="row"><span class="k">Agent</span><span class="v">Scripted: one price drop, one reduce</span></div>
+      </div>
+      <a class="btn primary" href="Main.dc.html">Activate sandbox</a>
+      <a class="btn ghost" href="S3-Connect.dc.html" style="justify-self: start; padding-left: 0">Back to connect</a>
+      <p class="muted small">Pattern borrowed from the Spark app's "Try in Sandbox" (checked 9 Nov 2026): an explainer sheet, then the real screens with a simulated account, labelled throughout.</p>
+    </aside>
+  </main>
+  <footer class="footer">
+    <span>Sandbox: nothing here is evidence about the live protocol.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
