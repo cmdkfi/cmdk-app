@@ -122,7 +122,7 @@ test('after connect from S3: an active vault opens the position screen (D4, land
   await fx.install(context)
   await chooseAndAcknowledge(page); await connect(page)
   await expect(page).toHaveURL(/#position$/)
-  await expect(page.getByText('Active position')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your position' })).toBeVisible()
 })
 
 test('after connect: an empty vault with complete setup is reused at the deposit step', async ({ page, context, fx }) => {

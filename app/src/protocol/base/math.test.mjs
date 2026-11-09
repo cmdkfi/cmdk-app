@@ -103,3 +103,12 @@ test('Morpho SDK cross-check: collateral value and LTV equal MathLib mulDivDown 
     if (value > 0n) assert.equal(ltv(debt, value), MathLib.mulDivUp(debt, WAD, value))
   }
 })
+
+test('remaining sell budget mirrors CorridorMath.remainingBudget: (active + sold) × budget − sold, never negative', async () => {
+  const { remainingSellBudget } = await import('./math.ts')
+  const fifth = 2n * 10n ** 17n
+  assert.equal(remainingSellBudget(100n, 10n, fifth), 12n) // (100 + 10) × 20% = 22 − 10
+  assert.equal(remainingSellBudget(10n ** 17n, 0n, fifth), 2n * 10n ** 16n)
+  assert.equal(remainingSellBudget(0n, 100n, fifth), 0n)
+  assert.equal(remainingSellBudget(100n, 0n, 0n), 0n)
+})

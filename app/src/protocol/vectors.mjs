@@ -78,6 +78,6 @@ export const V = {
   // ---- selectors pinned by the protocol ----------------------------------------------------------------------
   SELECTORS: {
     from: 'cmdkfi/app agent/src/chain.rs l.1001-1014 (selectors_match_the_current_executor) and vault/src/evm.rs l.21-22',
-    corridors: '2e18e9e7', config: 'cc718f76', transfer: 'a9059cbb', approve: '095ea7b3',
+    corridors: '2e18e9e7', config: 'cc718f76', soldInWindow: '03e29885', closedForAgent: '91dea56f', transfer: 'a9059cbb', approve: '095ea7b3',
   },
 }

@@ -39,6 +39,12 @@ export const executorAbi = parseAbi([
   'function config(bytes32 id) view returns (MarketConfig)',
   // executor/src/Executor.sol l.65 public mapping getter (selector 2e18e9e7 pinned in agent/src/chain.rs l.1002)
   'function corridors(address user, bytes32 id) view returns (uint64 target, uint64 act, uint64 floor, uint64 sellBudget, bool migrateAllowed, bool exitAllowed, bool set)',
+  // executor/src/Executor.sol l.453 (selector 03e29885 pinned in agent/src/chain.rs l.1005): collateral `token` the
+  // caller sold in the rolling 24 h window (WINDOW, l.49)
+  'function soldInWindow(address user, address token) view returns (uint256)',
+  // executor/src/Executor.sol l.67 public mapping (selector 91dea56f pinned in agent/src/chain.rs l.1004): set by exit,
+  // cleared by open; such a market does not count toward the sell budget (l.504-517)
+  'function closedForAgent(address user, bytes32 id) view returns (bool)',
   // executor/src/Executor.sol l.80-97 (events)
   'event CorridorSet(address indexed caller, bytes32 indexed market, Corridor corridor)',
   'event Opened(address indexed caller, bytes32 indexed market, uint256 collateralIn, uint256 borrowed, uint256 ltv)',

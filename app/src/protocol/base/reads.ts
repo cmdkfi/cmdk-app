@@ -5,7 +5,7 @@ import { publicActionsL2 } from 'viem/op-stack'
 import type { VaultState } from '../near/vault.ts'
 import type { SetupFact } from '../owner/message.ts'
 import { chainlinkAbi, erc20Abi, executorAbi, irmAbi, morphoAbi, oracleAbi, wethAbi } from './abi.ts'
-import { accrue, availableLiquidity, collateralValue, ltv, toAssetsUp } from './math.ts'
+import { accrue, availableLiquidity, collateralValue, ltv, remainingSellBudget, toAssetsUp } from './math.ts'
 
 type Hex = `0x${string}`
 const ZERO: Hex = '0x0000000000000000000000000000000000000000'
@@ -112,7 +112,16 @@ export type SnapshotMarket = {
   ltv: bigint | null
   lltv: bigint
   corridor: { target: bigint; act: bigint; floor: bigint; sellBudget: bigint; migrateAllowed: boolean; exitAllowed: boolean; set: boolean }
+  /** Executor.closedForAgent: set by the agent's exit, cleared by open (Executor.sol l.67). */
+  closedForAgent: boolean
+  collateralToken: Hex
+  loanDecimals: number
+  collateralDecimals: number
+  price: bigint | null
 }
+
+/** Remaining daily sell budget of one executor and collateral token (Executor._activeCollateral + CorridorMath.remainingBudget). */
+export type SellBudget = { executor: Hex; token: Hex; activeCollateral: bigint; sold: bigint; budgetWad: bigint; remaining: bigint }
 
 export type VaultSnapshot = {
   blockNumber: bigint
@@ -121,6 +130,7 @@ export type VaultSnapshot = {
   markets: SnapshotMarket[]
   setup: SetupFact[]
   idle: { eth: bigint; weth: bigint; usdc: bigint }
+  sellBudgets: SellBudget[]
 }
 
 /**
@@ -133,13 +143,14 @@ export async function readVaultSnapshot(client: PublicClient, state: VaultState,
   const { blockNumber } = at
   const user = state.base_address
   const markets = await Promise.all(state.markets.map(async vm => {
-    const [market, position, corridor, authorized, loanAllowance, collateralAllowance] = await Promise.all([
+    const [market, position, corridor, authorized, loanAllowance, collateralAllowance, closed] = await Promise.all([
       readMarket(client, { morpho: state.morpho, executor: vm.executor, id: vm.id }, at),
       client.readContract({ address: state.morpho, abi: morphoAbi, functionName: 'position', args: [vm.id, user], blockNumber }),
       client.readContract({ address: vm.executor, abi: executorAbi, functionName: 'corridors', args: [user, vm.id], blockNumber }),
       client.readContract({ address: state.morpho, abi: morphoAbi, functionName: 'isAuthorized', args: [user, vm.executor], blockNumber }),
       client.readContract({ address: vm.loan_token, abi: erc20Abi, functionName: 'allowance', args: [user, vm.executor], blockNumber }),
       client.readContract({ address: vm.collateral_token, abi: erc20Abi, functionName: 'allowance', args: [user, vm.executor], blockNumber }),
+      client.readContract({ address: vm.executor, abi: executorAbi, functionName: 'closedForAgent', args: [user, vm.id], blockNumber }),
     ])
     if (!market.totals) throw new Error(`Morpho totals for ${vm.id} could not be read.`)
     const borrowAssets = market.borrowAccrued ?? market.totals.totalBorrowAssets
@@ -149,6 +160,7 @@ export async function readVaultSnapshot(client: PublicClient, state: VaultState,
       id: vm.id, executor: vm.executor, collateral: position[2], borrowShares: position[1], debt, value,
       ltv: value === null ? null : ltv(debt, value), lltv: market.params.lltv,
       corridor: { target: corridor[0], act: corridor[1], floor: corridor[2], sellBudget: corridor[3], migrateAllowed: corridor[4], exitAllowed: corridor[5], set: corridor[6] },
+      closedForAgent: closed, collateralToken: market.params.collateralToken, loanDecimals: market.loanDecimals, collateralDecimals: market.collateralDecimals, price: market.price,
     }
     const fact: SetupFact = { market: vm.id, executor: vm.executor, authorized, loanAllowance, collateralAllowance, corridorSet: corridor[6], lltv: market.params.lltv }
     return { snapshot, fact }
@@ -158,7 +170,30 @@ export async function readVaultSnapshot(client: PublicClient, state: VaultState,
     client.readContract({ address: tokens.weth, abi: erc20Abi, functionName: 'balanceOf', args: [user], blockNumber }),
     client.readContract({ address: tokens.usdc, abi: erc20Abi, functionName: 'balanceOf', args: [user], blockNumber }),
   ])
-  return { ...at, baseAddress: user, markets: markets.map(m => m.snapshot), setup: markets.map(m => m.fact), idle: { eth, weth, usdc } }
+  const snapshots = markets.map(m => m.snapshot)
+  // One budget per (executor, collateral token), as Executor._activeCollateral groups them (l.504-517).
+  const groups = [...new Map(snapshots.map(m => [`${m.executor.toLowerCase()}:${m.collateralToken.toLowerCase()}`, m])).values()]
+  const sellBudgets = await Promise.all(groups.map(async g => {
+    const sold = await client.readContract({ address: g.executor, abi: executorAbi, functionName: 'soldInWindow', args: [user, g.collateralToken], blockNumber })
+    const active = snapshots.filter(m => m.executor.toLowerCase() === g.executor.toLowerCase() && m.collateralToken.toLowerCase() === g.collateralToken.toLowerCase() && m.corridor.set && !m.closedForAgent && m.collateral > 0n)
+    const activeCollateral = active.reduce((sum, m) => sum + m.collateral, 0n)
+    const budgetWad = active.length ? active.reduce((min, m) => (m.corridor.sellBudget < min ? m.corridor.sellBudget : min), active[0].corridor.sellBudget) : 0n
+    return { executor: g.executor, token: g.collateralToken, activeCollateral, sold, budgetWad, remaining: remainingSellBudget(activeCollateral, sold, budgetWad) }
+  }))
+  return { ...at, baseAddress: user, markets: snapshots, setup: markets.map(m => m.fact), idle: { eth, weth, usdc }, sellBudgets }
+}
+
+/** Latest block number (the head the activity window counts back from). */
+export async function readHead(client: PublicClient): Promise<bigint> {
+  if (await client.getChainId() !== BASE_SEPOLIA) throw new Error('The Base RPC is not Base Sepolia.')
+  return client.getBlockNumber()
+}
+
+/** Timestamps of the given blocks (for the activity list). */
+export async function readBlockTimes(client: PublicClient, numbers: bigint[]): Promise<Map<bigint, bigint>> {
+  const unique = [...new Set(numbers)]
+  const blocks = await Promise.all(unique.map(blockNumber => client.getBlock({ blockNumber })))
+  return new Map(blocks.map(b => [b.number, b.timestamp]))
 }
 
 export type WalletFunding = { blockNumber: bigint; eth: bigint; weth: bigint; wrapCost: bigint; transferCost: bigint }

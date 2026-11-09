@@ -58,13 +58,13 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 
 ## Phase 3 — Onboarding progress (S4)
 - [x] Step machine (`flow/onboarding.ts`, runner `components/useOnboarding.ts`) with the record keyed `factory:owner`, vault inside (Q3); resume on reload; one active step; nothing prompts after a reload until Continue.
-- [x] Step 1 create: `/create-vault` once, job polling, 429 countdown, uncertain POST or 404 job → discovery re-run and the appeared vault adopted before any repeat POST (only on user Retry). The vault id and position address are shown; a NearBlocks link is **not** added (no NearBlocks URL in config yet).
+- [x] Step 1 create: `/create-vault` once, job polling, 429 countdown, uncertain POST or 404 job → discovery re-run and the appeared vault adopted before any repeat POST (only on user Retry). The vault id and position address are shown; the vault links to NearBlocks (`help.nearblocks`, added in Phase 4).
 - [x] Step 2 setup: args from Base facts read by `readVault` (approve always true, authorize per executor, corridor where unset; Q4), sign, lock, `/owner-call`, job, receipts × 2 confirmations, then setup complete per fact 3.
 - [x] Step 3 agent registration: `/agent/vaults` row + NEAR key list every 30 s, non-blocking, "usually a few minutes".
 - [x] Prompt chaining (D11, FR-5a): five prompts in order, one at a time, pause on rejection with Retry.
 - [x] Step 4: 4a wrap only the missing WETH, skipped when the wallet holds enough (FR-7); 4b transfer; receipts × 2 and balance predicates.
 - [x] Step 5 open: `collateral_in` = WETH at the position address; feeds (R1) and liquidity re-read before the prompt; 1% margin; "opened below target (X%)"; pause under 1 USDC lendable; pause with the new figure when > 2 points below what S1 showed (Q1).
-- [ ] Step 5: simulate `Executor.open` (eth_call) before signing — **not done**; the feed and liquidity reads cover the known revert causes (StaleFeed, insufficient liquidity). Decide in Phase 7 whether to add it.
+- Removed after Phase 3 acceptance (product owner, 9 Nov): simulating `Executor.open` before signing. Relayer prechecks plus the feed and liquidity reads cover the known reverts; a Base revert after the NEAR call resolves through the nonce rule into a re-sign.
 - [x] Step 6 withdraw: all idle USDC to the owner; done = job done and idle USDC below `usdcDust`; skipped when none.
 - [x] Reactive gas top-up (FR-8, D7, Q2): relayer refusal text verbatim, top-up (need − have) × 1.25 rounded up to 0.0001 ETH, min 0.0005 ETH, then the same signed message if ≥ 45 s valid, else a new signature.
 - [x] Minimal reconciliation (FR-6, reworded in the PRD): lock keyed `vault:owner`; job → `owner_nonce` → NEAR time; "Checking…".
@@ -74,12 +74,14 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [x] Browser: happy path (one click), reload at each prompt step without a prompt until Continue, rejection + Retry, gas refusal + top-up + same-message re-post, lost create job → adopted vault, lost owner-call job → owner_nonce, stale feed, Q1 accept-lower-LTV.
 
 ## Phase 4 — Position screen (S5)
-- [ ] React Query polling of `readLivePosition` (30 s, paused when hidden); hero debt/collateral/LTV with segmented track; freshness line; stale snapshot kept read-only on error.
-- [ ] Agent card status from `/agent/vaults` fields only (`registration`, `agent_status`, `expires_at`, `last_tick_unix`) plus the vault's `agent` and corridors; **not** the previous app's 60-second tick rule (product owner, 9 Nov). Remaining sell budget; Verify link.
-- [ ] Market card: live vs backup from the market with debt; contract links.
-- [ ] Recent actions from Executor logs (`topics[1] = base_address`) + token transfers; You/Agent labels; block range shown; "Load earlier".
-- [ ] Idle balances line; liquidated state; closed state with Start over (D5).
-- [ ] Unit tests: event labelling, market selection, closed/liquidated state derivation.
+- [x] `help.nearblocks` (https://testnet.nearblocks.io) in `config.app.json` and the validator; vault links on S4 and S5.
+- [x] React Query polling of `readPosition` (30 s, paused while hidden); hero debt accrued to the read block, collateral in WETH and USD, LTV with the segmented track (floor/target/trigger from the Base corridor, liquidation from the market LLTV); "Read at block N, X s ago"; on a failed read the last snapshot stays, marked read-only with its age.
+- [x] Agent card: status from `/agent/vaults` fields only (`registration`, `agent_status`, `expires_at`) plus the NEAR key check; **not** the previous app's 60-second tick rule (product owner, 9 Nov). Last check from `last_tick_unix`; key expiry; remaining daily sell budget from `Executor.soldInWindow` against the corridor `sellBudget` (CorridorMath.remainingBudget); "Verify the agent" opens a placeholder until Phase 6.
+- [x] Market card: the market with debt is current (live or backup); pair, LLTV, market id prefix with Morpho and Executor links, backup status per `Executor.migrate`, position address and vault links.
+- [x] Recent actions: Executor logs (`topics[1]` = position address) + WETH/USDC transfers over the last 10,000 blocks; You/Agent by event name; amounts, time, BaseScan link; "Load earlier" adds 10,000 blocks down to the Executor deploy block; the covered range is stated; a failure keeps the list and says so.
+- [x] Idle balances line; liquidated variant (remaining debt, no recovery promise, no actions); closed variant only from the route's close record (Phase 5 writes it). Close position present, disabled: "Closing arrives in Phase 5".
+- [x] Unit tests: event labelling, current-market selection, backup status, agent status derivation, sell budget math, variant derivation.
+- [x] Browser: active position renders all cards; read failure keeps the last snapshot read-only; liquidated variant; Load earlier.
 
 ## Phase 5 — Close position (S6) and Start over (S7)
 - [ ] Shortfall computation from fresh debt (accrued) × 1.01 vs idle USDC; USDC transfer step when short.
@@ -107,6 +109,7 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [ ] Extend `e2e/fixture.ts`: `eth_sendTransaction` (wrap, WETH/USDC transfer, ETH top-up) with receipts and balance mutation, `wallet_addEthereumChain`, 4902 on switch, faucet-credit hooks (R11).
 - [ ] Playwright (desktop project): happy path S1→S5 against `e2e/fixture.ts` (fake MetaMask, NEAR/Base/relayer fixtures), reload-resume at steps 2, 5, 6, rejection at each signature, relayer 400 and 404 job, close flow with and without shortfall, wallet short of USDC with faucet panel and auto-resume after the fixture credits USDC, wallet without Base Sepolia ETH with faucet panel and auto-continue, 4902 add-network prompt values, verification mismatch, desktop gate, no-MetaMask, one-click chaining (no page clicks between Create position and the position screen).
 - [ ] Update `e2e/harness.tsx` mounts for the new components; keep "unexpected request fails the test".
+- [ ] Browser test of an account switch mid-onboarding (moved from Phase 3): the runner stops, re-keys the record to the new owner and prompts nothing until Continue.
 - [ ] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm test:bundle-boundary`, `pnpm test:browser` green locally and in `frontend quality` CI on the PR.
 - [ ] Live rehearsal on Base Sepolia with a real MetaMask and a fresh wallet holding ≥0.015 ETH: deposit the default **0.01 ETH** (≈10–11 USDC of debt; live market liquidity was 66 USDC free on 9 Nov after the top-up, backup 17 USDC); record vault id, every job id, tx hashes, elapsed time per step, gas used; confirm ≈10 USDC in the wallet and a Morpho position at ≈50% LTV; then full repay-and-close (one Circle faucet claim of 20 USDC covers the shortfall); then start over. Save notes in `tasks/rehearsal-<date>.md`.
 - [ ] Live rehearsal with a wallet that owns an old-app vault: lands on S5 with correct numbers and events.
@@ -185,5 +188,14 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
   - `eth_call` simulation of `Executor.open` before signing (left unticked)
   - a NearBlocks link (no URL in config)
   - a browser test of an account switch mid-flow (the runner stops and re-keys on owner or chain change; that code path has no browser test)
+- *Closed at acceptance (product owner, 9 Nov):* the `Executor.open` simulation is removed (relayer prechecks plus the feed and liquidity reads cover the known reverts; a Base revert after the NEAR call resolves through the nonce rule into a re-sign); the account-switch browser test moves to Phase 7; the NEAR hash on paused steps is not needed; the NearBlocks link is added in Phase 4.
 - *Results:* typecheck, 103/103 unit tests, build, bundle boundary, 27/27 Playwright desktop; the 8 onboarding scenarios also passed 3× repeated. No live signed rehearsal (Phase 7).
+
+**Phase 4 (9 Nov 2026, cmdkfi/app still `47fd4fb`; `git diff HEAD -- docs tasks` empty at start).** S5 is built from live reads only.
+- *Adapter methods* (each cites its source in `adapters/types.ts`): `readPosition` (Morpho `position`/`market`, `Executor.corridors`, `closedForAgent` l.67, `soldInWindow` l.453, grouping of `_activeCollateral` l.504-517, `CorridorMath.remainingBudget` l.67-75), `readAgent` (`/agent/vaults` row of agent/src/main.rs l.1029-1034 and vaults.rs l.215-222, `view_access_key_list`, vault `get_state.agent` lib.rs l.539-557), `readActivity` (Executor events l.80-97 and ERC-20 `Transfer` in 10,000-block windows from `executorDeployBlock`).
+- *New ABI fragments:* `soldInWindow(address,address)` (selector `03e29885`) and `closedForAgent(address,bytes32)` (`91dea56f`), both pinned in agent/src/chain.rs l.1004-1005 and checked by the selector test. Both decoded against the live Executor on Base Sepolia (block 56643763).
+- *Pure rules* in `flow/position.ts`: `agentState`, `currentMarket`, `backupStatus`, `budgetFor`, `positionVariant`, `describe`.
+- *Fixture:* head block, block timestamps per number, `eth_getLogs` filtered by address/topics/range (refuses windows over 10,000 blocks), `soldInWindow`, `closedForAgent`, `/agent/vaults` rows, a Base outage knob.
+- *Differences from PRD S5, by the Phase 4 scope:* recent actions cover block windows (10,000 per step) rather than "last 20 events"; the market card does not show the oracle source; the closed variant's Start over is Phase 5.
+- *Results:* typecheck, 112/112 unit tests, build, bundle boundary, 31/31 Playwright desktop; the 4 S5 scenarios also passed 3× repeated.
 

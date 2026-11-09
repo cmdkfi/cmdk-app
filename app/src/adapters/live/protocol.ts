@@ -4,7 +4,8 @@ import type { Address, Hex } from 'viem'
 import { accountKind } from '../../flow/account.ts'
 import { parseConfig, type LoadedConfig } from '../../flow/config.ts'
 import { borrowApr, collateralValue, depositEstimate, lendable, openTargetLtv } from '../../protocol/base/math.ts'
-import { baseClient, feedsFresh, readCode, readMarket, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding } from '../../protocol/base/reads.ts'
+import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding } from '../../protocol/base/reads.ts'
+import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRegistered, agentRow, measurementMatches } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList } from '../../protocol/near/rpc.ts'
 import { discover, getState } from '../../protocol/near/vault.ts'
@@ -130,6 +131,43 @@ export function createLiveProtocol(): ProtocolAdapter {
       } catch {
         return { state: 'unavailable' }
       }
+    },
+
+    async readPosition({ config, guided }, vaultId) {
+      const state = await getState(config.nearRpcUrl, vaultId)
+      const s = await readVaultSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc })
+      return {
+        blockNumber: s.blockNumber, blockTime: s.blockTime, morpho: state.morpho,
+        vault: { accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address },
+        markets: s.markets.map(m => ({ id: m.id, executor: m.executor, collateral: m.collateral, debt: m.debt, value: m.value, ltv: m.ltv, lltv: m.lltv, corridor: { target: m.corridor.target, act: m.corridor.act, floor: m.corridor.floor, sellBudget: m.corridor.sellBudget, migrateAllowed: m.corridor.migrateAllowed, set: m.corridor.set }, closedForAgent: m.closedForAgent, collateralToken: m.collateralToken, loanDecimals: m.loanDecimals, collateralDecimals: m.collateralDecimals })),
+        idle: s.idle,
+        sellBudgets: s.sellBudgets,
+      }
+    },
+    async readAgent(app, vaultId) {
+      const [state, rows, keys] = await Promise.all([getState(app.config.nearRpcUrl, vaultId), agentVaults(relayer(app)), viewAccessKeyList(app.config.nearRpcUrl, vaultId)])
+      const row = agentRow(rows, vaultId)
+      return {
+        row: row ? { registration: row.registration, agent_status: row.agent_status, expires_at: row.expires_at, last_tick_unix: row.last_tick_unix } : null,
+        keyLimited: agentKeyLimited(keys, vaultId, state.agent?.public_key),
+        vaultAgent: state.agent,
+      }
+    },
+    async readActivity({ config, guided }, positionAddress, toBlock) {
+      const client = baseClient(config.baseRpcUrl)
+      const start = BigInt(guided.base.executorDeployBlock)
+      const to = toBlock ?? await readHead(client)
+      if (to < start) return { from: start, to, items: [], reachedStart: true }
+      const from = to - MAX_WINDOW + 1n > start ? to - MAX_WINDOW + 1n : start
+      const executors = [...new Set(config.createVault.markets.map(m => m.executor.toLowerCase()))] as Hex[]
+      const events = []
+      for (const executor of executors) events.push(...await readActivity(client, { executor, positionAddress, tokens: [guided.base.weth, guided.base.usdc] }, from, to))
+      const times = await readBlockTimes(client, events.map(e => e.blockNumber)).catch(() => new Map<bigint, bigint>())
+      const items = events
+        .filter((e, i, all) => all.findIndex(x => x.transactionHash === e.transactionHash && x.logIndex === e.logIndex) === i)
+        .sort((a, b) => (a.blockNumber === b.blockNumber ? b.logIndex - a.logIndex : b.blockNumber > a.blockNumber ? 1 : -1))
+        .map(e => ({ ...e, time: times.get(e.blockNumber) ?? null }))
+      return { from, to, items, reachedStart: from === start }
     },
   }
 }

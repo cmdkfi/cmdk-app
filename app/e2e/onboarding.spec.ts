@@ -28,7 +28,7 @@ test('happy path: one click on Create position reaches the position screen; five
   await fx.install(context)
   await createPosition(page)
   await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
-  await expect(page.getByText('Active position')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your position' })).toBeVisible()
   expect(prompts(fx)).toEqual(['personal_sign', 'eth_sendTransaction', 'eth_sendTransaction', 'personal_sign', 'personal_sign'])
   expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
   expect(fx.posts.map(p => p.path)).toEqual(['/create-vault', '/owner-call', '/owner-call', '/owner-call'])

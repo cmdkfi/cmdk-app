@@ -78,6 +78,8 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
   const ob = useOnboarding(mode, app, owner, chainOk, () => go(href('position')))
   const [text] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
   const explorer = app?.guided.network.blockExplorerUrls[0]?.replace(/\/$/, '')
+  const nearblocks = app?.guided.help.nearblocks.replace(/\/$/, '')
+  const vaultLink = (id: string) => (nearblocks ? <a href={`${nearblocks}/address/${id}`} target="_blank" rel="noreferrer">{id}</a> : id)
   const r = ob.record
 
   if (!r) {
@@ -95,7 +97,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
       {resume === 'deposit' && <p className="screen__lead">Your vault is ready. Deposit to open a position.</p>}
       {resume === 'setup' && <p className="screen__lead">Your vault exists but its setup is not complete. One signature finishes it.</p>}
       {resume === 'open' && <p className="screen__lead">Your WETH is at your position address. One signature opens the position.</p>}
-      {summary && <p className="screen__note">Vault {summary.vault.accountId} · position address {shortAddress(summary.vault.baseAddress)}</p>}
+      {summary && <p className="screen__note">Vault {vaultLink(summary.vault.accountId)} · position address {shortAddress(summary.vault.baseAddress)}</p>}
       <div className="screen__actions">
         {check.kind === 'ok' || resume === 'setup' || resume === 'open'
           ? <button type="button" className="prototype-button is-primary" disabled={!summary || !owner} onClick={start}>{check.kind === 'ok' ? `Continue with ${formatUnits(check.wei, 18, 6)} ETH` : 'Continue'}</button>
@@ -120,7 +122,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
       <aside className="progress__rail prototype-surface" aria-label="Agent">
         <h2>Agent registration</h2>
         <p role="status">{!r.vault ? 'Starts after your vault exists.' : registration === 'registered' ? 'Registered and active on your vault.' : registration === 'unavailable' ? 'Unavailable: the agent list could not be read.' : 'Registering (usually a few minutes). The steps continue meanwhile.'}</p>
-        {r.vault && <p className="screen__note">Vault {r.vault.accountId}<br />Position address <code>{r.vault.baseAddress}</code></p>}
+        {r.vault && <p className="screen__note">Vault {vaultLink(r.vault.accountId)}<br />Position address <code>{r.vault.baseAddress}</code></p>}
         <p className="screen__note">The full verification panel arrives in Phase 6.</p>
       </aside>
     </div>

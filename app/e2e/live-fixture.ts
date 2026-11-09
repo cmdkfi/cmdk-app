@@ -4,7 +4,7 @@
 // Any request to another host, or an unknown method, is recorded and fails the test.
 import { readFileSync } from 'node:fs'
 import { test as base, expect, type BrowserContext } from '@playwright/test'
-import { decodeFunctionData, encodeAbiParameters, encodeFunctionResult, hexToString, keccak256, parseAbi, recoverMessageAddress, toHex, type Hex } from 'viem'
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, hexToString, keccak256, parseAbi, recoverMessageAddress, toHex, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { guidedValues } from '../scripts/guided-values.mjs'
 
@@ -53,9 +53,33 @@ const ABI = parseAbi([
   'function getL1Fee(bytes) view returns (uint256)',
   // executor/src/Interfaces.sol l.56-61
   'function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)',
+  // executor/src/Executor.sol l.453 and l.67 (public mapping)
+  'function soldInWindow(address user, address token) view returns (uint256)',
+  'function closedForAgent(address user, bytes32 id) view returns (bool)',
 ])
 
-type VaultFixture = {
+// Events the fixture emits as logs: executor/src/Executor.sol l.80-97; ERC-20 Transfer (executor/src/TestToken.sol, WETH9).
+const EVENTS = parseAbi([
+  'struct Corridor { uint64 target; uint64 act; uint64 floor; uint64 sellBudget; bool migrateAllowed; bool exitAllowed; bool set; }',
+  'event CorridorSet(address indexed caller, bytes32 indexed market, Corridor corridor)',
+  'event Opened(address indexed caller, bytes32 indexed market, uint256 collateralIn, uint256 borrowed, uint256 ltv)',
+  'event Reduced(address indexed caller, bytes32 indexed market, uint256 repaid, uint256 collateralSold, uint256 ltvBefore, uint256 ltvAfter, bool protective)',
+  'event Repaid(address indexed caller, bytes32 indexed market, uint256 repaid)',
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
+])
+type FixtureLog = { address: Hex; topics: Hex[]; data: Hex; blockNumber: bigint; transactionHash: Hex; logIndex: number }
+
+/** One log of `EVENTS` at `blockNumber`, encoded as a node would return it. */
+export function fixtureLog(address: Hex, eventName: 'CorridorSet' | 'Opened' | 'Reduced' | 'Repaid' | 'Transfer', args: Record<string, unknown>, blockNumber: bigint, logIndex = 0): FixtureLog {
+  const item = EVENTS.find(e => e.type === 'event' && e.name === eventName)! as Extract<(typeof EVENTS)[number], { type: 'event' }>
+  const topics = encodeEventTopics({ abi: EVENTS, eventName, args } as never) as Hex[]
+  const unindexed = (item.inputs as readonly { indexed?: boolean; name?: string; type: string }[]).filter(i => !i.indexed)
+  const data = unindexed.length ? encodeAbiParameters(unindexed as never, unindexed.map(i => args[i.name!]) as never) : '0x'
+  return { address, topics, data, blockNumber, transactionHash: keccak256(toHex(`fixture-log-${eventName}-${blockNumber}-${logIndex}`)), logIndex }
+}
+export const ADDRESSES = { WETH, USDC, EXECUTOR, MORPHO, NOW }
+
+export type VaultFixture = {
   owner: Hex
   ownerNonce: number
   collateral: bigint
@@ -89,6 +113,16 @@ export class LiveFixture {
   supply = 10_000n * 10n ** 6n; borrowed = 2_000n * 10n ** 6n
   l1Fee = 1_000n
   relayerPrimaryDown = false
+  // S5 (Phase 4) knobs
+  head = 100n
+  /** Every Base JSON-RPC call answers with an error (a node outage). */
+  baseDown = false
+  /** Executor.soldInWindow for the position address. */
+  sold = 0n
+  logs: FixtureLog[] = []
+  /** /agent/vaults rows; null answers 503. */
+  agentRows: Record<string, unknown>[] | null = []
+  logWindows: [bigint, bigint][] = []
   // S4 (Phase 3) knobs
   nearNow = NOW
   feedStale = false
@@ -224,21 +258,39 @@ export class LiveFixture {
         return result(0n)
       }
       case 'getL1Fee': return result(this.l1Fee)
+      case 'soldInWindow': return result(this.sold)
+      case 'closedForAgent': return result(false)
       default: throw Error(`Unexpected eth_call ${d.functionName}`)
     }
+  }
+
+  private block() {
+    return { number: '0x64', hash: '0x' + '77'.repeat(32), parentHash: '0x' + '76'.repeat(32), timestamp: toHex(NOW), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: ZERO, difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), size: '0x1' }
   }
 
   rpc(method: string, params: unknown[]): unknown {
     switch (method) {
       case 'eth_chainId': return '0x14a34'
-      case 'eth_blockNumber': return '0x64'
-      case 'eth_getBlockByNumber': return { number: '0x64', hash: '0x' + '77'.repeat(32), parentHash: '0x' + '76'.repeat(32), timestamp: toHex(NOW), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: ZERO, difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), size: '0x1' }
+      case 'eth_blockNumber': return toHex(this.head)
+      case 'eth_getBlockByNumber': {
+        const n = params[0] === 'latest' || params[0] === undefined ? this.head : BigInt(params[0] as string)
+        return { ...this.block(), number: toHex(n), hash: keccak256(toHex(`block-${n}`)), timestamp: toHex(BigInt(NOW) - (this.head - n) * 2n) }
+      }
+      case 'eth_getLogs': {
+        const f = params[0] as { address: string; topics: (Hex | null)[]; fromBlock: Hex; toBlock: Hex }
+        const from = BigInt(f.fromBlock), to = BigInt(f.toBlock)
+        if (to - from + 1n > 10_000n) throw Error(`eth_getLogs over ${to - from + 1n} blocks`)
+        this.logWindows.push([from, to])
+        return this.logs
+          .filter(l => l.address.toLowerCase() === f.address.toLowerCase() && l.blockNumber >= from && l.blockNumber <= to)
+          .filter(l => f.topics.every((t, i) => t === null || l.topics[i]?.toLowerCase() === t.toLowerCase()))
+          .map(l => ({ ...l, blockNumber: toHex(l.blockNumber), logIndex: toHex(l.logIndex), blockHash: keccak256(toHex(`block-${l.blockNumber}`)), transactionIndex: '0x0', removed: false }))
+      }
       case 'eth_getBalance': { const who = String(params[0]).toLowerCase(); return toHex(who === OWNER.toLowerCase() ? this.wallet.eth : who === BASE.toLowerCase() ? this.active()?.idle.eth ?? 0n : 0n) }
       case 'eth_getCode': return this.code === 'plain' ? '0x' : this.code === 'delegated' ? '0xef0100' + '99'.repeat(20) : '0x6080604052'
       case 'eth_getTransactionCount': return '0x3'
       case 'eth_maxPriorityFeePerGas': return '0x3b9aca00'
       case 'eth_gasPrice': return '0x77359400'
-      case 'eth_getLogs': return []
       case 'eth_estimateGas': return '0x186a0'
       case 'eth_feeHistory': return { oldestBlock: '0x63', baseFeePerGas: ['0x3b9aca00', '0x3b9aca00'], gasUsedRatio: [0.5], reward: [['0x3b9aca00']] }
       case 'eth_getTransactionReceipt': {
@@ -304,7 +356,7 @@ export class LiveFixture {
 
   relayer(method: string, path: string, body: unknown): { status: number; json: unknown; after?: () => void | Promise<void> } {
     if (method === 'GET' && path === '/health') return { status: 200, json: { ok: true, chain_id: 84532, near_network: 'testnet', factory: FACTORY, factory_exists: true, eth_float_wei: '5000000000000000' } }
-    if (method === 'GET' && path === '/agent/vaults') return { status: 200, json: { boot: 'boot-fixture', operator: 'cmdk', vaults: [] } }
+    if (method === 'GET' && path === '/agent/vaults') return this.agentRows ? { status: 200, json: { boot: 'boot-fixture', operator: 'cmdk', vaults: this.agentRows } } : { status: 503, json: { ok: false } }
     if (method === 'GET' && path.startsWith('/job/')) {
       const job = this.jobs.get(path.slice(5))
       return job ? { status: 200, json: job } : { status: 404, json: { ok: false, error: 'no such job' } }
@@ -353,7 +405,9 @@ export class LiveFixture {
         }
         if (['base.fixture.test', 'sepolia.base.org'].includes(url.host) && request.method() === 'POST') {
           const data = request.postDataJSON()
-          const one = (r: { id: unknown; method: string; params: unknown[] }) => ({ jsonrpc: '2.0', id: r.id, result: this.rpc(r.method, r.params ?? []) })
+          const one = (r: { id: unknown; method: string; params: unknown[] }) => (this.baseDown
+            ? { jsonrpc: '2.0', id: r.id, error: { code: -32000, message: 'fixture: the Base node is down' } }
+            : { jsonrpc: '2.0', id: r.id, result: this.rpc(r.method, r.params ?? []) })
           return route.fulfill({ json: Array.isArray(data) ? data.map(one) : one(data) })
         }
         if (url.host === 'near.fixture.test' && request.method() === 'POST') {

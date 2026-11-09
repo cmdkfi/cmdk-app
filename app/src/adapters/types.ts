@@ -123,6 +123,55 @@ export type WalletTx = { to: Address; data: Hex; value: bigint }
 export type WalletTxIntent = { kind: 'wrap'; amount: bigint } | { kind: 'transfer'; to: Address; amount: bigint } | { kind: 'topUp'; to: Address; amount: bigint }
 export type AgentRegistration = { state: 'registered' | 'registering' | 'unavailable' }
 
+export type PositionMarket = {
+  id: Hex
+  executor: Address
+  collateral: bigint
+  debt: bigint
+  /** Collateral value in loan units at the oracle price, or null when the price is unreadable. */
+  value: bigint | null
+  ltv: bigint | null
+  lltv: bigint
+  corridor: { target: bigint; act: bigint; floor: bigint; sellBudget: bigint; migrateAllowed: boolean; set: boolean }
+  closedForAgent: boolean
+  collateralToken: Address
+  loanDecimals: number
+  collateralDecimals: number
+}
+
+/** S5: one snapshot at one block (PRD S5, FR-9). */
+export type PositionView = {
+  blockNumber: bigint
+  blockTime: bigint
+  vault: { accountId: string; number: number; owner: Address; baseAddress: Address }
+  morpho: Address
+  markets: PositionMarket[]
+  idle: { eth: bigint; weth: bigint; usdc: bigint }
+  sellBudgets: { executor: Address; token: Address; activeCollateral: bigint; sold: bigint; budgetWad: bigint; remaining: bigint }[]
+}
+
+/** The facts the agent card derives its status from (PRD S5): the /agent/vaults row, the NEAR key check, the vault's agent. */
+export type AgentFacts = {
+  row: { registration?: string; agent_status?: string; expires_at?: number; last_tick_unix?: number | null } | null
+  keyLimited: boolean
+  vaultAgent: { public_key: string; expires_at: number } | null
+}
+
+export type ActivityItem = {
+  name: string
+  actor: 'you' | 'agent' | 'transfer'
+  blockNumber: bigint
+  /** Block time in seconds, or null when the block could not be read. */
+  time: bigint | null
+  transactionHash: Hex
+  logIndex: number
+  args: Record<string, unknown>
+  token?: Address
+}
+
+/** One window of recent actions; `reachedStart` when it reaches the Executor's deploy block. */
+export type ActivityWindow = { from: bigint; to: bigint; items: ActivityItem[]; reachedStart: boolean }
+
 /** Only what the screens use; methods are added when a screen needs them. */
 export interface ProtocolAdapter {
   readonly kind: AdapterKind
@@ -163,6 +212,14 @@ export interface ProtocolAdapter {
   fundsShortfall(error: string | undefined): { have: bigint; need: bigint } | null
   /** Agent registered and active on the vault, with exactly the restricted key (agent/src/main.rs l.1033; lib.rs l.46, l.498-503). */
   readAgentRegistration(app: LoadedConfig, vaultId: string): Promise<AgentRegistration>
+
+  // ---- Phase 4 (S5) --------------------------------------------------------------------------------------------
+  /** Position, corridor, sell budget and idle balances at one block (Interfaces.sol; Executor.sol l.65, l.67, l.453, l.504-517; CorridorMath.sol l.67-75). */
+  readPosition(app: LoadedConfig, vaultId: string): Promise<PositionView>
+  /** /agent/vaults row (agent/src/main.rs l.1029-1034, agent/src/vaults.rs l.215-222), NEAR key list (lib.rs l.46, l.498-503) and the vault's agent (lib.rs l.539-557). */
+  readAgent(app: LoadedConfig, vaultId: string): Promise<AgentFacts>
+  /** Executor events and WETH/USDC transfers of the position address in one window of at most 10,000 blocks ending at `toBlock` (head when null). */
+  readActivity(app: LoadedConfig, positionAddress: Address, toBlock: bigint | null): Promise<ActivityWindow>
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

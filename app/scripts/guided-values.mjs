@@ -57,6 +57,7 @@ export function guidedValues(appValues, deployment) {
     help: {
       metamaskInstall: https(help.metamaskInstall, 'help.metamaskInstall'),
       connectingToBase: https(help.connectingToBase, 'help.connectingToBase'),
+      nearblocks: https(help.nearblocks, 'help.nearblocks'),
       ethFaucets: links(help.ethFaucets, 'help.ethFaucets'),
       usdcFaucets: links(help.usdcFaucets, 'help.usdcFaucets'),
     },

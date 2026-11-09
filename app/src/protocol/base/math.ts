@@ -111,3 +111,15 @@ export function openTargetLtv(value: bigint, debt: bigint, liquidity: bigint, ta
   if (can >= wanted) return { targetLtv: targetWad, borrow: wanted, belowTarget: false }
   return { targetLtv: value === 0n ? 0n : (debt + can) * WAD / value, borrow: can, belowTarget: true }
 }
+
+/**
+ * Remaining discretionary sell budget in collateral units: (active collateral + sold in the window) × budget − sold.
+ * Mirrors executor/src/CorridorMath.sol l.67-75 `remainingBudget`; the inputs follow Executor._activeCollateral
+ * (l.504-517): markets of that collateral token with a corridor set, not closed for the agent, holding collateral;
+ * the budget is the smallest sellBudget among them.
+ */
+export function remainingSellBudget(activeCollateral: bigint, soldInWindow: bigint, budgetWad: bigint): bigint {
+  const limit = (activeCollateral + soldInWindow) * budgetWad / WAD
+  return limit > soldInWindow ? limit - soldInWindow : 0n
+}
+

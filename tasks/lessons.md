@@ -42,3 +42,8 @@
 - **Rule:** a Retry label names exactly what will happen (same signature vs new signature vs new request); never a generic "Retry" on a signed action.
 - **Also:** the PRD and todo were edited on disk during the phase (S1 0.01 ETH prefill) and I found it only while editing the PRD at the end. Run `git diff HEAD -- docs tasks` at the start of each phase and before the Review note, and apply what the product owner added.
 
+## 2026-11-09 — Phase 4: check each status rule against the contract that enforces it
+- **What happened:** the first S5 draft showed the backup market as "Approved for migration" whenever its corridor was set. `Executor.migrate` also requires `migrateAllowed` on both corridors and neither market closed for the agent (l.304-309 via `_agentCorridor` l.470-474). It also carried an agent-card sentence and a contract link label that were not in the PRD, and a WETH dust threshold that no source defines. All were caught by re-reading PRD S5 and Executor.sol before the checks.
+- **Rule:** a displayed status ("approved", "active", "budget left") is derived from the full precondition of the contract call it describes, with the line cited, and has a unit test per precondition.
+- **Rule:** user-facing copy comes from the PRD or the scope message; do not add explanatory sentences or thresholds of my own.
+

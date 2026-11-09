@@ -46,6 +46,9 @@ export function createSandboxProtocol(): ProtocolAdapter {
     walletTx: () => { throw new Error(MESSAGE) },
     fundsShortfall: () => null,
     readAgentRegistration: notImplemented,
+    readPosition: notImplemented,
+    readAgent: notImplemented,
+    readActivity: notImplemented,
   }
 }
 

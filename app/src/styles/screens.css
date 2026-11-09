@@ -98,3 +98,26 @@
 .progress__rail{display:grid;gap:10px}
 .progress__rail h2{font-size:16px}
 .progress__rail code{overflow-wrap:anywhere;font-size:12px}
+/* S5 position */
+.position--stale .hero-s5,.position--stale .cards-s5{opacity:.72}
+.hero-s5{display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px}
+.hero-s5__figure{display:grid;gap:6px;align-content:start}
+.hero-s5__figure>span{font-size:12px;color:var(--muted)}
+.hero-s5__figure>strong{font-size:28px;font-variant-numeric:tabular-nums}
+.hero-s5__figure>small{font-size:12px;color:var(--muted)}
+.vault-ltv-legend--four{grid-template-columns:repeat(4,1fr)}
+.idle-line{font-size:13px;color:var(--muted)}
+.cards-s5{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card-s5{display:grid;gap:12px;align-content:start}
+.card-s5 h2{font-size:16px;margin:0}
+.card-s5__status{font-size:14px}
+.card-s5__facts{display:grid;gap:10px;margin:0}
+.card-s5__facts>div{display:grid;grid-template-columns:160px 1fr;gap:12px}
+.card-s5__facts dt{font-size:12px;color:var(--muted)}
+.card-s5__facts dd{margin:0;font-size:13px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.actions{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.actions__row{display:grid;grid-template-columns:80px 1fr auto;gap:12px;font-size:13px;align-items:baseline}
+.actions__who{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.actions__who--agent{color:#e4ba69}
+.actions__meta{font-size:12px;color:var(--muted)}
+

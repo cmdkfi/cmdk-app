@@ -12,6 +12,8 @@ test('selectors of our fragments and of viem\'s erc20Abi equal the ones the prot
   const s = V.SELECTORS
   assert.equal(selector(executorAbi, 'corridors'), s.corridors)
   assert.equal(selector(executorAbi, 'config'), s.config)
+  assert.equal(selector(executorAbi, 'soldInWindow'), s.soldInWindow)
+  assert.equal(selector(executorAbi, 'closedForAgent'), s.closedForAgent)
   assert.equal(selector(erc20Abi, 'transfer'), s.transfer)
 })
 

@@ -5,7 +5,7 @@ import { afterConnect, guard, landing, type EntryInput, type Resolution, type Wa
 import { hashFor, parseHash, type Mode, type Route } from '../flow/routes.ts'
 import { Choose } from '../screens/Choose.tsx'
 import { Connect } from '../screens/Connect.tsx'
-import { Position } from '../screens/index.tsx'
+import { Position } from '../screens/Position.tsx'
 import { Progress } from '../screens/Progress.tsx'
 import { loadRecord } from '../flow/onboarding-record.ts'
 import { Settings } from '../screens/Settings.tsx'
@@ -92,7 +92,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     case 'settings': screen = <Settings mode={mode} href={href} banner={banner} />; break
     case 'connect': screen = <Connect mode={mode} href={href} banner={banner} discovery={discovery} />; break
     case 'progress': screen = <Progress mode={mode} href={href} discovery={discovery} resume={resolution.step} />; break
-    case 'position': screen = <Position variant={resolution.variant} />; break
+    case 'position': screen = <Position variant={resolution.variant} discovery={discovery} />; break
   }
 
   return <div className="app-shell">

@@ -1,6 +1,6 @@
 // React Query hooks over the adapters. Every key includes the adapter kind so live and sandbox data
 // never share a cache entry (PRD §8a "never mix"). Failed reads surface as errors, never as values.
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import type { Address } from 'viem'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import type { WalletFunding } from '../adapters/types.ts'
@@ -62,3 +62,32 @@ export function useRelayerReadiness(enabled: boolean) {
   const app = useAppConfig().data
   return useQuery({ queryKey: ['relayer', kind], enabled: enabled && !!app, queryFn: () => protocol.relayerReadiness(app!), refetchInterval: 30_000, retry: false })
 }
+
+/** S5 position snapshot, every 30 s while the tab is visible; on failure React Query keeps the last snapshot (FR-9). */
+export function usePosition(vaultId: string | undefined) {
+  const { protocol, kind } = useAdapters()
+  const app = useAppConfig().data
+  return useQuery({ queryKey: ['position', kind, vaultId ?? null], enabled: !!app && !!vaultId, queryFn: () => protocol.readPosition(app!, vaultId!), refetchInterval: 30_000, retry: false })
+}
+
+/** Agent card facts, every 30 s while visible. */
+export function useAgent(vaultId: string | undefined) {
+  const { protocol, kind } = useAdapters()
+  const app = useAppConfig().data
+  return useQuery({ queryKey: ['agent', kind, vaultId ?? null], enabled: !!app && !!vaultId, queryFn: () => protocol.readAgent(app!, vaultId!), refetchInterval: 30_000, retry: false })
+}
+
+/** Recent actions in 10,000-block windows; "Load earlier" fetches the next window down (PRD S5, R9). */
+export function useActivity(positionAddress: Address | undefined) {
+  const { protocol, kind } = useAdapters()
+  const app = useAppConfig().data
+  return useInfiniteQuery({
+    queryKey: ['activity', kind, positionAddress?.toLowerCase() ?? null],
+    enabled: !!app && !!positionAddress,
+    initialPageParam: null as bigint | null,
+    queryFn: ({ pageParam }) => protocol.readActivity(app!, positionAddress!, pageParam),
+    getNextPageParam: last => (last.reachedStart ? undefined : last.from - 1n),
+    retry: false,
+  })
+}
+

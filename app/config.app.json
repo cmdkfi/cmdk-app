@@ -24,6 +24,7 @@
   "help": {
     "metamaskInstall": "https://metamask.io/download/",
     "connectingToBase": "https://docs.base.org/base-chain/quickstart/connecting-to-base",
+    "nearblocks": "https://testnet.nearblocks.io",
     "ethFaucets": [
       { "label": "Base docs: network faucets", "url": "https://docs.base.org/base-chain/tools/network-faucets", "note": "the list Base keeps current" },
       { "label": "Coinbase Developer Platform faucet", "url": "https://portal.cdp.coinbase.com/products/faucet", "note": "Base Sepolia ETH and USDC, Coinbase developer login" },
