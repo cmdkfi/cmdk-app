@@ -4,15 +4,15 @@ import type { Address, Hex } from 'viem'
 import { accountKind } from '../../flow/account.ts'
 import { parseConfig, type LoadedConfig } from '../../flow/config.ts'
 import { borrowApr, collateralValue, debtAt, depositEstimate, lendable, openTargetLtv, repayNeed } from '../../protocol/base/math.ts'
-import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding } from '../../protocol/base/reads.ts'
+import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readMarketStatic, readPositionSnapshot, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding, type MarketStatic } from '../../protocol/base/reads.ts'
 import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRegistered, agentRow, measurementMatches } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList } from '../../protocol/near/rpc.ts'
-import { discover, getState } from '../../protocol/near/vault.ts'
+import { discoverWithHint, getState, type VaultState } from '../../protocol/near/vault.ts'
 import { closeArgs, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
 import { agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
 import { sendEth, transferToken, wrapEth } from '../../protocol/wallet/tx.ts'
-import { ProtocolError, type ProtocolAdapter } from '../types.ts'
+import { ProtocolError, type DeploymentStatic, type ProtocolAdapter } from '../types.ts'
 
 const relayer = ({ config }: LoadedConfig) => ({ primary: config.relayerUrl, fallback: config.relayerUrlFallback })
 
@@ -27,7 +27,23 @@ function mapped(error: unknown): never {
   throw new ProtocolError('unavailable', error instanceof Error ? error.message : String(error))
 }
 
+const staticsOf = (s: DeploymentStatic) => s.data as MarketStatic[]
+
+/** How long one NEAR get_state answer is shared between the S5 position and agent reads (PRD §9 6). */
+const SHARED_STATE_MS = 5_000
+
 export function createLiveProtocol(): ProtocolAdapter {
+  // S5 only: the position and agent queries of one refresh share one get_state; failures are not kept. The onboarding
+  // and close chains call getState directly and always read live.
+  const shared = new Map<string, { at: number; state: Promise<VaultState> }>()
+  const sharedState = (rpcUrl: string, vaultId: string) => {
+    const hit = shared.get(vaultId)
+    if (hit && Date.now() - hit.at < SHARED_STATE_MS) return hit.state
+    const state = getState(rpcUrl, vaultId)
+    shared.set(vaultId, { at: Date.now(), state })
+    state.catch(() => { if (shared.get(vaultId)?.state === state) shared.delete(vaultId) })
+    return state
+  }
   return {
     kind: 'live',
     async loadConfig() {
@@ -35,8 +51,14 @@ export function createLiveProtocol(): ProtocolAdapter {
       if (!response.ok) throw new Error('The app configuration could not be loaded.')
       return parseConfig(await response.json())
     },
-    async readMarketQuote({ config, guided }) {
-      const m = await readMarket(baseClient(config.baseRpcUrl), { morpho: guided.base.morpho, executor: guided.liveMarket.executor, id: guided.liveMarket.id })
+    async readStatic({ config, guided }) {
+      const client = baseClient(config.baseRpcUrl)
+      const data = await Promise.all(config.createVault.markets.map(m => readMarketStatic(client, { morpho: guided.base.morpho, executor: m.executor, id: m.id })))
+      return { kind: 'deployment-static', data }
+    },
+    async readMarketQuote({ config, guided }, statics) {
+      const known = staticsOf(statics).find(s => s.id.toLowerCase() === guided.liveMarket.id.toLowerCase())
+      const m = await readMarket(baseClient(config.baseRpcUrl), { morpho: guided.base.morpho, executor: guided.liveMarket.executor, id: guided.liveMarket.id }, undefined, known)
       return {
         blockNumber: m.blockNumber, lltv: m.params.lltv, loanDecimals: m.loanDecimals, collateralDecimals: m.collateralDecimals,
         price: m.price, liquidity: m.liquidity, borrowApr: m.borrowRate === null ? null : borrowApr(m.borrowRate),
@@ -49,9 +71,11 @@ export function createLiveProtocol(): ProtocolAdapter {
     async readAccountKind({ config }, address) {
       return accountKind(await readCode(baseClient(config.baseRpcUrl), address))
     },
-    async discoverPosition({ config, guided }, owner) {
-      const found = await discover(config.nearRpcUrl, config.near.factory, owner, guided.firstVaultNumber)
+    async discoverPosition({ config, guided }, owner, hint) {
+      const found = await discoverWithHint(config.nearRpcUrl, config.near.factory, owner, guided.firstVaultNumber, hint ?? null)
       if (!found) return null
+      // the get_state discovery just read is the one S5's position and agent reads share next (PRD §9 6)
+      shared.set(found.accountId, { at: Date.now(), state: Promise.resolve(found.state) })
       const snapshot = await readVaultSnapshot(baseClient(config.baseRpcUrl), found.state, { weth: guided.base.weth, usdc: guided.base.usdc })
       return {
         vault: { accountId: found.accountId, number: found.number, baseAddress: found.state.base_address },
@@ -135,9 +159,9 @@ export function createLiveProtocol(): ProtocolAdapter {
       }
     },
 
-    async readPosition({ config, guided }, vaultId) {
-      const state = await getState(config.nearRpcUrl, vaultId)
-      const s = await readVaultSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc })
+    async readPosition({ config, guided }, statics, vaultId) {
+      const state = await sharedState(config.nearRpcUrl, vaultId)
+      const s = await readPositionSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc }, staticsOf(statics))
       return {
         blockNumber: s.blockNumber, blockTime: s.blockTime, morpho: state.morpho,
         vault: { accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address },
@@ -148,7 +172,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       }
     },
     async readAgent(app, vaultId) {
-      const [state, rows, keys] = await Promise.all([getState(app.config.nearRpcUrl, vaultId), agentVaults(relayer(app)), viewAccessKeyList(app.config.nearRpcUrl, vaultId)])
+      const [state, rows, keys] = await Promise.all([sharedState(app.config.nearRpcUrl, vaultId), agentVaults(relayer(app)), viewAccessKeyList(app.config.nearRpcUrl, vaultId)])
       const row = agentRow(rows, vaultId)
       return {
         row: row ? { registration: row.registration, agent_status: row.agent_status, expires_at: row.expires_at, last_tick_unix: row.last_tick_unix } : null,
@@ -156,23 +180,20 @@ export function createLiveProtocol(): ProtocolAdapter {
         vaultAgent: state.agent,
       }
     },
-    async readActivity({ config, guided }, positionAddress, toBlock) {
+    async readActivity({ config, guided }, positionAddress, toBlock, fromBlock) {
       const client = baseClient(config.baseRpcUrl)
       const start = BigInt(guided.base.executorDeployBlock)
       const to = toBlock ?? await readHead(client)
-      if (to < start) return { from: start, to, items: [], reachedStart: true }
-      const from = to - MAX_WINDOW + 1n > start ? to - MAX_WINDOW + 1n : start
+      const head = toBlock === null ? to : null
+      if (to < start) return { from: start, to, head: head ?? to, items: [], reachedStart: true }
+      const lowest = [start, to - MAX_WINDOW + 1n, fromBlock ?? start].reduce((a, b) => (a > b ? a : b))
+      // nothing new since `fromBlock` (a cached range already reaches the head): no request
+      if (lowest > to) return { from: lowest, to, head: head ?? to, items: [], reachedStart: false }
       const executors = [...new Set(config.createVault.markets.map(m => m.executor.toLowerCase()))] as Hex[]
-      const events = []
-      for (const executor of executors) events.push(...await readActivity(client, { executor, positionAddress, tokens: [guided.base.weth, guided.base.usdc] }, from, to))
+      const events = await readActivity(client, { executors, positionAddress, tokens: [guided.base.weth, guided.base.usdc] }, lowest, to)
       const times = await readBlockTimes(client, events.map(e => e.blockNumber)).catch(() => new Map<bigint, bigint>())
-      const items = events
-        .filter((e, i, all) => all.findIndex(x => x.transactionHash === e.transactionHash && x.logIndex === e.logIndex) === i)
-        .sort((a, b) => (a.blockNumber === b.blockNumber ? b.logIndex - a.logIndex : b.blockNumber > a.blockNumber ? 1 : -1))
-        .map(e => ({ ...e, time: times.get(e.blockNumber) ?? null }))
-      return { from, to, items, reachedStart: from === start }
+      return { from: lowest, to, head: head ?? to, items: events.map(e => ({ ...e, time: times.get(e.blockNumber) ?? null })), reachedStart: lowest === start }
     },
-
     async readClosePlan({ config, guided }, vaultId, owner) {
       const client = baseClient(config.baseRpcUrl)
       const state = await getState(config.nearRpcUrl, vaultId)

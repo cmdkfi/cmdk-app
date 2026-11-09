@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Address } from 'viem'
 import { useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
-import { useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
+import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
 import { useNow } from '../components/use-now.ts'
@@ -16,6 +16,8 @@ import { agentState, backupStatus, budgetFor, currentMarket, describe, positionV
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
 const BASE_SEPOLIA = 84532
+/** The one close reason that keeps the button usable: clicking reads the plan again. */
+const PLAN_FAILED = 'The amount to repay could not be read. Click to read it again.'
 
 const usdc = (v: bigint) => `${formatUnits(v, 6, 2)} USDC`
 const weth = (v: bigint) => `${formatUnits(v, 18, 6)} WETH`
@@ -116,14 +118,16 @@ function MarketCard({ app, view, market, chainNow }: { app: LoadedConfig; view: 
 function RecentActions({ app, view, owner }: { app: LoadedConfig; view: PositionView; owner: `0x${string}` }) {
   const activity = useActivity(view.vault.baseAddress)
   const explorer = app.guided.network.blockExplorerUrls[0].replace(/\/$/, '')
-  const pages = activity.data?.pages ?? []
+  // On return, the confirmed cached part is shown at once while the newest blocks are read (PRD §9 3).
+  const pages = activity.data?.pages ?? (activity.cached ? [{ ...activity.cached, head: activity.cached.to }] : [])
+  const fromCache = !activity.data && !!activity.cached
   const items = pages.flatMap(p => p.items)
   const ctx = { owner, positionAddress: view.vault.baseAddress, weth: app.guided.base.weth, usdc: app.guided.base.usdc, marketLabels: app.config.marketLabels }
   const range = pages.length ? `Blocks ${pages[pages.length - 1].from.toString()}–${pages[0].to.toString()}` : null
   return <section className="card-s5 card-s5--wide prototype-surface" aria-labelledby="actions-title">
     <h2 id="actions-title">Recent actions</h2>
-    {range && <p className="screen__note">{range}{pages[pages.length - 1].reachedStart ? ' (since the Executor was deployed)' : ''}</p>}
-    {activity.isPending && <p className="screen__note" role="status">Reading recent actions…</p>}
+    {range && <p className="screen__note">{range}{pages[pages.length - 1].reachedStart ? ' (since the Executor was deployed)' : ''}{fromCache ? ' · saved list, reading newer blocks…' : ''}</p>}
+    {activity.isPending && !fromCache && <p className="screen__note" role="status">Reading recent actions…</p>}
     {activity.isError && <p className="notice notice--warning" role="alert">{pages.length ? 'Could not load recent actions. The list below is the previous one.' : 'Could not load recent actions.'}<button type="button" className="prototype-button" onClick={() => { void (pages.length ? activity.fetchNextPage() : activity.refetch()) }}>Retry</button></p>}
     {pages.length > 0 && items.length === 0 && <p className="screen__note">No actions in this range.</p>}
     <ul className="actions">
@@ -133,7 +137,7 @@ function RecentActions({ app, view, owner }: { app: LoadedConfig; view: Position
         <span className="actions__meta">{item.time !== null ? date(item.time) : `block ${item.blockNumber.toString()}`} · <a href={`${explorer}/tx/${item.transactionHash}`} target="_blank" rel="noreferrer">BaseScan</a></span>
       </li> })}
     </ul>
-    {activity.hasNextPage && !activity.isError && <button type="button" className="prototype-button" disabled={activity.isFetchingNextPage} onClick={() => { void activity.fetchNextPage() }}>{activity.isFetchingNextPage ? 'Loading…' : 'Load earlier'}</button>}
+    {activity.hasNextPage && !activity.isError && !fromCache && <button type="button" className="prototype-button" disabled={activity.isFetchingNextPage} onClick={() => { void activity.fetchNextPage() }}>{activity.isFetchingNextPage ? 'Loading…' : 'Load earlier'}</button>}
   </section>
 }
 
@@ -213,9 +217,9 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const wallet = useWalletState()
   const now = useNow()
   const vaultId = discovery.result?.summary?.vault.accountId
-  const position = usePosition(vaultId)
-  const view = position.data
   const owner = wallet.status === 'connected' ? wallet.address : undefined
+  const position = usePosition(vaultId, owner)
+  const view = position.data
   const chainOk = wallet.status === 'connected' && wallet.chainId === BASE_SEPOLIA
   const summary = discovery.result?.summary
   const closeVault = summary ? { accountId: summary.vault.accountId, number: summary.vault.number, baseAddress: summary.vault.baseAddress } : undefined
@@ -243,6 +247,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const value = view.markets.every(m => m.value !== null) ? view.markets.reduce((sum, m) => sum + (m.value ?? 0n), 0n) : null
   const age = now - position.dataUpdatedAt / 1000
   const stale = position.isError
+  // A snapshot from an earlier visit (persisted, PRD §9 4) paints the screen only; no action uses it.
+  const restored = position.dataUpdatedAt < SESSION_START
   const idle = view.idle
   // USDC below guided.usdcDust is repay rounding (config.app.json), not a balance to report
   const showIdle = idle.weth > 0n || idle.usdc > app.guided.usdcDust || idle.eth > 0n
@@ -253,7 +259,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   let closeReason: string | null = null
   if (!owner || !chainOk) closeReason = 'Connect the vault owner on Base Sepolia to close.'
   else if (stale) closeReason = 'The latest read failed; closing waits for a fresh one.'
-  else if (plan.isError) closeReason = 'The amount to repay could not be read. Retrying every 30 s.'
+  else if (restored) closeReason = 'Refreshing your position…'
+  else if (plan.isError) closeReason = PLAN_FAILED
   else if (!plan.data) closeReason = 'Reading the amount to repay…'
   const shortfall = plan.data ? closeShortfall(plan.data) : null
   const closeLine = plan.data && shortfall !== null
@@ -272,11 +279,12 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     setAmount(DEFAULT_DEPOSIT[mode])
     window.location.hash = href('start')
   }
-  const canStartOver = startOverAllowed(view, app.guided.usdcDust)
+  // Start over is decided on a live read only (never the persisted or a failed-read snapshot).
+  const canStartOver = !restored && !stale && startOverAllowed(view, app.guided.usdcDust)
 
   return <section className={`screen screen--wide position${stale ? ' position--stale' : ''}`} aria-labelledby="screen-title">
     <h1 id="screen-title">{variant === 'liquidated' ? 'Position liquidated' : variant === 'closed' ? 'Position closed' : 'Your position'}</h1>
-    <p className="screen__note" role="status">Read at block {view.blockNumber.toString()}, {ago(age)}{stale ? ' · read-only' : ''}</p>
+    <p className="screen__note" role="status">Read at block {view.blockNumber.toString()}, {ago(age)}{stale ? ' · read-only' : restored ? ' · refreshing' : ''}</p>
     {stale && <p className="notice notice--warning" role="alert">The latest read failed. This is the snapshot from block {view.blockNumber.toString()}, {ago(age)}; it is read-only until a read succeeds.</p>}
     {variant === 'liquidated' && <p className="notice notice--warning">Morpho liquidated the collateral. {usdc(debt)} of debt remains on the market. This app offers no recovery for a liquidated position.</p>}
 
@@ -296,10 +304,12 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     {owner && <RecentActions app={app} view={view} owner={owner} />}
 
     {variant === 'active' && !closing && <div className="create-action">
-      <button type="button" className="prototype-button is-primary" disabled={closeReason !== null} aria-describedby="close-reason" onClick={() => { void plan.refetch(); setReview(true) }}>Close position</button>
+      <button type="button" className="prototype-button is-primary" disabled={closeReason !== null && closeReason !== PLAN_FAILED} aria-describedby="close-reason" onClick={() => { void plan.refetch(); setReview(true) }}>Close position</button>
       <p id="close-reason">{closeReason ?? closeLine}</p>
     </div>}
-    {review && plan.data && owner && <ReviewSheet app={app} plan={plan.data} owner={owner} onStart={startClosing} onCancel={() => setReview(false)} />}
+    {review && plan.isFetching && <p className="screen__note" role="status">Reading the amount to repay…</p>}
+    {review && plan.isError && !plan.isFetching && <p className="notice notice--warning" role="alert">The amount to repay could not be read. Nothing is signed.</p>}
+    {review && plan.data && !plan.isFetching && !plan.isError && owner && <ReviewSheet app={app} plan={plan.data} owner={owner} onStart={startClosing} onCancel={() => setReview(false)} />}
     {variant === 'closed' && <div className="create-action">
       {canStartOver
         ? <button type="button" className="prototype-button is-primary" onClick={startOver}>Start over</button>

@@ -191,19 +191,27 @@ export type ActivityItem = {
 }
 
 /** One window of recent actions; `reachedStart` when it reaches the Executor's deploy block. */
-export type ActivityWindow = { from: bigint; to: bigint; items: ActivityItem[]; reachedStart: boolean }
+export type ActivityWindow = { from: bigint; to: bigint; head: bigint; items: ActivityItem[]; reachedStart: boolean }
+
+/**
+ * Deployment data that does not move (market params, decimals, LLTV, Executor feeds and max ages), read once per
+ * session for S1 and S5 (PRD §9 2). Opaque outside the live adapter; the onboarding and close chains never use it.
+ */
+export type DeploymentStatic = { readonly kind: 'deployment-static'; readonly data: unknown }
 
 /** Only what the screens use; methods are added when a screen needs them. */
 export interface ProtocolAdapter {
   readonly kind: AdapterKind
   loadConfig(): Promise<LoadedConfig>
-  readMarketQuote(app: LoadedConfig): Promise<MarketQuote>
+  /** Static deployment data for the configured markets (Morpho idToMarketParams, Executor.config, decimals). */
+  readStatic(app: LoadedConfig): Promise<DeploymentStatic>
+  readMarketQuote(app: LoadedConfig, statics: DeploymentStatic): Promise<MarketQuote>
   /** Pure: value, borrow at the configured target and the liquidity cap for a deposit amount (no I/O). */
   estimateDeposit(app: LoadedConfig, quote: MarketQuote, amountWei: bigint): DepositEstimate
   readWalletFunding(app: LoadedConfig, owner: Address, amountWei: bigint): Promise<WalletFunding>
   readAccountKind(app: LoadedConfig, address: Address): Promise<AccountKind>
-  /** D4: the owner's newest vault numbered from firstVaultNumber, or null; throws when that cannot be known. */
-  discoverPosition(app: LoadedConfig, owner: Address): Promise<PositionSummary | null>
+  /** D4: the owner's newest vault numbered from firstVaultNumber, or null; throws when that cannot be known. `hint`: the vault last found for this owner, verified with one get_state (PRD §9 5). */
+  discoverPosition(app: LoadedConfig, owner: Address, hint?: string | null): Promise<PositionSummary | null>
   relayerReadiness(app: LoadedConfig): Promise<Readiness>
 
   // ---- Phase 3 (S4) --------------------------------------------------------------------------------------------
@@ -236,11 +244,11 @@ export interface ProtocolAdapter {
 
   // ---- Phase 4 (S5) --------------------------------------------------------------------------------------------
   /** Position, corridor, sell budget and idle balances at one block (Interfaces.sol; Executor.sol l.65, l.67, l.453, l.504-517; CorridorMath.sol l.67-75). */
-  readPosition(app: LoadedConfig, vaultId: string): Promise<PositionView>
+  readPosition(app: LoadedConfig, statics: DeploymentStatic, vaultId: string): Promise<PositionView>
   /** /agent/vaults row (agent/src/main.rs l.1029-1034, agent/src/vaults.rs l.215-222), NEAR key list (lib.rs l.46, l.498-503) and the vault's agent (lib.rs l.539-557). */
   readAgent(app: LoadedConfig, vaultId: string): Promise<AgentFacts>
-  /** Executor events and WETH/USDC transfers of the position address in one window of at most 10,000 blocks ending at `toBlock` (head when null). */
-  readActivity(app: LoadedConfig, positionAddress: Address, toBlock: bigint | null): Promise<ActivityWindow>
+  /** Executor events and WETH/USDC transfers of the position address in one window of at most 10,000 blocks ending at `toBlock` (head when null) and starting no lower than `fromBlock`. */
+  readActivity(app: LoadedConfig, positionAddress: Address, toBlock: bigint | null, fromBlock?: bigint): Promise<ActivityWindow>
 
   // ---- Phase 5 (S6) --------------------------------------------------------------------------------------------
   /** Debt now and `messageExpirySecs` ahead with the relayer's 1% headroom, idle balances, the owner's wallet USDC (relayer.py l.72, l.516-529; Morpho accrual). */

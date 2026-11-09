@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { V } from '../vectors.mjs'
 import { NearRpcError, viewAccessKeyList, viewFunction } from './rpc.ts'
-import { discover, getState, vaultId } from './vault.ts'
+import { discover, discoverWithHint, getState, vaultId } from './vault.ts'
 
 let n = 0
 const rpcUrl = () => `https://rpc-${++n}.test` // module caches are per URL
@@ -100,3 +100,28 @@ test('V36: view_access_key_list returns the key list of a live vault', async () 
   assert.equal(keys.length, 1)
   assert.equal(keys[0].public_key, recorded.agent_public_key)
 })
+
+test('§9 5: a remembered vault still owned is one get_state; a mismatch, an unreadable or a sub-cutoff hint scans', async () => {
+  const configs = fake => { let n = 0; const fetcher = async (url, init) => { if (JSON.parse(init.body).params.method_name === 'get_config') n++; return fake.fetcher(url, init) }; return { fetcher, count: () => n } }
+  // still owned: no factory read, no scan
+  const owned = nearFake({ count: 14, owners: { 12: OWNER } }), c1 = configs(owned)
+  assert.equal((await discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v12.factory.testnet', c1.fetcher)).accountId, 'v12.factory.testnet')
+  assert.deepEqual(owned.reads, [12]); assert.equal(c1.count(), 0)
+  // mismatch: the hinted vault names another owner → the scan runs from the factory count and finds the owned one
+  const moved = nearFake({ count: 14, owners: { 13: OWNER } }), c2 = configs(moved)
+  assert.equal((await discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v12.factory.testnet', c2.fetcher)).accountId, 'v13.factory.testnet')
+  assert.deepEqual(moved.reads, [12, 14, 13]); assert.equal(c2.count(), 1)
+  // mismatch and nothing owned → null, as a scan says
+  const gone = nearFake({ count: 12, owners: {} })
+  assert.equal(await discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v12.factory.testnet', gone.fetcher), null)
+  // an unreadable hint falls back to the scan; a hint below the cutoff or of another factory is not read at all
+  const unread = nearFake({ count: 12, owners: { 11: OWNER }, unread: [12] })
+  await assert.rejects(discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v12.factory.testnet', unread.fetcher)) // the scan meets v12 unreadable above v11: unknown, never "none"
+  const low = nearFake({ count: 11, owners: { 11: OWNER, 3: OWNER } })
+  assert.equal((await discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v3.factory.testnet', low.fetcher)).accountId, 'v11.factory.testnet')
+  assert.deepEqual(low.reads, [11, 10]) // the scan's batch of two; v3 (below the cutoff) is never read
+  const other = nearFake({ count: 11, owners: { 11: OWNER } })
+  await discoverWithHint(rpcUrl(), 'factory.testnet', OWNER, 10, 'v11.other.testnet', other.fetcher)
+  assert.deepEqual(other.reads, [11, 10]) // a hint of another factory is ignored; only the scan reads
+})
+

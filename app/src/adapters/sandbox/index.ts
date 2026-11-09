@@ -27,6 +27,7 @@ export function createSandboxProtocol(): ProtocolAdapter {
   return {
     kind: 'sandbox',
     loadConfig: notImplemented,
+    readStatic: notImplemented,
     readMarketQuote: notImplemented,
     estimateDeposit: () => { throw new Error(MESSAGE) },
     readWalletFunding: notImplemented,

@@ -52,3 +52,8 @@
 - **Rule:** when a second flow needs the same safety machinery, extract it first, prove the extraction with the first flow's existing tests, then build the second flow on it. No copy-and-adapt of safety code.
 - **Rule:** a multi-step chain whose intermediate chain states classify as another screen's state (WETH idle after `close` reads as "deposited") needs its in-progress record in the entry resolver, with a reload test at such an intermediate step.
 
+## 2026-11-09 — Phase 5b: measure a performance instruction against live data before building it
+- **What happened:** the todo asked for one unfiltered eth_getLogs per window over the Executor, WETH and USDC addresses. A live measurement before writing code showed 4,208 logs / 2.7 MB per window (every testnet USDC transfer), so the change would have made activity slower and heavier. Asked the product owner; they chose two topic-filtered queries in one JSON-RPC batch.
+- **Rule:** for a performance change, measure the proposed request shape against the live endpoint first; if it contradicts its own goal, stop and ask with the numbers.
+- **Rule:** measure per leg as well as in total. The refresh went from 39 requests to 6, but its time barely moved: the NEAR RPC takes about 3 s per call. Report where the time goes instead of claiming a speed-up from a request count.
+

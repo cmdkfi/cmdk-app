@@ -58,6 +58,17 @@ const ABI = parseAbi([
   'function closedForAgent(address user, bytes32 id) view returns (bool)',
 ])
 
+// Multicall3 (github.com/mds1/multicall, Multicall3.sol): viem's multicall batching sends readContract calls as one
+// aggregate3, and getBalance as getEthBalance inside it. The fixture answers each inner call with its own handlers
+// above, so an app ABI mistake still cannot pass by agreeing with itself.
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11'
+const MULTICALL = parseAbi([
+  'struct Call3 { address target; bool allowFailure; bytes callData; }',
+  'struct Result { bool success; bytes returnData; }',
+  'function aggregate3(Call3[] calls) payable returns (Result[] returnData)',
+  'function getEthBalance(address addr) view returns (uint256 balance)',
+])
+
 // Events the fixture emits as logs: executor/src/Executor.sol l.80-97; ERC-20 Transfer (executor/src/TestToken.sol, WETH9).
 const EVENTS = parseAbi([
   'struct Corridor { uint64 target; uint64 act; uint64 floor; uint64 sellBudget; bool migrateAllowed; bool exitAllowed; bool set; }',
@@ -77,7 +88,8 @@ export function fixtureLog(address: Hex, eventName: 'CorridorSet' | 'Opened' | '
   const data = unindexed.length ? encodeAbiParameters(unindexed as never, unindexed.map(i => args[i.name!]) as never) : '0x'
   return { address, topics, data, blockNumber, transactionHash: keccak256(toHex(`fixture-log-${eventName}-${blockNumber}-${logIndex}`)), logIndex }
 }
-export const ADDRESSES = { WETH, USDC, EXECUTOR, MORPHO, NOW }
+export const HEAD = 30_000_100n, DEPLOY = 30_000_001n
+export const ADDRESSES = { WETH, USDC, EXECUTOR, MORPHO, NOW, HEAD, DEPLOY }
 
 export type VaultFixture = {
   owner: Hex
@@ -114,7 +126,14 @@ export class LiveFixture {
   l1Fee = 1_000n
   relayerPrimaryDown = false
   // S5 (Phase 4) knobs
-  head = 100n
+  /** Base head; real Base Sepolia heights, because viem's Multicall3 only exists from block 1,059,647. */
+  head = HEAD
+  /** The Executor deploy block in config.json (where "Load earlier" stops). */
+  deployBlock = DEPLOY
+  /** Delay before answering Base RPC requests (shows a cached snapshot while the live read is pending). */
+  baseDelayMs = 0
+  /** Every HTTP request to the Base RPC, NEAR RPC and relayer, with the JSON-RPC methods or path it carried. */
+  requests: { host: string; calls: string[] }[] = []
   /** Every Base JSON-RPC call answers with an error (a node outage). */
   baseDown = false
   /** Executor.soldInWindow for the position address. */
@@ -148,7 +167,7 @@ export class LiveFixture {
   config() {
     const market = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, slice_max: '1000000000' })
     return {
-      ...guidedValues(appValues, { base: { morpho: MORPHO, executorDeployBlock: 1, gasPriceOracle: GAS_ORACLE, tokens: { weth: WETH, usdc: USDC }, chainlink: { ethUsd: { address: FEED, description: 'ETH / USD', maxAgeSeconds: 1200 } } } }),
+      ...guidedValues(appValues, { base: { morpho: MORPHO, executorDeployBlock: Number(this.deployBlock), gasPriceOracle: GAS_ORACLE, tokens: { weth: WETH, usdc: USDC }, chainlink: { ethUsd: { address: FEED, description: 'ETH / USD', maxAgeSeconds: 1200 } } } }),
       baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: 'https://near.fixture.test', baseRpcUrl: 'https://base.fixture.test',
       relayerUrl: 'https://relayer.fixture.test', relayerUrlFallback: 'https://fallback.fixture.test', near: { factory: FACTORY },
       marketLabels: { [LIVE.toLowerCase()]: 'live', [BACKUP.toLowerCase()]: 'backup' },
@@ -279,12 +298,13 @@ export class LiveFixture {
         return { ...this.block(), number: toHex(n), hash: keccak256(toHex(`block-${n}`)), timestamp: toHex(BigInt(NOW) - (this.head - n) * 2n) }
       }
       case 'eth_getLogs': {
-        const f = params[0] as { address: string; topics: (Hex | null)[]; fromBlock: Hex; toBlock: Hex }
+        const f = params[0] as { address: string | string[]; topics: (Hex | null)[]; fromBlock: Hex; toBlock: Hex }
+        const addresses = (Array.isArray(f.address) ? f.address : [f.address]).map(a => a.toLowerCase())
         const from = BigInt(f.fromBlock), to = BigInt(f.toBlock)
         if (to - from + 1n > 10_000n) throw Error(`eth_getLogs over ${to - from + 1n} blocks`)
         this.logWindows.push([from, to])
         return this.logs
-          .filter(l => l.address.toLowerCase() === f.address.toLowerCase() && l.blockNumber >= from && l.blockNumber <= to)
+          .filter(l => addresses.includes(l.address.toLowerCase()) && l.blockNumber >= from && l.blockNumber <= to)
           .filter(l => f.topics.every((t, i) => t === null || l.topics[i]?.toLowerCase() === t.toLowerCase()))
           .map(l => ({ ...l, blockNumber: toHex(l.blockNumber), logIndex: toHex(l.logIndex), blockHash: keccak256(toHex(`block-${l.blockNumber}`)), transactionIndex: '0x0', removed: false }))
       }
@@ -298,9 +318,25 @@ export class LiveFixture {
       case 'eth_getTransactionReceipt': {
         const hash = String(params[0])
         if (!this.receipts.has(hash)) return null
-        return { transactionHash: hash, transactionIndex: '0x0', blockHash: '0x' + '77'.repeat(32), blockNumber: '0x60', from: OWNER, to: BASE, cumulativeGasUsed: '0x5208', gasUsed: '0x5208', effectiveGasPrice: '0x1', contractAddress: null, logs: [], logsBloom: '0x' + '00'.repeat(256), status: '0x1', type: '0x2' }
+        return { transactionHash: hash, transactionIndex: '0x0', blockHash: '0x' + '77'.repeat(32), blockNumber: toHex(this.head - 4n), from: OWNER, to: BASE, cumulativeGasUsed: '0x5208', gasUsed: '0x5208', effectiveGasPrice: '0x1', contractAddress: null, logs: [], logsBloom: '0x' + '00'.repeat(256), status: '0x1', type: '0x2' }
       }
-      case 'eth_call': { const c = params[0] as { to: string; data: Hex }; return this.call(c.to, c.data) }
+      case 'eth_call': {
+        const c = params[0] as { to: string; data: Hex }
+        if (c.to.toLowerCase() !== MULTICALL3.toLowerCase()) return this.call(c.to, c.data)
+        const m = decodeFunctionData({ abi: MULTICALL, data: c.data })
+        if (m.functionName !== 'aggregate3') throw Error(`Unexpected Multicall3 call ${m.functionName}`)
+        this.ethCalls.push('aggregate3')
+        const results = (m.args[0] as readonly { target: Hex; allowFailure: boolean; callData: Hex }[]).map(inner => {
+          if (inner.target.toLowerCase() === MULTICALL3.toLowerCase()) {
+            const b = decodeFunctionData({ abi: MULTICALL, data: inner.callData })
+            if (b.functionName !== 'getEthBalance') throw Error(`Unexpected Multicall3 inner call ${b.functionName}`)
+            return { success: true, returnData: encodeFunctionResult({ abi: MULTICALL, functionName: 'getEthBalance', result: BigInt(this.rpc('eth_getBalance', [b.args[0]]) as string) }) }
+          }
+          const returnData = this.call(inner.target, inner.callData)
+          return { success: returnData !== '0x', returnData }
+        })
+        return encodeFunctionResult({ abi: MULTICALL, functionName: 'aggregate3', result: results })
+      }
       default: throw Error(`Unexpected Base RPC ${method}`)
     }
   }
@@ -432,18 +468,23 @@ export class LiveFixture {
         }
         if (['base.fixture.test', 'sepolia.base.org'].includes(url.host) && request.method() === 'POST') {
           const data = request.postDataJSON()
+          this.requests.push({ host: url.host, calls: (Array.isArray(data) ? data : [data]).map((r: { method: string }) => r.method) })
+          if (this.baseDelayMs) await new Promise(resolve => setTimeout(resolve, this.baseDelayMs))
           const one = (r: { id: unknown; method: string; params: unknown[] }) => (this.baseDown
             ? { jsonrpc: '2.0', id: r.id, error: { code: -32000, message: 'fixture: the Base node is down' } }
             : { jsonrpc: '2.0', id: r.id, result: this.rpc(r.method, r.params ?? []) })
           return route.fulfill({ json: Array.isArray(data) ? data.map(one) : one(data) })
         }
         if (url.host === 'near.fixture.test' && request.method() === 'POST') {
-          const answer = this.near(request.postDataJSON())
+          const body = request.postDataJSON()
+          this.requests.push({ host: url.host, calls: [`${body.method}:${body.params?.request_type ?? ''}:${body.params?.method_name ?? ''}`] })
+          const answer = this.near(body)
           return route.fulfill({ status: answer.status ?? 200, headers: answer.headers, json: answer.json ?? {} })
         }
         if (url.host === 'relayer.fixture.test' || url.host === 'fallback.fixture.test') {
           if (url.host === 'relayer.fixture.test' && this.relayerPrimaryDown) return route.abort('failed')
           if (request.method() === 'POST' && url.host !== 'relayer.fixture.test') throw Error('POST sent to the relayer fallback')
+          this.requests.push({ host: url.host, calls: [`${request.method()} ${url.pathname}`] })
           const answer = this.relayer(request.method(), url.pathname, request.method() === 'POST' ? request.postDataJSON() : undefined)
           await answer.after?.()
           return route.fulfill({ status: answer.status, json: answer.json })

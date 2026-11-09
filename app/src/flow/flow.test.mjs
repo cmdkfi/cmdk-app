@@ -70,8 +70,26 @@ test('classification: liquidated, active, idle USDC, setup, deposited, ready (no
 })
 
 test('discovery: no vault is "found: null"; a failed read propagates (never "none")', async () => {
-  const app = { guided }
+  const app = { guided, config: { near: { factory: 'f.testnet' } } }
   assert.deepEqual(await discoverActiveVault({ discoverPosition: async () => null }, app, '0xowner'), { status: null })
   assert.equal((await discoverActiveVault({ discoverPosition: async () => summary([{ collateral: 1n, debt: 1n }]) }, app, '0xowner')).status, 'active')
   await assert.rejects(discoverActiveVault({ discoverPosition: async () => { throw new Error('NEAR RPC did not answer.') } }, app, '0xowner'))
 })
+
+test('§9 5: the vault found for an owner is remembered (live only) and passed as the hint next time; none clears it', async () => {
+  const m = new Map()
+  globalThis.window = { localStorage: { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
+  const app = { guided, config: { near: { factory: 'f.testnet' } } }
+  const hints = []
+  const found = { ...summary([{ collateral: 1n, debt: 1n }]), vault: { accountId: 'v12.f.testnet', number: 12, baseAddress: '0x' + '15'.repeat(20) } }
+  const protocol = answer => ({ discoverPosition: async (_app, _owner, hint) => { hints.push(hint); return answer } })
+  await discoverActiveVault(protocol(found), app, '0xOWNER', 'live')
+  await discoverActiveVault(protocol(found), app, '0xowner', 'live')
+  await discoverActiveVault(protocol(null), app, '0xowner', 'live')
+  await discoverActiveVault(protocol(null), app, '0xowner', 'live')
+  assert.deepEqual(hints, [null, 'v12.f.testnet', 'v12.f.testnet', null])
+  await discoverActiveVault(protocol(found), app, '0xother', 'sandbox')
+  assert.deepEqual([...m.keys()], []) // sandbox never stores; the cleared live hint is gone
+  delete globalThis.window
+})
+

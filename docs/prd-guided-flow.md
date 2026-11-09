@@ -226,7 +226,10 @@ Opens automatically when the wallet's USDC is below the shortfall during Close p
 - The chain resumes by itself when the balance covers the shortfall; the user does not click again.
 
 ### S7 — Start over
-- Appears per D5, after a close chain finished in this session. Click → S4 at the deposit step on the **same vault** (choose the amount there); no vault is created and no creation quota is used. A new vault is created only when the wallet owns none (D4 cutoff); then rate-limit refusals (429 with `Retry-After`) are shown as a countdown.
+- Appears per D5, after a close chain finished in this session, and only when debt, collateral and idle WETH are zero and idle USDC is at most the dust threshold.
+- Click → the close record is cleared and the user returns to **S1 with the 0.01 ETH default** to choose the amount; S2 as usual; S3 shows the vault as "ready for a deposit" and its button reads **Deposit** instead of Create position; S4 resumes at the wrap step on the **same vault**. No vault is created and no creation quota is used (Phase 5 implementation, 9 Nov).
+- A new vault is created only when the wallet owns none above the cutoff (D4); then rate-limit refusals (429 with `Retry-After`) are shown as a countdown.
+- While a close chain is unfinished, its record keeps the user on S5 through reloads, so returned WETH at the position address is not mistaken for a fresh deposit.
 
 ---
 
@@ -396,7 +399,7 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 - **Reads and caching (performance pass, product owner 9 Nov):**
   1. Contract reads are batched: the Base client is created with viem's multicall batching (Multicall3 on Base Sepolia from viem's chain definition) and JSON-RPC transport batching, so one refresh is a handful of requests instead of ~36; pinned-block reads stay pinned.
   2. Static deployment data (market params, token decimals, LLTV, Executor config with feeds and max ages, factory config) is read once per session (infinite stale time); only moving data (position, totals, price, feed timestamps, balances, corridor, sell budget) is polled every 30 s.
-  3. Activity uses one `eth_getLogs` per window with the address array (Executor, WETH, USDC) and client-side topic filtering; confirmed logs and block timestamps are immutable and are persisted per position address in the browser; on return only the range from the last cached block to the head is fetched.
+  3. Activity uses two topic-filtered `eth_getLogs` per window with address arrays, sent as one JSON-RPC batch (one HTTP request): [Executor, WETH, USDC] with topics [null, position address] (Executor events by caller, transfers from) and [WETH, USDC] with [Transfer, null, position address] (transfers to); events are classified client-side as before. (Phase 5b, product owner: one unfiltered query over the three addresses returned 4,208 logs / 2.7 MB per 10,000-block window on Base Sepolia on 9 Nov, against near zero filtered.) Confirmed logs and block timestamps are immutable and are persisted per position address in the browser; on return only the range from the last cached block to the head is fetched.
   4. The last position snapshot per vault is persisted (TanStack Query storage persister) and rendered immediately on return, labelled "read at block N, X min ago · refreshing", while live reads run (extends FR-9 across reloads).
   5. The owned vault id is cached per owner and verified with one `get_state`; the factory scan runs only when the cached vault no longer belongs to the owner.
   6. The NEAR `get_state` read is shared between the position and agent queries.

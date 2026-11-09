@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect, ADDRESSES, BASE, OWNER, vault, type LiveFixture } from './live-fixture.ts'
 
-const { WETH, USDC } = ADDRESSES
+const { WETH, USDC, HEAD } = ADDRESSES
 const E = 10n ** 18n
 // 160.08 M shares on equal totals of 2000 USDC: 160.000001 USDC of debt at the read block (lastUpdate = block time);
 // 600 s ahead at the fixture's 5% APR: 160.000153 USDC; the relayer needs debt + debt // 100 = 161.600154 USDC.
@@ -46,7 +46,7 @@ test('review sheet: debt, interest, headroom, amount sent, collateral returned, 
   await page.getByRole('button', { name: 'Close position' }).click()
   const s = sheet(page)
   const row = (label: string) => s.locator('.card-s5__facts > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
-  await expect(row('Debt now')).toHaveText('160.000001 USDC accrued to block 100')
+  await expect(row('Debt now')).toHaveText(`160.000001 USDC accrued to block ${HEAD}`)
   await expect(row('Interest over the next 10 minutes')).toHaveText('up to 0.000152 USDC')
   await expect(row('Headroom (1%, returned to you)')).toHaveText('1.600001 USDC')
   await expect(row('USDC already at your position address')).toHaveText('0 USDC')

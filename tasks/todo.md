@@ -99,13 +99,13 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 
 ## Phase 5b — Performance pass (PRD §9 "Reads and caching"; product owner, 9 Nov)
 Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short dedicated pass before Phase 7, because they change what the first tester sees.
-- [ ] 1. Batch reads: `createPublicClient({ batch: { multicall: true } })` with `http(url, { batch: true })`; keep pinned `blockNumber` on every read; verify in the fixture that one refresh is ≤ 6 RPC requests and that Multicall3 is viem's `baseSepolia.contracts.multicall3`.
-- [ ] 2. Static data once per session: params, decimals, LLTV, Executor config (feeds, maxAges), factory config in a query with `staleTime: Infinity`; the 30 s poll reads only moving data. Unit test that a refresh issues no static reads.
-- [ ] 3. Activity: one `eth_getLogs` per window with the address array and client-side topic filtering; persist decoded events and block timestamps per position address (immutable once ≥ 2 confirmations); on return fetch only last-cached-block+1 → head. Browser test: second load shows the list instantly and requests one window only.
-- [ ] 4. Persist the last position snapshot per vault (TanStack Query persister, localStorage, key includes kind+owner+vault); render it immediately on return with "read at block N, X min ago · refreshing"; never use it for a decision. Browser test: reload shows the cached snapshot with its age before the live read lands.
-- [ ] 5. Cache the owned vault id per owner; verify with one `get_state`; scan only when the cached vault no longer matches the owner. Unit test for the mismatch path.
-- [ ] 6. Share the NEAR `get_state` read between position and agent queries.
-- [ ] Measure before/after on the live RPC (requests per refresh, time to first full S5) and record both in the Review note.
+- [x] 1. Batch reads: `createPublicClient({ batch: { multicall: true } })` with `http(url, { batch: true })`; pinned `blockNumber` on every refresh read (static data is read once at `latest`); the fixture answers Multicall3 aggregate3 (and viem's `getEthBalance` inside it) at `baseSepolia.contracts.multicall3` by dispatching each inner call to its own handlers; browser test: one S5 refresh is 6 HTTP requests (Base: block pin + two aggregate3 rounds; NEAR: get_state + key list; relayer: agent list).
+- [x] 2. Static data once per session: params, decimals, LLTV, Executor config (feeds, maxAges) in a query with `staleTime: Infinity` (loaded with the shell); the 30 s poll reads only moving data. Unit test (viem custom transport) that a refresh issues no static reads. The factory config is not part of it: discovery runs once per session and its `count` moves. The onboarding and close chains read static data live.
+- [x] 3. Activity: two topic-filtered `eth_getLogs` per window with address arrays, sent as one JSON-RPC batch: [Executor, WETH, USDC] with [null, position] and [WETH, USDC] with [Transfer, null, position]; events classified client-side as before (product owner, Phase 5b: unfiltered, one window was 4,208 logs / 2.7 MB on Base Sepolia on 9 Nov; filtered, near zero). Decoded events and block timestamps persisted per position address once ≥ 2 confirmations; on return only last-cached-block+1 → head is fetched. Browser test: the saved list shows at once and one window is requested.
+- [x] 4. Persist the last position snapshot per vault (TanStack Query persister, localStorage, key kind+owner+vault, live only); rendered at once on return with "Read at block N, X min ago · refreshing"; Close position and Start over wait for a live read. Browser test: reload shows the cached snapshot with its age before the live read lands.
+- [x] 5. Cache the owned vault id per owner (live only); verify with one `get_state`; scan only when the cached vault no longer names the owner (or cannot be read). Unit tests for the mismatch, unreadable, sub-cutoff and other-factory paths.
+- [x] 6. Share the NEAR `get_state` read between position and agent queries (one answer shared for 5 s in the live adapter; discovery's read seeds it); S5 only, the chains read live.
+- [x] Measure before/after on the live RPC (requests per refresh, time to first full S5) and record both in the Review note.
 
 ## Phase 6 — Verification panel
 - [ ] Checklist rows per PRD §6 using `measurementMatches`, `evidenceIndex`, `readBootFile` (app-compose.json SHA-256), `/agent/vaults`, `readNearSecurity`; manifest fetched from raw GitHub with `sourceCommit` shown; `Unavailable` on fetch failure. Nothing else from `agent-evidence.ts` (no transcripts, no execution verification).
@@ -224,4 +224,20 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
 - *Differences from PRD S7, by your Phase 5 decision:* Start over goes to `#start` with 0.01 ETH and then through S3 ("Deposit") to S4 at the wrap step; the PRD S7 line still says "S4 at the deposit step (choose the amount there)". Not edited.
 - *Not covered by a browser test:* the R10 second transfer (unit-tested only) and the relayer's close refusal (the fixture has it; no scenario reaches it because the shortfall always covers the need).
 - *Results:* typecheck, 121/121 unit tests, build, bundle boundary, 37/37 Playwright desktop; close and onboarding specs 3× repeated (42/42).
+
+**Phase 5b (9 Nov 2026, cmdkfi/app still `47fd4fb`).** `git diff HEAD -- docs tasks` at start: your PRD S7 update only; unchanged during the phase.
+- *Item 3 decision (product owner, during the phase):* an unfiltered address-array query was measured at 4,208 logs / 2.7 MB per window; the window is now two topic-filtered queries in one JSON-RPC batch. PRD §9 item 3 and this todo item are reworded accordingly.
+- *Measured live* (Base Sepolia via base-sepolia-rpc.publicnode.com, NEAR via rpc.testnet.near.org, relayer.cmdk.fi; vault v9 of the live factory, two markets, read with the live ProtocolAdapter from node; the cutoff lowered to 1 for the measurement only, because no live vault is numbered 10 or higher):
+
+  | | before | after |
+  |---|---|---|
+  | one S5 refresh (position + agent) | 39 HTTP requests (36 Base, 2 NEAR, 1 relayer), 3.8–4.0 s | 6 HTTP requests (3 Base, 2 NEAR, 1 relayer), 3.5–4.5 s |
+  | first full S5 after connect, first visit (discovery, static data, position, agent, activity) | 85 requests, 13.0 s | 17 requests, 10.0 s |
+  | first full S5 after connect, return (remembered vault, saved snapshot and activity) | — | 11 requests, 6.8 s; the saved snapshot paints as soon as discovery resolves |
+
+- *Where the time goes:* each NEAR RPC request to rpc.testnet.near.org took 3.1–3.2 s (get_state and view_access_key_list alike), against 0.1–0.25 s for Base and 0.1–0.7 s for the relayer. A refresh needs one NEAR get_state before the Base reads, so it stays near 3.5 s with this endpoint whatever the request count. Choosing another NEAR testnet RPC in `config.app.json` is a product decision (the agent uses the same URL, agent/src/main.rs l.57); not changed here.
+- *Close plan:* no longer polled every 30 s on S5 (it is a full live snapshot plus wallet balances and would break the refresh budget); read when S5 shows and again on Close position, and the review sheet waits for that read.
+- *Fixture:* real Base heights (head 30,000,100; Multicall3 exists from block 1,059,647), Multicall3 aggregate3 and getEthBalance, address arrays in eth_getLogs, a request log per host, a Base delay knob.
+- *Dependencies:* `@tanstack/react-query-persist-client` and `@tanstack/query-sync-storage-persister` 5.105.2 (pinned to the installed react-query; lockfile +39 lines, additions only).
+- *Results:* typecheck, 127/127 unit tests, build, bundle boundary, 40/40 Playwright desktop; performance, position, close and onboarding specs 3× repeated (63/63).
 

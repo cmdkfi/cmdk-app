@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect, fixtureLog, ADDRESSES, BASE, LIVE, OWNER, vault, type LiveFixture } from './live-fixture.ts'
 
-const { WETH, USDC, EXECUTOR, NOW } = ADDRESSES
+const { WETH, USDC, EXECUTOR, NOW, HEAD, DEPLOY } = ADDRESSES
 const VAULT = 'v10.factory.fixture.testnet'
 const E = 10n ** 18n
 // 160.08 M shares against equal totals (2000 USDC) are 160.000001 USDC of debt (Morpho toAssetsUp with virtual shares).
@@ -27,17 +27,17 @@ test('active position: hero, agent, market, idle line and recent actions render 
   activeVault(fx)
   fx.sold = 5n * 10n ** 15n
   fx.logs = [
-    fixtureLog(WETH, 'Transfer', { from: OWNER, to: BASE, value: E / 10n }, 89n),
-    fixtureLog(EXECUTOR, 'Opened', { caller: BASE, market: LIVE, collateralIn: E / 10n, borrowed: 160_000_000n, ltv: 5n * 10n ** 17n }, 90n),
-    fixtureLog(EXECUTOR, 'Reduced', { caller: BASE, market: LIVE, repaid: 20_000_000n, collateralSold: E / 100n, ltvBefore: 71n * 10n ** 16n, ltvAfter: 5n * 10n ** 17n, protective: true }, 95n),
+    fixtureLog(WETH, 'Transfer', { from: OWNER, to: BASE, value: E / 10n }, HEAD - 11n),
+    fixtureLog(EXECUTOR, 'Opened', { caller: BASE, market: LIVE, collateralIn: E / 10n, borrowed: 160_000_000n, ltv: 5n * 10n ** 17n }, HEAD - 10n),
+    fixtureLog(EXECUTOR, 'Reduced', { caller: BASE, market: LIVE, repaid: 20_000_000n, collateralSold: E / 100n, ltvBefore: 71n * 10n ** 16n, ltvAfter: 5n * 10n ** 17n, protective: true }, HEAD - 5n),
   ]
   await fx.install(context); await openPosition(page)
 
   await expect(page.getByRole('heading', { name: 'Your position' })).toBeVisible()
-  await expect(page.getByText(/^Read at block 100, \d+ s ago$/)).toBeVisible()
+  await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, \\d+ s ago$`))).toBeVisible()
   // hero: debt accrued to the read block, collateral in WETH and USD, LTV with the corridor and LLTV marks
   await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
-  await expect(figure(page, 'Debt')).toContainText('with interest accrued to block 100')
+  await expect(figure(page, 'Debt')).toContainText(`with interest accrued to block ${HEAD}`)
   await expect(figure(page, 'Collateral').locator('strong')).toHaveText('0.1 WETH')
   await expect(figure(page, 'Collateral')).toContainText('≈ $320 at the market oracle')
   await expect(figure(page, 'LTV').locator('strong')).toHaveText('50%')
@@ -69,7 +69,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   await expect(rows.nth(1)).toContainText('YouOpened: supplied 0.1 WETH, borrowed 160 USDC at 50% LTV')
   await expect(rows.nth(2)).toContainText('YouSent 0.1 WETH from your wallet to your position address')
   await expect(rows.nth(0).getByRole('link', { name: 'BaseScan' })).toHaveAttribute('href', `https://sepolia.basescan.org/tx/${fx.logs[2].transactionHash}`)
-  await expect(card(page, 'Recent actions').getByText('Blocks 1–100 (since the Executor was deployed)')).toBeVisible()
+  await expect(card(page, 'Recent actions').getByText(`Blocks ${DEPLOY}–${HEAD} (since the Executor was deployed)`)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Load earlier' })).toHaveCount(0)
   // the only action: Close position, with what it will do (no USDC idle, wallet has none: a transfer comes first)
   await expect(page.getByRole('button', { name: 'Close position' })).toBeEnabled()
@@ -85,8 +85,8 @@ test('read failure: the last snapshot stays, marked read-only with its age; the 
   await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
   fx.baseDown = true
   await page.clock.fastForward(31_000)
-  await expect(page.getByRole('alert').filter({ hasText: /^The latest read failed\. This is the snapshot from block 100, \d+ s ago; it is read-only until a read succeeds\.$/ })).toBeVisible()
-  await expect(page.getByText(/^Read at block 100, \d+ s ago · read-only$/)).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: new RegExp(`^The latest read failed\\. This is the snapshot from block ${HEAD}, \\d+ s ago; it is read-only until a read succeeds\\.$`) })).toBeVisible()
+  await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, \\d+ s ago · read-only$`))).toBeVisible()
   await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
   await expect(page.locator('.position--stale')).toHaveCount(1)
   fx.baseDown = false
@@ -109,26 +109,26 @@ test('liquidated: collateral 0 with debt left shows the remaining debt, no recov
 
 test('recent actions: Load earlier extends by 10,000 blocks until the Executor deploy block; the range is stated', async ({ page, context, fx }) => {
   activeVault(fx)
-  fx.head = 25_000n
+  fx.head = DEPLOY + 24_999n // 30,025,000: three windows down to the deploy block
   fx.logs = [
-    fixtureLog(EXECUTOR, 'Repaid', { caller: BASE, market: LIVE, repaid: 1_000_000n }, 24_000n),
-    fixtureLog(USDC, 'Transfer', { from: BASE, to: OWNER, value: 160_000_000n }, 12_000n),
-    fixtureLog(EXECUTOR, 'CorridorSet', { caller: BASE, market: LIVE, corridor: { target: 5n * 10n ** 17n, act: 7n * 10n ** 17n, floor: 3n * 10n ** 17n, sellBudget: 2n * 10n ** 17n, migrateAllowed: true, exitAllowed: true, set: true } }, 3_000n),
+    fixtureLog(EXECUTOR, 'Repaid', { caller: BASE, market: LIVE, repaid: 1_000_000n }, DEPLOY + 23_999n),
+    fixtureLog(USDC, 'Transfer', { from: BASE, to: OWNER, value: 160_000_000n }, DEPLOY + 11_999n),
+    fixtureLog(EXECUTOR, 'CorridorSet', { caller: BASE, market: LIVE, corridor: { target: 5n * 10n ** 17n, act: 7n * 10n ** 17n, floor: 3n * 10n ** 17n, sellBudget: 2n * 10n ** 17n, migrateAllowed: true, exitAllowed: true, set: true } }, DEPLOY + 2_999n),
   ]
   await fx.install(context); await openPosition(page)
   const actions = card(page, 'Recent actions'), rows = actions.locator('.actions__row')
-  await expect(actions.getByText('Blocks 15001–25000', { exact: true })).toBeVisible()
+  await expect(actions.getByText(`Blocks ${DEPLOY + 15_000n}–${DEPLOY + 24_999n}`, { exact: true })).toBeVisible()
   await expect(rows).toHaveCount(1)
   await expect(rows.nth(0)).toContainText('YouRepaid 1 USDC')
   await page.getByRole('button', { name: 'Load earlier' }).click()
-  await expect(actions.getByText('Blocks 5001–25000', { exact: true })).toBeVisible()
+  await expect(actions.getByText(`Blocks ${DEPLOY + 5_000n}–${DEPLOY + 24_999n}`, { exact: true })).toBeVisible()
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(1)).toContainText('You160 USDC from your position address to your wallet')
   await page.getByRole('button', { name: 'Load earlier' }).click()
-  await expect(actions.getByText('Blocks 1–25000 (since the Executor was deployed)')).toBeVisible()
+  await expect(actions.getByText(`Blocks ${DEPLOY}–${DEPLOY + 24_999n} (since the Executor was deployed)`)).toBeVisible()
   await expect(rows).toHaveCount(3)
   await expect(rows.nth(2)).toContainText('YouRules set on the live market')
   await expect(page.getByRole('button', { name: 'Load earlier' })).toHaveCount(0)
   // every eth_getLogs stayed within 10,000 blocks (the fixture refuses wider ones), in three windows
-  expect([...new Set(fx.logWindows.map(([from, to]) => `${from}-${to}`))]).toEqual(['15001-25000', '5001-15000', '1-5000'])
+  expect([...new Set(fx.logWindows.map(([from, to]) => `${from}-${to}`))]).toEqual([`${DEPLOY + 15_000n}-${DEPLOY + 24_999n}`, `${DEPLOY + 5_000n}-${DEPLOY + 14_999n}`, `${DEPLOY}-${DEPLOY + 4_999n}`])
 })

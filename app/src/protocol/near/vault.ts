@@ -97,3 +97,18 @@ export async function discover(rpcUrl: string, factory: string, owner: string, f
   }
   return null
 }
+
+/**
+ * D4 with a remembered vault (PRD §9 5): when the owner's last known vault (from the cutoff) still names this owner,
+ * one get_state answers; when it does not, or cannot be read, the factory scan runs as in `discover`.
+ */
+export async function discoverWithHint(rpcUrl: string, factory: string, owner: string, firstVaultNumber: number, hint: string | null, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
+  const suffix = `.${factory}`
+  const number = hint?.startsWith('v') && hint.endsWith(suffix) ? Number(hint.slice(1, -suffix.length)) : 0
+  if (hint && Number.isSafeInteger(number) && number >= firstVaultNumber && hint === vaultId(factory, number)) {
+    const state = await readState(rpcUrl, hint, fetcher).catch(() => null)
+    if (state && state.owner.toLowerCase() === owner.toLowerCase()) return { accountId: hint, number, state }
+  }
+  return discover(rpcUrl, factory, owner, firstVaultNumber, fetcher)
+}
+

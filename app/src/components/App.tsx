@@ -9,7 +9,7 @@ import { Position } from '../screens/Position.tsx'
 import { Progress } from '../screens/Progress.tsx'
 import { loadCloseRecord, loadRecord } from '../flow/onboarding-record.ts'
 import { Settings } from '../screens/Settings.tsx'
-import { useAppConfig, useDiscovery } from './data.ts'
+import { useAppConfig, useDeploymentStatic, useDiscovery } from './data.ts'
 import { DesktopGate } from './DesktopGate.tsx'
 import { WalletSlot } from './WalletSlot.tsx'
 
@@ -53,6 +53,8 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   const app = useAppConfig()
   const owner = state.status === 'connected' ? state.address : undefined
   const discovery = useDiscovery(owner)
+  // Static deployment data (once per session, PRD §9 2) loads with the shell, alongside discovery.
+  useDeploymentStatic(mode === 'live')
   const href = useCallback((to: Route) => hashFor({ mode, route: to }), [mode])
   // Onboarding and close records are local (flow/onboarding-record.ts); the close record is per vault.
   const factory = app.data?.config.near.factory
