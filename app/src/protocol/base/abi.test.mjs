@@ -2,17 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { decodeFunctionData, getAbiItem, toFunctionSelector } from 'viem'
 import { V } from '../vectors.mjs'
-import { erc20Abi, executorAbi, gasPriceOracleAbi, wethAbi } from './abi.ts'
+import { erc20Abi, executorAbi, wethAbi } from './abi.ts'
 import { sendEth, transferToken, wrapEth } from '../wallet/tx.ts'
 import { marketId } from './reads.ts'
 
 const selector = (abi, name) => toFunctionSelector(getAbiItem({ abi, name })).slice(2)
 
-test('selectors of our fragments equal the ones the protocol pins (chain.rs, evm.rs)', () => {
+test('selectors of our fragments and of viem\'s erc20Abi equal the ones the protocol pins (chain.rs, evm.rs)', () => {
   const s = V.SELECTORS
   assert.equal(selector(executorAbi, 'corridors'), s.corridors)
   assert.equal(selector(executorAbi, 'config'), s.config)
-  assert.equal(selector(gasPriceOracleAbi, 'getL1Fee'), s.getL1Fee)
   assert.equal(selector(erc20Abi, 'transfer'), s.transfer)
 })
 

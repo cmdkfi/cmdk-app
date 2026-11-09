@@ -1,9 +1,10 @@
 // Base Sepolia reads, every set at one pinned block (scripts/VERIFY.md §2 step 2). ABIs: ./abi.ts.
-import { createPublicClient, encodeAbiParameters, encodeFunctionData, http, keccak256, serializeTransaction, type PublicClient } from 'viem'
+import { createPublicClient, encodeAbiParameters, encodeFunctionData, http, keccak256, type PublicClient } from 'viem'
 import { baseSepolia } from 'viem/chains'
+import { publicActionsL2 } from 'viem/op-stack'
 import type { VaultState } from '../near/vault.ts'
 import type { SetupFact } from '../owner/message.ts'
-import { chainlinkAbi, erc20Abi, executorAbi, gasPriceOracleAbi, irmAbi, morphoAbi, oracleAbi, wethAbi } from './abi.ts'
+import { chainlinkAbi, erc20Abi, executorAbi, irmAbi, morphoAbi, oracleAbi, wethAbi } from './abi.ts'
 import { accrue, availableLiquidity, collateralValue, ltv, toAssetsUp } from './math.ts'
 
 type Hex = `0x${string}`
@@ -164,26 +165,23 @@ export type WalletFunding = { blockNumber: bigint; eth: bigint; weth: bigint; wr
 
 /**
  * Wallet ETH and WETH, and an upper-bound cost of one WETH.deposit and one WETH.transfer from this wallet:
- * gas limit × live maxFeePerGas + Base's L1 data fee from GasPriceOracle.getL1Fee on the unsigned transaction
- * (the call agent/src/chain.rs l.824-834 makes).
+ * gas limit × live maxFeePerGas + Base's L1 data fee. The L1 fee uses viem's OP Stack action `estimateL1Fee`
+ * (GasPriceOracle.getL1Fee on the serialized transaction, the same call agent/src/chain.rs l.824-834 makes), at the
+ * oracle address from the deployment manifest.
  */
 export async function readWalletFunding(client: PublicClient, w: { owner: Hex; weth: Hex; gasPriceOracle: Hex; gasLimit: bigint; amount: bigint }): Promise<WalletFunding> {
   const { blockNumber } = await pinned(client)
-  const [eth, weth, nonce, fees] = await Promise.all([
+  const [eth, weth, fees] = await Promise.all([
     client.getBalance({ address: w.owner, blockNumber }),
     client.readContract({ address: w.weth, abi: erc20Abi, functionName: 'balanceOf', args: [w.owner], blockNumber }),
-    client.getTransactionCount({ address: w.owner, blockNumber }),
     client.estimateFeesPerGas(),
   ])
-  const unsigned = (data: Hex, value: bigint) => serializeTransaction({
-    chainId: BASE_SEPOLIA, type: 'eip1559', nonce, gas: w.gasLimit, to: w.weth, data, value,
-    maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-  })
-  const l1 = (tx: Hex) => client.readContract({ address: w.gasPriceOracle, abi: gasPriceOracleAbi, functionName: 'getL1Fee', args: [tx], blockNumber })
+  const l2Client = client.extend(publicActionsL2())
+  const l1 = (data: Hex, value: bigint) => l2Client.estimateL1Fee({ chain: baseSepolia, account: w.owner, to: w.weth, data, value, gasPriceOracleAddress: w.gasPriceOracle })
   const [wrapL1, transferL1] = await Promise.all([
-    l1(unsigned(encodeFunctionData({ abi: wethAbi, functionName: 'deposit' }), w.amount)),
+    l1(encodeFunctionData({ abi: wethAbi, functionName: 'deposit' }), w.amount),
     // The position address may not exist yet; any 20-byte recipient serializes to the same size.
-    l1(unsigned(encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [w.owner, w.amount] }), 0n)),
+    l1(encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [w.owner, w.amount] }), 0n),
   ])
   const l2 = w.gasLimit * fees.maxFeePerGas
   return { blockNumber, eth, weth, wrapCost: l2 + wrapL1, transferCost: l2 + transferL1 }

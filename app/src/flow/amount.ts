@@ -1,11 +1,12 @@
-// Decimal amounts typed by the user (PRD S1, D7). Plain digits with an optional fraction within the token's
-// precision; no exponent, sign or rounding.
+// Decimal amounts typed by the user (PRD S1, D7). Conversion is viem's parseUnits; our validation runs first because
+// parseUnits rounds over-precise input and the product rejects it instead (vector V8).
+import { parseUnits } from 'viem'
 
 /** Parses a positive decimal into base units, or null when it is not one (zero is not positive). */
 export function parseDecimal(text: string, decimals: number): bigint | null {
   const match = new RegExp(`^(0|[1-9]\\d*)(?:\\.(\\d{1,${decimals}}))?$`).exec(text)
   if (!match) return null
-  const value = BigInt(match[1]) * 10n ** BigInt(decimals) + BigInt((match[2] ?? '').padEnd(decimals, '0') || '0')
+  const value = parseUnits(text, decimals)
   return value > 0n ? value : null
 }
 

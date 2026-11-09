@@ -55,3 +55,37 @@ test('deposit estimate: value, borrow at target, and the liquidity cap with its 
   assert.deepEqual(depositEstimate(10n ** 17n, null, 1n, half), { value: null, target: null, borrow: null, limited: false, resultingLtv: null, liquidityKnown: true })
   assert.equal(depositEstimate(10n ** 17n, price, null, half).liquidityKnown, false)
 })
+
+// Independent oracle: Morpho's own SDK (@morpho-org/blue-sdk, devDependency only; the boundary test keeps it out of app
+// code). Our functions mirror CorridorMath.sol; the SDK mirrors Morpho Blue's MathLib/SharesMathLib. They must agree.
+import { MathLib, SharesMath } from '@morpho-org/blue-sdk'
+
+const ORACLE_PRICE_SCALE = 10n ** 36n
+const cases = [
+  // [borrowShares, totalBorrowAssets, totalBorrowShares, collateral, price, rate, elapsed]
+  [V.V14_marketMath.shares, V.V14_marketMath.totalAssets, V.V14_marketMath.totalShares, V.V14_marketMath.collateral, V.V14_marketMath.price, 0n, 0n],
+  [V.V17_verifyExample.borrowShares, V.V17_verifyExample.totalBorrowAssets, V.V17_verifyExample.totalBorrowShares, V.V17_verifyExample.collateral, V.V17_verifyExample.price, V.V17_verifyExample.rate, V.V17_verifyExample.elapsed],
+  [10n ** 15n, 5_000_000_000n, 5n * 10n ** 15n, 10n ** 18n, 2_000n * 10n ** 24n, 1_585_489_600n, 86_400n],
+  [1n, 1n, 1n, 1n, 1n, 10n ** 9n, 31_536_000n],
+  [123_456_789_012n, 987_654_321n, 456_789_012_345_678n, 3n * 10n ** 17n, 2128137606814873744509394071n, 1302065709n, 3_600n],
+]
+
+test('Morpho SDK cross-check: accrual equals MathLib.wTaylorCompounded', () => {
+  for (const [, assets, , , , rate, elapsed] of cases) {
+    assert.equal(accrue(assets, rate, elapsed), assets + MathLib.wMulDown(assets, MathLib.wTaylorCompounded(rate, elapsed)))
+  }
+  assert.equal(accrue(V.V17_verifyExample.totalBorrowAssets, V.V17_verifyExample.rate, V.V17_verifyExample.elapsed), V.V17_verifyExample.accruedAssets)
+})
+
+test('Morpho SDK cross-check: debt equals SharesMath.toAssets rounded up', () => {
+  for (const [shares, assets, totalShares] of cases) assert.equal(toAssetsUp(shares, assets, totalShares), SharesMath.toAssets(shares, assets, totalShares, 'Up'))
+})
+
+test('Morpho SDK cross-check: collateral value and LTV equal MathLib mulDivDown / mulDivUp', () => {
+  for (const [shares, assets, totalShares, collateral, price] of cases) {
+    const value = collateralValue(collateral, price)
+    assert.equal(value, MathLib.mulDivDown(collateral, price, ORACLE_PRICE_SCALE))
+    const debt = toAssetsUp(shares, assets, totalShares)
+    if (value > 0n) assert.equal(ltv(debt, value), MathLib.mulDivUp(debt, WAD, value))
+  }
+})

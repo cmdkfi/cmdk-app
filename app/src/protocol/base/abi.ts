@@ -1,7 +1,7 @@
-// Every Base ABI fragment the app uses, copied from cmdkfi/app at 47fd4fb. Each line names its source:
-// Solidity (executor/src/*.sol, executor/test/TestToken.sol), the agent's selector list (agent/src/chain.rs),
-// or, for WETH.deposit only, the team's script (scripts/rebalance_pool.py). Selectors that the protocol pins are
-// cross-checked in abi.test.mjs.
+// Base ABI fragments. Standard ABIs come from viem (erc20Abi; the OP Stack fee oracle via viem/op-stack). The
+// protocol-specific fragments are copied from cmdkfi/app at 47fd4fb, each line naming its source: Solidity
+// (executor/src/*.sol) or the agent's selector list (agent/src/chain.rs); WETH.deposit comes from the team's script.
+// Selectors that the protocol pins are cross-checked in abi.test.mjs.
 import { parseAbi } from 'viem'
 
 export const morphoAbi = parseAbi([
@@ -50,20 +50,11 @@ export const executorAbi = parseAbi([
   'event Closed(address indexed caller, bytes32 indexed market, uint256 repaid, uint256 collateralOut)',
 ])
 
-export const erc20Abi = parseAbi([
-  // executor/src/Interfaces.sol l.83-86 (IERC20)
-  'function balanceOf(address) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function transfer(address to, uint256 amount) returns (bool)',
-  // executor/test/TestToken.sol l.8 (`uint8 public constant decimals`); scripts/VERIFY.md §2 step 2 reads token decimals
-  'function decimals() view returns (uint8)',
-  // executor/test/TestToken.sol l.13
-  'event Transfer(address indexed from, address indexed to, uint256 amount)',
-])
+// Standard ERC-20 (balanceOf, allowance, transfer, decimals, Transfer event) comes from viem, not hand-typed. Its
+// transfer selector is cross-checked against the one cmdkfi/app pins (vault/src/evm.rs l.22) in abi.test.mjs.
+export { erc20Abi } from 'viem'
 
-// scripts/rebalance_pool.py l.349 (`send('wrap ETH', WETH, 'deposit()', value=amt)`). Base's WETH at
-// 0x4200000000000000000000000000000000000006 is the standard WETH9 predeploy; no Solidity in cmdkfi/app declares it.
+// Hand-rolled on purpose: viem ships no WETH ABI. scripts/rebalance_pool.py l.349 (`send('wrap ETH', WETH,
+// 'deposit()', value=amt)`). Base's WETH at 0x4200000000000000000000000000000000000006 is the standard WETH9
+// predeploy; no Solidity in cmdkfi/app declares it.
 export const wethAbi = parseAbi(['function deposit() payable'])
-
-// agent/src/chain.rs l.22, l.824-834 (`getL1Fee(bytes)` of the unsigned RLP transaction; selector 49948e0e pinned l.1012)
-export const gasPriceOracleAbi = parseAbi(['function getL1Fee(bytes) view returns (uint256)'])

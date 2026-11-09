@@ -1,4 +1,5 @@
-// Hash routes (PRD §8): five live routes, mirrored under #sandbox/….
+// Hash routes (PRD §8): five live routes, mirrored under #sandbox/…. Hand-rolled on purpose: five fixed hashes,
+// redirects and guards fit in a few lines, and a router library would not remove the guard logic (flow/entry.ts).
 // S6 close-in-progress and S7 closed are states of #position, not routes.
 export const ROUTES = ['start', 'settings', 'connect', 'progress', 'position'] as const
 export type Route = (typeof ROUTES)[number]

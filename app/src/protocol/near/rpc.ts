@@ -1,4 +1,5 @@
-// NEAR JSON-RPC reads. Request shapes follow cmdkfi/app at 47fd4fb: `call_function` with finality "final" and
+// NEAR JSON-RPC reads. Hand-rolled on purpose: the app needs three read-only `query` calls, and near-api-js would add
+// a large signing stack the browser never uses; the request shapes are small and fixed. They follow cmdkfi/app at 47fd4fb: `call_function` with finality "final" and
 // base64 JSON args (scripts/relayer.py l.162-163), `view_account` (scripts/reproduce-hash.sh l.114-125);
 // `view_access_key_list` follows the NEAR RPC documentation (the protocol repo only uses `view_access_key`).
 

@@ -156,3 +156,11 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
   - `remainingSellBudget`, re-derived in Phase 4 from `CorridorMath.remainingBudget`
   - `protectionStatus`: Phase 4 defines it from `/agent/vaults` fields only, not from the old 60-second tick rule
 
+**Phase 2b follow-up (9 Nov 2026): standard libraries where they exist.**
+- The Base L1 fee now uses viem's OP Stack `estimateL1Fee` at the manifest's GasPriceOracle address. The `getL1Fee` fragment is removed. The `WalletFunding` shape is unchanged.
+- ERC-20 uses viem's `erc20Abi`; its `transfer` selector is still checked against `vault/src/evm.rs`.
+- Units use viem `parseUnits`/`formatUnits`, behind our own validation (V8 still applies).
+- `@morpho-org/blue-sdk@8.0.1` (with `morpho-ts@4.0.1`, both three weeks old) is a test-only oracle. `math.test.mjs` cross-checks `accrue`, `toAssetsUp`, collateral value and LTV against `MathLib.wTaylorCompounded`, `MathLib.mulDivDown`/`mulDivUp` and `SharesMath.toAssets`, alongside the VERIFY.md vectors. The boundary test fails if the SDK appears in app code.
+- Hand-rolled pieces carry a comment saying why: WETH `deposit()`, NEAR view calls, hash router, step reducers.
+- Lockfile: adding the SDK changed no resolved version. It added 3 packages; pnpm also recomputed peer-context suffixes on 54 existing lines.
+

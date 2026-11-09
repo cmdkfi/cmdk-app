@@ -74,6 +74,12 @@ test('only adapters/live imports protocol/', async () => {
   assert.deepEqual(offenders, [])
 })
 
+test('the Morpho SDK is a test oracle only: no app source imports it', async () => {
+  const all = await sources('.')
+  const found = await violations(all, item => /^@morpho-org\//.test(item.spec) ? 'test-only dependency' : null)
+  assert.deepEqual(found, [])
+})
+
 test('sandbox adapter never imports live adapters, wagmi, viem or protocol code at runtime', async () => {
   const files = await sources('adapters/sandbox')
   assert.ok(files.length >= 1)

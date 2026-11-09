@@ -1,14 +1,13 @@
-// Display formatting for bigint token amounts and WAD ratios. Truncates (never rounds up) so a figure is
-// not shown larger than it is.
+// Display formatting for bigint token amounts and WAD ratios. Conversion is viem's formatUnits; the fraction is then
+// truncated (never rounded up, so a figure is not shown larger than it is) and the whole part grouped.
+import { formatUnits as viemFormatUnits } from 'viem'
 export function formatUnits(value: bigint, decimals: number, maxFraction = 4, group = true): string {
-  const negative = value < 0n
-  const abs = negative ? -value : value
-  const scale = 10n ** BigInt(decimals)
-  const whole = abs / scale
-  let fraction = (abs % scale).toString().padStart(decimals, '0').slice(0, Math.max(0, maxFraction)).replace(/0+$/, '')
-  if (decimals === 0) fraction = ''
-  const wholeText = group ? whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') : whole.toString()
-  return `${negative ? '-' : ''}${wholeText}${fraction ? `.${fraction}` : ''}`
+  const [whole, fraction = ''] = viemFormatUnits(value, decimals).split('.')
+  const negative = whole.startsWith('-')
+  const digits = negative ? whole.slice(1) : whole
+  const kept = fraction.slice(0, Math.max(0, maxFraction)).replace(/0+$/, '')
+  const wholeText = group ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : digits
+  return `${negative ? '-' : ''}${wholeText}${kept ? `.${kept}` : ''}`
 }
 
 /** WAD fraction as a percentage, e.g. 0.5e18 → "50%". */

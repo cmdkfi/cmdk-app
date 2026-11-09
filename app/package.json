@@ -23,6 +23,8 @@
     "wagmi": "^2.19.5"
   },
   "devDependencies": {
+    "@morpho-org/blue-sdk": "8.0.1",
+    "@morpho-org/morpho-ts": "4.0.1",
     "@playwright/test": "^1.65.0",
     "@types/node": "^22.20.5",
     "@types/react": "^18.3.0",

@@ -31,3 +31,8 @@
 - **Rule:** a predicate that gates a user flow (complete / missing / allowed) must cite the protocol code that enforces the same condition, not a helper from the replaced app. If none exists, ask.
 - **Also:** pin a dependency with a one-line lockfile edit and `pnpm install --frozen-lockfile`. An offline `pnpm install` re-resolved peer dependencies (500-line lockfile diff) and left `node_modules` out of step with the lockfile; check `node_modules/.pnpm/lock.yaml` against `pnpm-lock.yaml` before running checks.
 
+## 2026-11-09 — Use maintained libraries for chain plumbing (product owner, after Phase 2b)
+- **What happened:** Phase 2b hand-built the Base L1-fee call (serialize + GasPriceOracle.getL1Fee), typed an ERC-20 ABI and converted units by hand, although viem ships `publicActionsL2().estimateL1Fee`, `erc20Abi`, `parseUnits`/`formatUnits`, and Morpho publishes its math as an SDK.
+- **Rule:** check for a maintained library before writing chain plumbing (ABIs of standard tokens, fee estimation, unit conversion, reference math). Keep own code only for protocol-specific pieces (fragments copied from cmdkfi/app) or trivially small ones, and say why in a comment.
+- **Also:** a reference library can be a test oracle without becoming a runtime dependency (Morpho SDK as devDependency, kept out of app code by the boundary test).
+

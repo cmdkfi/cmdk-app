@@ -321,7 +321,7 @@ app/
 ```
 
 - **Nothing from the previous app's `src/` is imported.** Phase 1 moved twenty modules into `protocol/` unchanged; Phase 2b replaces them (§8b). Visual tokens and the font come from the same design source and are kept.
-- State: TanStack Query for polling reads, small reducers for the two step machines. No global store.
+- State: TanStack Query for polling reads, small hand-rolled reducers for the two step machines (a few explicit states each; a state-machine library would add more surface than it removes). No global store.
 - Config: `scripts/generate-config.mjs` reads `deployments/testnet.json` (fetched from cmdkfi/app main at build time) and `config.app.json`; the app never carries an address that is not in the manifest.
 - Wallet: `createConfig({ chains:[baseSepolia], connectors:[injected({ target:'metaMask' })] })`.
 - Build/deploy: `pnpm build`, `pnpm test`, `pnpm test:bundle-boundary`, `pnpm test:browser`, `wrangler deploy`; workflows unchanged. Vite is pinned to an exact version.
@@ -343,6 +343,8 @@ Decision (product owner, 9 Nov 2026): the protocol client is written fresh again
 | `protocol/wallet/tx.ts` | calldata builders: `WETH.deposit`, `WETH.transfer`, `USDC.transfer`, plain ETH value transfer | WETH9 ABI; ERC-20 |
 
 Also `protocol/base/abi.ts` holds every ABI fragment once, each line citing its source; selectors the protocol pins (`agent/src/chain.rs` l.1001-1014, `vault/src/evm.rs` l.21-22) are cross-checked by a test. `flow/` imports nothing from `protocol/`; the live adapter is its only consumer, and the `ProtocolAdapter` interface lists only what the screens use.
+
+Standard ABIs and actions come from viem where they exist (erc20Abi, OP Stack fee actions); protocol-specific fragments are copied from cmdkfi/app. Kept hand-rolled, each with a comment saying why: the WETH `deposit()` fragment (viem has no WETH ABI), the NEAR JSON-RPC view calls (three read-only calls; near-api-js would add an unused signing stack), the hash router (five fixed hashes) and the step reducers. The Morpho SDK (`@morpho-org/blue-sdk`) is a test-only oracle for the math.
 
 Rules: every exported function has a one-line comment with the cmdkfi/app path it mirrors; every ABI fragment is copied from the protocol repo's Solidity or the agent's selector list, never typed from memory; message bytes, nonce/expiry rules and math are covered by vectors ported from the previous app's tests and cross-checked against `scripts/p2_owner.py` and `scripts/VERIFY.md`.
 
