@@ -1,4 +1,42 @@
-# Protocol/frontend audit status — 2026-11-08
+# Protocol/frontend audit status — guided flow, 2026-11-09
+
+Source: cmdkfi/app `47fd4fb` (origin/main, rechecked at every phase). Branch `feat/guided-flow` replaces the cockpit with
+the guided flow of `docs/prd-guided-flow.md`; it was written from the protocol repository, not ported from the cockpit
+(lessons 9 Nov: the old code is documentation). Checks: 135 Node unit tests, 49 desktop browser scenarios against the
+controlled fixture (run three times), a production-bundle check (no fixture markers, no sandbox), and read-only live
+checks against Base Sepolia, NEAR testnet and the relayer. **No live signed rehearsal has been done yet**
+(Phase 7). "Implemented" below means source plus those checks; no failure was induced
+with a funded wallet.
+
+| Cockpit finding | In the guided flow | Why |
+|---|---|---|
+| F01 recovery | **Survives, reduced.** One pending owner intent per vault and owner (lock record); a lost job or uncertain POST is resolved from the job, the vault's `owner_nonce` and NEAR time only; a signed message is never posted twice automatically; a refusal before sending keeps the lock and re-sends only while ≥ 45 s valid (PRD FR-6). **Dropped:** raw-transaction recovery, held-transaction cancellation (`cancel`), exact-call rebroadcast, NEAR-receipt reconciliation. | Product owner, 9 Nov: the guided flow reacts to the relayer's deterministic answers instead of reconstructing raw Base transactions; FR-6 states "no raw-transaction, NEAR-receipt or cancellation handling". |
+| F02 read failures / unknown deployment | **Survives.** A failed refresh keeps the last snapshot read-only with its block and age; a snapshot from an earlier visit paints as "refreshing" and never decides an action (FR-9, §9). Markets of the vault that are not in the session's static data are read live. | — |
+| F03 quote outages | **Changed.** The oracle-independent recovery panel is dropped. S1 shows a failed oracle or IRM read as unavailable. The close does not need the oracle; it needs the IRM rate for the amount to send and pauses with the reason when the rate cannot be read. | Guided flow has one action on S5 (Close position, D3); no separate recovery panel. |
+| F04 reapproval / revoke | **Changed.** The setup signature approves the published measurement when the vault has not; a separate approve/revoke control is dropped. The verification panel shows whether the approved values equal the published manifest. | Scope of the guided flow (PRD §6, D3). |
+| F05 account eligibility | **Survives.** Contract wallets are blocked with the reason; EIP-7702 delegated accounts are allowed (product owner, Phase 2). | — |
+| F06 free funds | **Changed.** Idle WETH, USDC and ETH at the position address are shown on S5; the close repays from idle USDC first and returns WETH and leftover USDC in its last steps. Separate repay, withdraw and reopen-from-free-funds actions are dropped. | D3: one action, Close position. |
+| F07 verification | **Survives as PRD §6:** approved measurement vs published manifest, app-compose.json SHA-256 vs approved compose hash and the `/agent/` index, agent registration, limited agent key, vault code vs factory; static rows for the relayer's lack of authority and what is not checked (TDX quote, PCCS, RTMR replay). **Dropped:** boot-file browsing, transcript checks, execution verification. | PRD §6 scope (product owner, 9 Nov). Independent TDX verification remains outside the browser. |
+| F08 agent limits | **Survives.** Floor, target, trigger and the market's liquidation LTV on the S5 track; remaining daily sell budget from `Executor.soldInWindow`; backup-market status by `Executor.migrate`'s preconditions. The corridor is fixed (`config.app.json`), not editable. | Fixed rules for the testnet prototype (FR-2). |
+| F09 activity | **Changed.** Base logs only: Executor events by the position address and WETH/USDC transfers, 10,000-block windows with "Load earlier", the covered range stated, confirmed logs kept in the browser. **Dropped:** NearBlocks NEAR history, decoded owner intents, the transcript viewer. | FR-10: Base logs are the source; agent transcripts are not used for the list. |
+| F10 agent health | **Changed.** The agent card shows registration, status, key expiry and the agent's last check from `/agent/vaults`, plus the NEAR key check; no transcript-derived snapshot. Not presented as a heartbeat. | Product owner, 9 Nov: status from `/agent/vaults` fields only. |
+| F11 zero collateral with debt | **Survives.** "Position liquidated" with the remaining debt, no recovery promise, no actions. | — |
+| F12 create/setup lifecycle | **Survives.** Resumable onboarding record, setup derived from Base facts (approve always, authorize per executor, corridor where unset); **strengthened** in Phase 7: creation is guarded by a fresh ownership read before every `/create-vault` POST, and an owned vault is adopted. **Dropped:** "create another vault". | D4 (one position per wallet), D5 (an empty vault is reused). |
+| F13 identity/icons | **Changed.** The market is named live or backup with its market id prefix and the oracle feeds by name; S1 tiles use letters, not token icons. | Guided-flow design (PRD S1). |
+| F14 selected vault | **Dropped.** One vault per wallet: the newest numbered from the cutoff (10). Vaults below the cutoff (made by the cockpit) are not used. | D4 / R8 (product owner, 9 Nov). |
+| F15 review / risk navigation | **Changed.** A review sheet before the first close prompt; contextual risk actions dropped. | D3. |
+| F16 gates / scaling | **Survives, changed.** `frontend quality` runs build, unit tests, the bundle boundary and the browser scenarios. Browser coverage is desktop Chromium only (the app is not mounted below 960 px, FR-16). Reads are batched (one S5 refresh is 6 HTTP requests) and NEAR uses FastNEAR with a drpc fallback. | Mobile dropped by the product owner (Phase 1). |
+| F17 documentation | **Survives.** README rewritten for the guided flow (Phase 7). | — |
+
+### Pending
+
+- **Live signed rehearsal** on Base Sepolia with a real MetaMask (script: `tasks/rehearsal-2026-11-10.md`, Phase 7 step 3): open with 0.01 ETH, close with a faucet claim, Start over. Fixes from it come before anything else.
+- **Sandbox (Phase 6b).** Not built and not in any production build: `#sandbox/…` goes to `#start`, the stub adapter is not bundled, and the bundle check fails on any "sandbox" string. The adapter interface and the route seams stay in source behind the `VITE_SANDBOX=1` build flag. Work starts only after the rehearsal is done and its fixes are committed.
+- **Protocol paths not exercised live:** relayer refusals other than the gas check, a lost job, the R10 second transfer, migration to the backup market. They are covered by the controlled fixture only.
+
+## Historical: cockpit audit ledger — 2026-11-08 (superseded by the guided flow)
+
+Kept as evidence of what the replaced cockpit implemented and checked; the status above is current.
 
 Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (rechecked against protocol main `47fd4fb`; relevant contracts/relayer unchanged, evidence proxy added). Frontend integration includes PRs #50–#71 and the #68 follow-up. This ledger supersedes the original findings as a status report; it does not erase their historical evidence.
 
@@ -24,13 +62,13 @@ Source: cmdkfi/app at `672f1ff702b12307b1df31d10b27d9599b7765dd` (rechecked agai
 | F16 gates/scaling | PR build/TypeScript/tests (#56); obsolete demo components removed (#67); deduplicated reads, timeout/rate-limit handling (#59). Current suite: 79 Node tests and 42 desktop/mobile browser cases. | 42 controlled browser cases now cover wallet connection, recovery and Edit rules on desktop/mobile Chromium; they run before merge and deployment. Partial: this is not comprehensive cross-browser/live-extension E2E coverage. Factory enumeration is the supported protocol path (six vaults at the developer response); no owner-index API is required before the deadline. A server-side cached loop is a post-deadline optimization, not a current integration blocker. |
 | F17 documentation | README describes actual React runtime, interest, routes, transactions and test limitations (#56, #67). Planning docs found in fffilimonov/prime, not missing protocol implementation. | Planning source: docs/04-app-requirements.md Q14 in prime; keep its role separate from deployed contract authority. |
 
-## Next frontend work
+### Next frontend work (cockpit era, historical)
 
 1. Rehearse the implemented held-cancellation flow with the user when a genuine failed owner-call exists. Do not manufacture a failure or submit an unchanged intent to generate evidence. Protocol references: vault/src/lib.rs owner_call `cancel`; scripts/RELAYER.md failed/held jobs. Cancellation does not prove the original action never executed.
 2. Extend the 42-case browser suite when new protocol flows land; add WebKit/real-extension coverage separately. Controlled RPC/wallet fixtures and 79 helper tests do not replace live signed rehearsals.
 3. Rehearse changed signed flows with the user; do not submit unchanged rules merely to generate evidence.
 
-## Note for Vadim (not sent)
+### Note for Vadim (not sent, cockpit era)
 
 - Factory discovery resolved by the developer: enumeration via count and per-vault get_state is supported. There is no owner index before the deadline; a cached GET /vaults?owner= loop in the relayer is an optional post-deadline optimization.
 - Agent telemetry resolved through transcripts; no measured-agent change is required. Current source stores the chosen proposal at top level (also accept nested decision proposals). Snapshot gate checks read_errors, rpc_second_error and rpc_disagree; early failed ticks may not produce a transcript. sent or near_error is an attempt, not confirmation.

@@ -124,9 +124,8 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [ ] README and `docs/audit-status.md`: state why a labelled, isolated sandbox is acceptable after demo routes were removed.
 
 ## Phase 7 — Verification of the whole (before merge)
-- [ ] Extend `e2e/fixture.ts`: `eth_sendTransaction` (wrap, WETH/USDC transfer, ETH top-up) with receipts and balance mutation, `wallet_addEthereumChain`, 4902 on switch, faucet-credit hooks (R11).
+- Superseded: `e2e/fixture.ts` and `e2e/harness.tsx` belonged to the cockpit; the guided flow's browser fixture is `e2e/live-fixture.ts`, which covers these (wallet transactions with receipts and balance changes, add-chain and 4902, faucet credit).
 - [ ] Playwright (desktop project): happy path S1→S5 against `e2e/fixture.ts` (fake MetaMask, NEAR/Base/relayer fixtures), reload-resume at steps 2, 5, 6, rejection at each signature, relayer 400 and 404 job, close flow with and without shortfall, wallet short of USDC with faucet panel and auto-resume after the fixture credits USDC, wallet without Base Sepolia ETH with faucet panel and auto-continue, 4902 add-network prompt values, verification mismatch, desktop gate, no-MetaMask, one-click chaining (no page clicks between Create position and the position screen).
-- [ ] Update `e2e/harness.tsx` mounts for the new components; keep "unexpected request fails the test".
 - [x] Browser test of an account switch mid-onboarding (moved from Phase 3): the runner stops, re-keys the record to the new owner and prompts nothing until Continue; back on the owner, the landing table lands on S4 again.
 - [x] R10 second-transfer browser scenario (close declined, 30 days pass, Retry inserts a second transfer of exactly the new shortfall).
 - [x] Creation guarded by a fresh ownership read (product owner, step 1): discovery before every `/create-vault` POST with adoption; discovery refreshed when a run creates or adopts a vault; landing re-run on account change; S3 never overwrites a record that names a vault. Browser tests for each; PRD S4 step 1 and FR-4.
@@ -137,7 +136,7 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [ ] Live rehearsal with a wallet that owns an old-app vault: lands on S5 with correct numbers and events.
 - [ ] Copy review against README honesty constraints (PRD §1 item 15): testnet, unaudited, not insurance, no "verified" without result, submitted ≠ done.
 - [ ] Preview deploy: run `deploy testnet` via `workflow_dispatch` from `feat/guided-flow`; smoke test on testnet.cmdk.fi (CORS, config.json, fonts, one full read of an existing vault).
-- [ ] Update `README.md` navigation/transactions sections for the new flow; update `docs/audit-status.md` with what was dropped and why.
+- [x] `README.md` rewritten for the guided flow (routes and reads, open/close prompts, honesty rules, commands, RPC choice with the measurement, the vault cutoff); `docs/audit-status.md` maps every cockpit finding to survives / changed / dropped with the reason, and lists what is pending (live rehearsal, sandbox).
 - [ ] The product owner approves; merge `feat/guided-flow` → `main` (deploys automatically).
 
 ## Mockups
