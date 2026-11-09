@@ -27,8 +27,10 @@ export type EntryInput = {
   discovery: Discovery
   /** A local onboarding record exists for this wallet (Phase 3). */
   onboardingRecord: boolean
-  /** A close chain finished in this session for the active vault (Phase 5). */
+  /** A close chain finished in this session for the active vault (Phase 5): the completed close record. */
   closeRecord: boolean
+  /** A close chain is in progress for the active vault (an unfinished close record, Phase 5). */
+  closing?: boolean
 }
 
 export type ProgressStep = 'create' | 'setup' | 'deposit' | 'open' | 'withdraw'
@@ -51,6 +53,9 @@ export function landing(input: EntryInput): Resolution {
   // Never "no position" and never Create position on a failed scan.
   if (discovery.kind === 'failed') return go('start', { banner: 'discovery-failed' })
   if (discovery.kind === 'not-checked') return go('start')
+  // A close in progress stays on the position screen at every step: after `close` the WETH waiting at the position
+  // address would otherwise read as "deposited" (S4 open step).
+  if (input.closing && discovery.status !== null) return go('position', { variant: 'active' })
   // Chain state first; a local onboarding record never overrides a position the chain shows.
   switch (discovery.status) {
     case 'liquidated': return go('position', { variant: 'liquidated' })

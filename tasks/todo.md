@@ -84,13 +84,28 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [x] Browser: active position renders all cards; read failure keeps the last snapshot read-only; liquidated variant; Load earlier.
 
 ## Phase 5 — Close position (S6) and Start over (S7)
-- [ ] Shortfall computation from fresh debt (accrued) × 1.01 vs idle USDC; USDC transfer step when short.
-- [ ] Get test USDC panel (S6a, FR-17): exact missing amount, copy address, Circle faucet link with the "choose Base Sepolia" warning, CDP faucet as secondary, 10 s polling, auto-resume of the close chain.
-- [ ] `close` signature with pre-sign review sheet; confirmation by `Closed` receipt and zero borrow shares.
-- [ ] `withdraw` WETH, then leftover USDC > 0.01.
-- [ ] Close record: when the close chain finishes, write the local record that makes S5 show the closed variant (`closeRecord` input of `flow/entry.ts`); "Position closed" is never derived from a discovered vault (D5 revised, 9 Nov).
-- [ ] Start over (D5 revised): reuses the empty vault and goes to S4 at the deposit step; no `/create-vault` call. A new vault (with the 429 `Retry-After` countdown) only when the wallet owns none from the D4 cutoff.
-- [ ] Unit tests: shortfall math, step gating, close record → closed variant, Start over → deposit step on the same vault.
+- [x] S5 market card: oracle source and freshness, "Chainlink ETH/USD · updated N min ago", from the Executor's configured feeds (the R1 reads); feed names from the manifest `base.chainlink` (address, description) carried into `config.json` by the generator; "stale" past the feed's maxAge.
+- [x] Shared step-chain runner (`components/runner.ts`): the Phase 3 owner-call machinery and hook, generic over step id and record; S4 (`useOnboarding.ts`) and S6 (`useClose.ts`) are configurations of it.
+- [x] Step 1 shortfall: need(debt accrued to now + 600 s) − idle USDC, floored at 0, where need = debt + debt // 100 (relayer `REPAY_HEADROOM`, relayer.py l.72, l.516-529); wallet USDC transfer of exactly that; done when idle USDC ≥ need(debt now).
+- [x] Get test USDC panel (S6a): exact missing amount, wallet balance, copy address, Circle faucet first with the "choose Base Sepolia" warning, Coinbase faucet second, headroom reminder, 10 s re-read, the chain resumes by itself.
+- [x] R10: debt re-read immediately before the close signature; if idle USDC < need(debt now), a second transfer step is inserted (shown only then) instead of failing.
+- [x] `close {market}`: one owner call per market holding debt or collateral; done = job done, receipts at 2 confirmations, Morpho borrowShares 0 and collateral 0 for that market.
+- [x] `withdraw` WETH when idle WETH > 0; `withdraw` USDC when idle USDC > usdcDust; each done when its job is done and the idle balance is gone.
+- [x] Review sheet before the first prompt: debt, interest over the next 10 minutes, headroom, USDC already there, what is sent first, collateral returned, destination, "each signature expires in 10 minutes", no close without repaying. S5 sub-line under Close position (PRD S5).
+- [x] Close record `cmdk.<mode>.close.v1.<factory>:<owner>:<vault>` with per-step state, written on every change; completed → the closed marker (`closeRecord`); an unfinished one keeps the resolver on S5 at every step (`closing`); the onboarding record for that vault is cleared on completion.
+- [x] S7 closed variant: debt 0, collateral 0, idle balances, Start over only when debt, collateral and idle WETH are zero and idle USDC ≤ usdcDust. Start over clears the close record, resets the S1 amount to 0.01 ETH and goes to `#start`; S3 shows the vault "ready for a deposit" with a **Deposit** button; S4 resumes at the wrap step on the same vault (no `/create-vault`).
+- [x] Unit tests: shortfall math with the 600 s accrual, R10 rule, wallet missing amount, close record steps and storage, Start over gating, closing/closed resolution, relayer need and debt-ahead math, manifest feed names.
+- [x] Browser: review sheet content; close with no shortfall; close with shortfall and enough wallet USDC; wallet short → panel → fixture credit → auto-resume; reload mid-close (stays on S5, no prompt until Continue); Start over → S4 wrap step on the same vault.
+
+## Phase 5b — Performance pass (PRD §9 "Reads and caching"; product owner, 9 Nov)
+Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short dedicated pass before Phase 7, because they change what the first tester sees.
+- [ ] 1. Batch reads: `createPublicClient({ batch: { multicall: true } })` with `http(url, { batch: true })`; keep pinned `blockNumber` on every read; verify in the fixture that one refresh is ≤ 6 RPC requests and that Multicall3 is viem's `baseSepolia.contracts.multicall3`.
+- [ ] 2. Static data once per session: params, decimals, LLTV, Executor config (feeds, maxAges), factory config in a query with `staleTime: Infinity`; the 30 s poll reads only moving data. Unit test that a refresh issues no static reads.
+- [ ] 3. Activity: one `eth_getLogs` per window with the address array and client-side topic filtering; persist decoded events and block timestamps per position address (immutable once ≥ 2 confirmations); on return fetch only last-cached-block+1 → head. Browser test: second load shows the list instantly and requests one window only.
+- [ ] 4. Persist the last position snapshot per vault (TanStack Query persister, localStorage, key includes kind+owner+vault); render it immediately on return with "read at block N, X min ago · refreshing"; never use it for a decision. Browser test: reload shows the cached snapshot with its age before the live read lands.
+- [ ] 5. Cache the owned vault id per owner; verify with one `get_state`; scan only when the cached vault no longer matches the owner. Unit test for the mismatch path.
+- [ ] 6. Share the NEAR `get_state` read between position and agent queries.
+- [ ] Measure before/after on the live RPC (requests per refresh, time to first full S5) and record both in the Review note.
 
 ## Phase 6 — Verification panel
 - [ ] Checklist rows per PRD §6 using `measurementMatches`, `evidenceIndex`, `readBootFile` (app-compose.json SHA-256), `/agent/vaults`, `readNearSecurity`; manifest fetched from raw GitHub with `sourceCommit` shown; `Unavailable` on fetch failure. Nothing else from `agent-evidence.ts` (no transcripts, no execution verification).
@@ -198,4 +213,15 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
 - *Fixture:* head block, block timestamps per number, `eth_getLogs` filtered by address/topics/range (refuses windows over 10,000 blocks), `soldInWindow`, `closedForAgent`, `/agent/vaults` rows, a Base outage knob.
 - *Differences from PRD S5, by the Phase 4 scope:* recent actions cover block windows (10,000 per step) rather than "last 20 events"; the market card does not show the oracle source; the closed variant's Start over is Phase 5.
 - *Results:* typecheck, 112/112 unit tests, build, bundle boundary, 31/31 Playwright desktop; the 4 S5 scenarios also passed 3× repeated.
+
+**Phase 5 (9 Nov 2026, cmdkfi/app still `47fd4fb`).** `git diff HEAD -- docs tasks` at start showed your PRD S5 update (block windows, Transfer label, no market-id explorer link, migration rule, oracle source and freshness). During the phase you added PRD §9 "Reads and caching" and the todo "Phase 5b — Performance pass" on disk (found by the diff before this note); they are not started here and wait for "start Phase 5b".
+- *Oracle line (first item):* `guided-values.mjs` now carries `base.chainlink` (address, description) from `deployments/testnet.json` into `config.json`; the market card matches the Executor's configured feeds by address. Live read at block 56650232: ETH / USD (maxAge 1200 s, updated 277 s before the block) and USDC / USD (maxAge 86400 s).
+- *Runner:* the Phase 3 owner-call machinery (prompt, receipts, job polling, lock reconciliation, refusal top-up, Retry) moved unchanged into `components/runner.ts`, generic over step id and record; the 8 onboarding scenarios passed on it before any close code ran, and 3× afterwards.
+- *Adapter method:* `readClosePlan(app, vaultId, owner)` (relayer.py l.72 and l.516-529 for the need; Morpho accrual via `base/math.debtAt`; Executor.close l.226-240 for what is pulled). Intents extended: `close {market}` (vault/src/lib.rs l.356-359, `closeArgs`), `withdraw` with token WETH or USDC (lib.rs l.360-368), wallet `transfer` with token USDC. `VaultView.markets` carries `borrowShares`; `PositionMarket.feeds` carries the feed names. No new ABI fragment.
+- *New math:* `repayNeed` (debt + debt // 100) and `debtAt` (shares at Morpho totals accrued to a given time).
+- *Resolver:* `closing` (unfinished close record) keeps S5 at every step: after `close` the WETH waiting at the position address would otherwise read as "deposited" (S4 open step).
+- *Fixture:* the relayer's close precheck with its exact refusal text, close/withdraw-by-token effects, USDC wallet transfers, manifest feed names.
+- *Differences from PRD S7, by your Phase 5 decision:* Start over goes to `#start` with 0.01 ETH and then through S3 ("Deposit") to S4 at the wrap step; the PRD S7 line still says "S4 at the deposit step (choose the amount there)". Not edited.
+- *Not covered by a browser test:* the R10 second transfer (unit-tested only) and the relayer's close refusal (the fixture has it; no scenario reaches it because the shortfall always covers the need).
+- *Results:* typecheck, 121/121 unit tests, build, bundle boundary, 37/37 Playwright desktop; close and onboarding specs 3× repeated (42/42).
 

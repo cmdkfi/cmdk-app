@@ -118,6 +118,11 @@ export type SnapshotMarket = {
   loanDecimals: number
   collateralDecimals: number
   price: bigint | null
+  /** Morpho totals and the IRM rate at the read block (null rate: the IRM read failed); for accrual ahead (close). */
+  totals: Totals
+  borrowRate: bigint | null
+  /** The Executor's configured Chainlink feeds for this market (Executor.config feeds/maxAges, l.15-20). */
+  feeds: MarketRead['feeds']
 }
 
 /** Remaining daily sell budget of one executor and collateral token (Executor._activeCollateral + CorridorMath.remainingBudget). */
@@ -161,6 +166,7 @@ export async function readVaultSnapshot(client: PublicClient, state: VaultState,
       ltv: value === null ? null : ltv(debt, value), lltv: market.params.lltv,
       corridor: { target: corridor[0], act: corridor[1], floor: corridor[2], sellBudget: corridor[3], migrateAllowed: corridor[4], exitAllowed: corridor[5], set: corridor[6] },
       closedForAgent: closed, collateralToken: market.params.collateralToken, loanDecimals: market.loanDecimals, collateralDecimals: market.collateralDecimals, price: market.price,
+      totals: market.totals, borrowRate: market.borrowRate, feeds: market.feeds,
     }
     const fact: SetupFact = { market: vm.id, executor: vm.executor, authorized, loanAllowance, collateralAllowance, corridorSet: corridor[6], lltv: market.params.lltv }
     return { snapshot, fact }

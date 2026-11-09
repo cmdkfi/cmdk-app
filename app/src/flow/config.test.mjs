@@ -6,7 +6,7 @@ import { guidedValues } from '../../scripts/guided-values.mjs'
 import { parseConfig } from './config.ts'
 
 const appValues = JSON.parse(await readFile(new URL('../../config.app.json', import.meta.url), 'utf8'))
-const deployment = { base: { morpho: '0x' + '55'.repeat(20), executorDeployBlock: 54354973, gasPriceOracle: '0x420000000000000000000000000000000000000F', tokens: { weth: '0x4200000000000000000000000000000000000006', usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' } } }
+const deployment = { base: { morpho: '0x' + '55'.repeat(20), executorDeployBlock: 54354973, gasPriceOracle: '0x420000000000000000000000000000000000000F', tokens: { weth: '0x4200000000000000000000000000000000000006', usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' }, chainlink: { ethUsd: { address: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1', description: 'ETH / USD', maxAgeSeconds: 1200 }, _comment: 'x' } } }
 const clone = value => JSON.parse(JSON.stringify(value))
 const measurement = { mrtd: 'ab'.repeat(48), rtmr0: 'bc'.repeat(48), rtmr1: 'cd'.repeat(48), rtmr2: 'de'.repeat(48), compose_hash: 'ef'.repeat(32), os_image_hash: 'fa'.repeat(32) }
 const market = id => ({ id, loan_token: deployment.base.tokens.usdc, collateral_token: deployment.base.tokens.weth, executor: '0x' + '44'.repeat(20), slice_max: '1000000000' })
@@ -72,4 +72,10 @@ test('V29: the wrong network or a missing deployment refuses the whole config', 
   assert.throws(() => parseConfig({ ...generated(), guided: null }), /guided/)
   assert.throws(() => parseConfig({ ...generated(), agent: { measurement: null } }), /measurement/)
   assert.throws(() => parseConfig({ ...generated(), relayerUrl: 'http://relayer' }), /https/)
+})
+
+test('feed names come from the manifest base.chainlink; a manifest without them is refused', () => {
+  assert.deepEqual(guidedValues(appValues, deployment).base.feeds, [{ address: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1', description: 'ETH / USD' }])
+  assert.throws(() => guidedValues(appValues, { base: { ...deployment.base, chainlink: { _comment: 'x' } } }), /chainlink lists no feeds/)
+  assert.throws(() => guidedValues(appValues, { base: { ...deployment.base, chainlink: { ethUsd: { address: '0x12' } } } }), /needs address and description/)
 })

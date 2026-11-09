@@ -14,7 +14,7 @@ export type AppConfig = {
   guided: { corridor: Corridor; minDepositEth: string; messageExpirySecs: number; walletTxGasLimit: number; usdcDust: string; firstVaultNumber: number }
   network: AddChainParams
   help: { metamaskInstall: string; connectingToBase: string; nearblocks: string; ethFaucets: HelpLink[]; usdcFaucets: HelpLink[] }
-  base: { morpho: Hex; weth: Hex; usdc: Hex; gasPriceOracle: Hex; executorDeployBlock: number }
+  base: { morpho: Hex; weth: Hex; usdc: Hex; gasPriceOracle: Hex; executorDeployBlock: number; feeds: { address: Hex; description: string }[] }
   baseChainId: number
   nearNetwork: string
   nearRpcUrl: string
@@ -69,7 +69,8 @@ export function parseConfig(value: unknown): LoadedConfig {
     || cv.markets.some(x => !ID.test(x.id) || ![x.loan_token, x.collateral_token, x.executor].every(a => ADDRESS.test(a)) || !/^\d+$/.test(x.slice_max))) fail('no vault policy')
   const g = c.guided
   if (!g || !g.corridor || typeof g.minDepositEth !== 'string' || !Number.isInteger(g.messageExpirySecs) || !Number.isInteger(g.walletTxGasLimit) || !/^\d+$/.test(g.usdcDust ?? '') || !Number.isInteger(g.firstVaultNumber) || g.firstVaultNumber < 1) fail('no guided block')
-  if (!c.base || ![c.base.morpho, c.base.weth, c.base.usdc, c.base.gasPriceOracle].every(a => ADDRESS.test(a ?? '')) || !Number.isInteger(c.base.executorDeployBlock)) fail('no Base addresses')
+  if (!c.base || ![c.base.morpho, c.base.weth, c.base.usdc, c.base.gasPriceOracle].every(a => ADDRESS.test(a ?? '')) || !Number.isInteger(c.base.executorDeployBlock)
+    || !Array.isArray(c.base.feeds) || c.base.feeds.length === 0 || c.base.feeds.some(f => !ADDRESS.test(f?.address ?? '') || typeof f.description !== 'string' || !f.description)) fail('no Base addresses')
   if (!c.network || c.network.chainId !== '0x14a34' || !c.network.rpcUrls?.every(u => HTTPS.test(u)) || !c.network.blockExplorerUrls?.every(u => HTTPS.test(u))) fail('no Base Sepolia network entry')
   if (!c.help || ![c.help.metamaskInstall, c.help.connectingToBase, c.help.nearblocks, ...(c.help.ethFaucets ?? []).map(l => l.url), ...(c.help.usdcFaucets ?? []).map(l => l.url)].every(u => HTTPS.test(u ?? ''))) fail('help links must be https')
   const minDepositWei = parseDecimal(g.minDepositEth, 18)

@@ -1,19 +1,54 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { Address } from 'viem'
 import { useWalletState } from '../adapters/AdapterProvider.tsx'
-import type { PositionMarket, PositionView } from '../adapters/types.ts'
-import { useActivity, useAgent, useAppConfig, useDiscovery, usePosition } from '../components/data.ts'
+import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
+import { useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
+import { StepRow } from '../components/StepRow.tsx'
+import { useClose, type Close } from '../components/useClose.ts'
 import { useNow } from '../components/use-now.ts'
+import { DEFAULT_DEPOSIT } from '../flow/amount.ts'
+import { closeShortfall, newCloseRecord, startOverAllowed, visibleCloseSteps, type CloseStepId } from '../flow/close.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
+import { clearCloseRecord } from '../flow/onboarding-record.ts'
 import { agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from '../flow/position.ts'
-import { Unavailable } from './common.tsx'
+import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
+
+const BASE_SEPOLIA = 84532
 
 const usdc = (v: bigint) => `${formatUnits(v, 6, 2)} USDC`
 const weth = (v: bigint) => `${formatUnits(v, 18, 6)} WETH`
 const pctNum = (wad: bigint) => Number(wad * 10_000n / 10n ** 18n) / 100
 const ago = (seconds: number) => (seconds < 90 ? `${Math.max(0, Math.round(seconds))} s ago` : seconds < 5400 ? `${Math.round(seconds / 60)} min ago` : `${Math.round(seconds / 3600)} h ago`)
 const date = (secs: number | bigint) => new Date(Number(secs) * 1000).toLocaleString()
+const usdcExact = (v: bigint) => `${formatUnits(v, 6, 6)} USDC`
+
+const CLOSE_TITLE: Record<CloseStepId, string> = {
+  transfer: 'Send USDC to your position address',
+  transfer2: 'Send USDC to your position address (second transfer)',
+  close: 'Close position',
+  withdrawWeth: 'Return WETH to your wallet',
+  withdrawUsdc: 'Return leftover USDC',
+}
+
+const CLOSE_WHY: Record<CloseStepId, string> = {
+  transfer: 'The debt is repaid from USDC at your position address. The amount covers interest for the next 10 minutes plus the relayer\'s 1% headroom; the headroom comes back in the last step.',
+  transfer2: 'Interest accrued since the first transfer, so the position address holds less than the debt plus 1% the relayer requires before it sends the close.',
+  close: 'One signature repays the whole debt and releases all collateral in one Base transaction. There is no close without repaying.',
+  withdrawWeth: 'The released WETH sits at your position address; one signature sends it to your wallet.',
+  withdrawUsdc: 'USDC left above 0.01 (mostly the 1% headroom) goes back to your wallet.',
+}
+
+/** The Executor's configured feeds for the oracle line: "Chainlink ETH/USD · updated N min ago" (PRD S5). */
+function OracleLine({ market, chainNow }: { market: PositionMarket; chainNow: number }) {
+  if (market.feeds.length === 0) return <Unavailable>no feed configured</Unavailable>
+  return <>{market.feeds.map((f, index) => {
+    const name = f.description ? `Chainlink ${f.description.replace(/\s*\/\s*/g, '/')}` : `Feed ${shortAddress(f.address)}`
+    const age = f.updatedAt === null ? null : chainNow - Number(f.updatedAt)
+    return <span key={f.address} className="oracle-line">{index > 0 && ' · '}{name} · {age === null ? <Unavailable>update time unavailable</Unavailable> : `updated ${ago(age)}`}{age !== null && age > f.maxAge ? ' · stale' : ''}</span>
+  })}</>
+}
 
 /** LTV with the segmented track: floor, target, trigger from the Base corridor; liquidation from the market's LLTV. */
 function LtvTrack({ m }: { m: PositionMarket }) {
@@ -57,7 +92,7 @@ function AgentCard({ vaultId, market, view, now }: { vaultId: string; market: Po
   </section>
 }
 
-function MarketCard({ app, view, market }: { app: LoadedConfig; view: PositionView; market: PositionMarket | null }) {
+function MarketCard({ app, view, market, chainNow }: { app: LoadedConfig; view: PositionView; market: PositionMarket | null; chainNow: number }) {
   const explorer = app.guided.network.blockExplorerUrls[0].replace(/\/$/, '')
   const nearblocks = app.guided.help.nearblocks.replace(/\/$/, '')
   const labels = app.config.marketLabels
@@ -69,6 +104,7 @@ function MarketCard({ app, view, market }: { app: LoadedConfig; view: PositionVi
     <dl className="card-s5__facts">
       <div><dt>Market</dt><dd>Morpho · USDC/WETH on Base Sepolia · {role ?? <Unavailable />}</dd></div>
       {market && <div><dt>Liquidation LTV</dt><dd>{formatWadPercent(market.lltv)}</dd></div>}
+      {market && <div><dt>Oracle</dt><dd><OracleLine market={market} chainNow={chainNow} /></dd></div>}
       {market && <div><dt>Market id</dt><dd><code title={market.id}>{market.id.slice(0, 10)}…{market.id.slice(-6)}</code> · <a href={`${explorer}/address/${view.morpho}`} target="_blank" rel="noreferrer">Morpho</a> · <a href={`${explorer}/address/${market.executor}`} target="_blank" rel="noreferrer">Executor</a></dd></div>}
       <div><dt>Backup market</dt><dd>{BACKUP_TEXT[backup]}</dd></div>
       <div><dt>Position address</dt><dd><a href={`${explorer}/address/${view.vault.baseAddress}`} target="_blank" rel="noreferrer">{shortAddress(view.vault.baseAddress)}</a></dd></div>
@@ -101,7 +137,78 @@ function RecentActions({ app, view, owner }: { app: LoadedConfig; view: Position
   </section>
 }
 
-export function Position({ variant: routeVariant, discovery }: { variant?: PositionVariant; discovery: ReturnType<typeof useDiscovery> }) {
+/** S6a: the wallet lacks test USDC for the shortfall; the close chain re-reads every 10 s and continues by itself. */
+function GetUsdc({ app, address, funding, now }: { app: LoadedConfig; address: Address; funding: NonNullable<Close['record']>['steps']['transfer']['funding']; now: number }) {
+  const [copied, setCopied] = useState(false)
+  if (!funding) return null
+  const [circle, ...others] = app.guided.help.usdcFaucets
+  return <section className="help-panel prototype-surface" aria-labelledby="get-usdc-title">
+    <div className="help-panel__head">
+      <h2 id="get-usdc-title">Get test USDC</h2>
+      <span className="help-panel__missing">{usdcExact(BigInt(funding.missing))} missing</span>
+    </div>
+    <dl className="card-s5__facts">
+      <div><dt>To send to your position address</dt><dd>{usdcExact(BigInt(funding.shortfall))}</dd></div>
+      <div><dt>USDC in your wallet</dt><dd>{usdcExact(BigInt(funding.wallet))}</dd></div>
+      <div><dt>Missing</dt><dd><strong>{usdcExact(BigInt(funding.missing))}</strong></dd></div>
+    </dl>
+    <div className="help-panel__address"><code>{address}</code>
+      <button type="button" className="prototype-button" onClick={() => { void navigator.clipboard?.writeText(address).then(() => setCopied(true), () => undefined) }}>{copied ? 'Copied' : 'Copy'}</button>
+    </div>
+    <p>Test USDC is free from Circle's faucet. Choose <strong>Base Sepolia</strong> in the network dropdown; USDC sent on another network cannot reach this wallet.</p>
+    <ul className="help-panel__links">
+      {circle && <li><a className="prototype-button is-primary" href={circle.url} target="_blank" rel="noreferrer">{circle.label}</a></li>}
+      {others.map(link => <li key={link.url}><a href={link.url} target="_blank" rel="noreferrer">{link.label}</a> <span>— {link.note}</span></li>)}
+    </ul>
+    <p className="help-panel__small">The 1% headroom comes back to your wallet as leftover USDC in the last close step.</p>
+    <p className="help-panel__small" role="status">Checking every 10 seconds; the close continues by itself. Last checked {Math.max(0, Math.round(now - funding.checkedAt / 1000))} s ago.</p>
+  </section>
+}
+
+/** The pre-sign review sheet (PRD S6): what closing repays, sends and returns, before the first prompt. */
+function ReviewSheet({ app, plan, owner, onStart, onCancel }: { app: LoadedConfig; plan: ClosePlan; owner: Address; onStart: () => void; onCancel: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => { const d = ref.current; if (d && !d.open) d.showModal() }, [])
+  const shortfall = closeShortfall(plan)
+  const minutes = Math.round(app.guided.messageExpirySecs / 60)
+  return <dialog ref={ref} className="sheet prototype-surface" aria-labelledby="review-title" onCancel={event => { event.preventDefault(); onCancel() }}>
+    <h2 id="review-title">Close your position</h2>
+    <dl className="card-s5__facts">
+      <div><dt>Debt now</dt><dd>{usdcExact(plan.debtNow)} <small>accrued to block {plan.blockNumber.toString()}</small></dd></div>
+      <div><dt>Interest over the next {minutes} minutes</dt><dd>up to {usdcExact(plan.debtAhead - plan.debtNow)}</dd></div>
+      <div><dt>Headroom (1%, returned to you)</dt><dd>{usdcExact(plan.needAhead - plan.debtAhead)}</dd></div>
+      <div><dt>USDC already at your position address</dt><dd>{usdcExact(plan.idle.usdc)}</dd></div>
+      <div><dt>You send first</dt><dd>{shortfall > 0n ? `${usdcExact(shortfall)} from your wallet to your position address` : 'Nothing: your position address already holds the debt plus 1%'}</dd></div>
+      <div><dt>Collateral returned</dt><dd>{weth(plan.collateral + plan.idle.weth)}</dd></div>
+      <div><dt>Destination</dt><dd><code>{owner}</code> (your wallet)</dd></div>
+    </dl>
+    <p>Each signature expires in {minutes} minutes.</p>
+    <p>The protocol has no close without repaying: the whole debt is repaid before your WETH is released.</p>
+    <div className="screen__actions">
+      <button type="button" className="prototype-button is-primary" onClick={onStart}>Start closing</button>
+      <button type="button" className="prototype-button" onClick={onCancel}>Cancel</button>
+    </div>
+  </dialog>
+}
+
+function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; close: Close; owner: Address; explorer: string; now: number }) {
+  const r = close.record!
+  const ids = visibleCloseSteps(r)
+  const active = ids.find(id => r.steps[id].status !== 'done' && r.steps[id].status !== 'skipped')
+  const canContinue = !close.running && !!active && r.steps[active].status === 'waiting'
+  const funding = active && r.steps[active].status === 'funding' ? r.steps[active].funding : undefined
+  return <section className="card-s5 card-s5--wide prototype-surface" aria-labelledby="closing-title">
+    <h2 id="closing-title">Closing your position</h2>
+    <p className="screen__note">Every signature and transaction is requested in order; you only act inside MetaMask.</p>
+    <ol className="steps">
+      {ids.map((id, index) => <StepRow key={id} title={CLOSE_TITLE[id]} why={CLOSE_WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => close.act(id, kind)} />)}
+    </ol>
+    {funding && <GetUsdc app={app} address={owner} funding={funding} now={now} />}
+    {canContinue && <div className="screen__actions"><button type="button" className="prototype-button is-primary" onClick={close.start}>Continue</button></div>}
+  </section>
+}
+
+export function Position({ mode, href, variant: routeVariant, discovery }: Omit<ScreenProps, 'banner'> & { variant?: PositionVariant; discovery: ReturnType<typeof useDiscovery> }) {
   const app = useAppConfig().data
   const wallet = useWalletState()
   const now = useNow()
@@ -109,6 +216,14 @@ export function Position({ variant: routeVariant, discovery }: { variant?: Posit
   const position = usePosition(vaultId)
   const view = position.data
   const owner = wallet.status === 'connected' ? wallet.address : undefined
+  const chainOk = wallet.status === 'connected' && wallet.chainId === BASE_SEPOLIA
+  const summary = discovery.result?.summary
+  const closeVault = summary ? { accountId: summary.vault.accountId, number: summary.vault.number, baseAddress: summary.vault.baseAddress } : undefined
+  const close = useClose(mode, app, owner, chainOk, closeVault, () => undefined)
+  const closing = !!close.record && !close.record.completed
+  const [review, setReview] = useState(false)
+  const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed' && !closing)
+  const [, setAmount] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
 
   if (!app || !vaultId) return <section className="screen" aria-labelledby="screen-title"><h1 id="screen-title">Your position</h1><p className="screen__note" role="status">Reading your vault…</p></section>
   if (!view) {
@@ -120,7 +235,8 @@ export function Position({ variant: routeVariant, discovery }: { variant?: Posit
     </section>
   }
 
-  const variant = positionVariant(view, routeVariant === 'closed')
+  // 'closed' comes only from the resolver, which requires this session's completed close record (D5)
+  const variant = closing ? 'active' : positionVariant(view, routeVariant === 'closed')
   const market = currentMarket(view, app.guided.liveMarket.id)
   const debt = view.markets.reduce((sum, m) => sum + m.debt, 0n)
   const collateral = view.markets.reduce((sum, m) => sum + m.collateral, 0n)
@@ -130,6 +246,33 @@ export function Position({ variant: routeVariant, discovery }: { variant?: Posit
   const idle = view.idle
   // USDC below guided.usdcDust is repay rounding (config.app.json), not a balance to report
   const showIdle = idle.weth > 0n || idle.usdc > app.guided.usdcDust || idle.eth > 0n
+  const explorer = app.guided.network.blockExplorerUrls[0].replace(/\/$/, '')
+  const chainNow = Number(view.blockTime) + (now - position.dataUpdatedAt / 1000)
+
+  // Close position (PRD S5 action, S6): enabled only with a fresh snapshot, the owner on Base Sepolia and a plan read.
+  let closeReason: string | null = null
+  if (!owner || !chainOk) closeReason = 'Connect the vault owner on Base Sepolia to close.'
+  else if (stale) closeReason = 'The latest read failed; closing waits for a fresh one.'
+  else if (plan.isError) closeReason = 'The amount to repay could not be read. Retrying every 30 s.'
+  else if (!plan.data) closeReason = 'Reading the amount to repay…'
+  const shortfall = plan.data ? closeShortfall(plan.data) : null
+  const closeLine = plan.data && shortfall !== null
+    ? shortfall === 0n
+      ? `Repays ${usdc(plan.data.debtNow)} held at your position address, returns your WETH to your wallet.`
+      : `You will first send ${usdcExact(shortfall)} to your position address, then the debt is repaid and your WETH returns to your wallet.`
+    : null
+  const startClosing = () => {
+    if (!app || !owner || !closeVault) return
+    setReview(false)
+    close.begin(newCloseRecord({ factory: app.config.near.factory, owner, vault: closeVault, now: Date.now() }))
+  }
+  const startOver = () => {
+    if (!owner) return
+    clearCloseRecord(mode, app.config.near.factory, owner, vaultId)
+    setAmount(DEFAULT_DEPOSIT[mode])
+    window.location.hash = href('start')
+  }
+  const canStartOver = startOverAllowed(view, app.guided.usdcDust)
 
   return <section className={`screen screen--wide position${stale ? ' position--stale' : ''}`} aria-labelledby="screen-title">
     <h1 id="screen-title">{variant === 'liquidated' ? 'Position liquidated' : variant === 'closed' ? 'Position closed' : 'Your position'}</h1>
@@ -147,13 +290,21 @@ export function Position({ variant: routeVariant, discovery }: { variant?: Posit
 
     <div className="cards-s5">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} />
-      <MarketCard app={app} view={view} market={market} />
+      <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </div>
+    {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} />}
     {owner && <RecentActions app={app} view={view} owner={owner} />}
 
-    {variant === 'active' && <div className="create-action">
-      <button type="button" className="prototype-button is-primary" disabled aria-describedby="close-reason">Close position</button>
-      <p id="close-reason">Closing arrives in Phase 5.</p>
+    {variant === 'active' && !closing && <div className="create-action">
+      <button type="button" className="prototype-button is-primary" disabled={closeReason !== null} aria-describedby="close-reason" onClick={() => { void plan.refetch(); setReview(true) }}>Close position</button>
+      <p id="close-reason">{closeReason ?? closeLine}</p>
+    </div>}
+    {review && plan.data && owner && <ReviewSheet app={app} plan={plan.data} owner={owner} onStart={startClosing} onCancel={() => setReview(false)} />}
+    {variant === 'closed' && <div className="create-action">
+      {canStartOver
+        ? <button type="button" className="prototype-button is-primary" onClick={startOver}>Start over</button>
+        : <p>Start over appears once your position address holds no WETH and no more than 0.01 USDC.</p>}
+      <p className="create-action__small">Start over reuses this vault: no new vault is created.</p>
     </div>}
     <p className="screen__note">Testnet prototype, unaudited. Protection is risk management, not insurance.</p>
   </section>

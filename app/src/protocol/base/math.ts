@@ -123,3 +123,24 @@ export function remainingSellBudget(activeCollateral: bigint, soldInWindow: bigi
   return limit > soldInWindow ? limit - soldInWindow : 0n
 }
 
+/** scripts/relayer.py l.72 `REPAY_HEADROOM = 100`: close and repay need debt plus 1/100 at the position address. */
+export const REPAY_HEADROOM = 100n
+
+/**
+ * What the relayer requires at the position address before it sends `close`: debt + debt // 100, integer division
+ * (scripts/relayer.py l.516-529 `check_flags`). The Executor then pulls the debt accrued at execution (Executor.close
+ * l.226-240: accrueInterest, repay all shares).
+ */
+export function repayNeed(debt: bigint): bigint {
+  return debt + debt / REPAY_HEADROOM
+}
+
+/**
+ * Debt of `shares` once Morpho has accrued interest up to `at` (unix seconds): totalBorrowAssets grows by
+ * wTaylorCompounded(rate, at − lastUpdate) (Morpho `_accrueInterest`), then shares convert rounding up (`toAssetsUp`).
+ */
+export function debtAt(shares: bigint, totals: { totalBorrowAssets: bigint; totalBorrowShares: bigint; lastUpdate: bigint }, ratePerSecond: bigint, at: bigint): bigint {
+  const elapsed = at > totals.lastUpdate ? at - totals.lastUpdate : 0n
+  return toAssetsUp(shares, accrue(totals.totalBorrowAssets, ratePerSecond, elapsed), totals.totalBorrowShares)
+}
+

@@ -53,6 +53,8 @@ test('active position: hero, agent, market, idle line and recent actions render 
   // market card
   await expect(fact(page, 'Market', 'Market')).toHaveText('Morpho · USDC/WETH on Base Sepolia · live')
   await expect(fact(page, 'Market', 'Liquidation LTV')).toHaveText('86%')
+  // oracle source and freshness from the Executor's configured feed (named by the manifest's base.chainlink)
+  await expect(fact(page, 'Market', 'Oracle')).toHaveText(/^Chainlink ETH\/USD · updated \d+ s ago$/)
   await expect(fact(page, 'Market', 'Market id')).toContainText(`${LIVE.slice(0, 10)}…${LIVE.slice(-6)}`)
   await expect(fact(page, 'Market', 'Market id').getByRole('link', { name: 'Executor' })).toHaveAttribute('href', `https://sepolia.basescan.org/address/${EXECUTOR}`)
   await expect(fact(page, 'Market', 'Backup market')).toHaveText('Approved for migration')
@@ -69,9 +71,9 @@ test('active position: hero, agent, market, idle line and recent actions render 
   await expect(rows.nth(0).getByRole('link', { name: 'BaseScan' })).toHaveAttribute('href', `https://sepolia.basescan.org/tx/${fx.logs[2].transactionHash}`)
   await expect(card(page, 'Recent actions').getByText('Blocks 1–100 (since the Executor was deployed)')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Load earlier' })).toHaveCount(0)
-  // the only action is present but disabled, with the reason
-  await expect(page.getByRole('button', { name: 'Close position' })).toBeDisabled()
-  await expect(page.getByText('Closing arrives in Phase 5.')).toBeVisible()
+  // the only action: Close position, with what it will do (no USDC idle, wallet has none: a transfer comes first)
+  await expect(page.getByRole('button', { name: 'Close position' })).toBeEnabled()
+  await expect(page.locator('#close-reason')).toHaveText(/^You will first send 161\.6\d+ USDC to your position address, then the debt is repaid and your WETH returns to your wallet\.$/)
   expect(fx.ethCalls).toEqual(expect.arrayContaining(['soldInWindow', 'closedForAgent']))
   expect(fx.signs).toEqual([]); expect(fx.posts).toEqual([]); expect(fx.txs).toEqual([])
 })

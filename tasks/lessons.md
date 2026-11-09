@@ -47,3 +47,8 @@
 - **Rule:** a displayed status ("approved", "active", "budget left") is derived from the full precondition of the contract call it describes, with the line cited, and has a unit test per precondition.
 - **Rule:** user-facing copy comes from the PRD or the scope message; do not add explanatory sentences or thresholds of my own.
 
+## 2026-11-09 — Phase 5: a second flow on the same machinery is an extraction first, proven by the old tests
+- **What happened:** close needed exactly the Phase 3 owner-call machinery (lock, nonce reconciliation, refusal top-up, Retry). I moved it unchanged into a generic runner and ran the 8 onboarding scenarios on it before writing any close code; only then did close use it. A copy would have meant two places to fix the next FR-6 change.
+- **Rule:** when a second flow needs the same safety machinery, extract it first, prove the extraction with the first flow's existing tests, then build the second flow on it. No copy-and-adapt of safety code.
+- **Rule:** a multi-step chain whose intermediate chain states classify as another screen's state (WETH idle after `close` reads as "deposited") needs its in-progress record in the entry resolver, with a reload test at such an intermediate step.
+

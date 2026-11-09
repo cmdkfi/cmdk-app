@@ -91,3 +91,10 @@ export function useActivity(positionAddress: Address | undefined) {
   })
 }
 
+/** S6 close plan (debt now and 10 min ahead, the relayer's 1% headroom, idle and wallet USDC); every 30 s while shown. */
+export function useClosePlan(vaultId: string | undefined, owner: Address | undefined, enabled: boolean) {
+  const { protocol, kind } = useAdapters()
+  const app = useAppConfig().data
+  return useQuery({ queryKey: ['close-plan', kind, vaultId ?? null, owner?.toLowerCase() ?? null], enabled: enabled && !!app && !!vaultId && !!owner, queryFn: () => protocol.readClosePlan(app!, vaultId!, owner!), refetchInterval: 30_000, retry: false })
+}
+

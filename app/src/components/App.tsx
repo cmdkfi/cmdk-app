@@ -7,7 +7,7 @@ import { Choose } from '../screens/Choose.tsx'
 import { Connect } from '../screens/Connect.tsx'
 import { Position } from '../screens/Position.tsx'
 import { Progress } from '../screens/Progress.tsx'
-import { loadRecord } from '../flow/onboarding-record.ts'
+import { loadCloseRecord, loadRecord } from '../flow/onboarding-record.ts'
 import { Settings } from '../screens/Settings.tsx'
 import { useAppConfig, useDiscovery } from './data.ts'
 import { DesktopGate } from './DesktopGate.tsx'
@@ -54,10 +54,12 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   const owner = state.status === 'connected' ? state.address : undefined
   const discovery = useDiscovery(owner)
   const href = useCallback((to: Route) => hashFor({ mode, route: to }), [mode])
-  // The onboarding record is local (flow/onboarding-record.ts); close records arrive in Phase 5.
+  // Onboarding and close records are local (flow/onboarding-record.ts); the close record is per vault.
   const factory = app.data?.config.near.factory
   const onboardingRecord = mode === 'live' && !!owner && !!factory && loadRecord(mode, factory, owner) !== null
-  const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord, closeRecord: false }
+  const vaultId = discovery.result?.summary?.vault.accountId
+  const close = mode === 'live' && owner && factory && vaultId ? loadCloseRecord(mode, factory, owner, vaultId) : null
+  const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord, closeRecord: !!close?.completed, closing: !!close && !close.completed }
 
   // The landing table runs once on "/" or "#start", and again when discovery resolves after a connect
   // from S1–S3 (PRD S0, S3). Otherwise only the route guards run, so Start over can reach S1.
@@ -92,7 +94,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     case 'settings': screen = <Settings mode={mode} href={href} banner={banner} />; break
     case 'connect': screen = <Connect mode={mode} href={href} banner={banner} discovery={discovery} />; break
     case 'progress': screen = <Progress mode={mode} href={href} discovery={discovery} resume={resolution.step} />; break
-    case 'position': screen = <Position variant={resolution.variant} discovery={discovery} />; break
+    case 'position': screen = <Position mode={mode} href={href} variant={resolution.variant} discovery={discovery} />; break
   }
 
   return <div className="app-shell">

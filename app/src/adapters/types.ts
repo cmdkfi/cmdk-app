@@ -74,14 +74,15 @@ export type VaultView = {
   setupComplete: boolean
   measurementApproved: boolean
   idle: { eth: bigint; weth: bigint; usdc: bigint }
-  markets: { id: Hex; collateral: bigint; debt: bigint }[]
+  markets: { id: Hex; collateral: bigint; borrowShares: bigint; debt: bigint }[]
   setup: unknown
 }
 
 export type OwnerIntent =
   | { method: 'setup' }
   | { method: 'open'; collateralIn: bigint; targetLtv: bigint }
-  | { method: 'withdraw'; amount: bigint; destination: Address }
+  | { method: 'withdraw'; token: 'weth' | 'usdc'; amount: bigint; destination: Address }
+  | { method: 'close'; market: Hex }
 
 export type JobView = {
   ok: boolean
@@ -120,7 +121,7 @@ export type OpenPlan = {
 export type ReceiptView = { hash: Hex; status: 'success' | 'reverted' | 'pending'; confirmations: number }
 export type WalletTokens = { eth: bigint; weth: bigint; usdc: bigint }
 export type WalletTx = { to: Address; data: Hex; value: bigint }
-export type WalletTxIntent = { kind: 'wrap'; amount: bigint } | { kind: 'transfer'; to: Address; amount: bigint } | { kind: 'topUp'; to: Address; amount: bigint }
+export type WalletTxIntent = { kind: 'wrap'; amount: bigint } | { kind: 'transfer'; token: 'weth' | 'usdc'; to: Address; amount: bigint } | { kind: 'topUp'; to: Address; amount: bigint }
 export type AgentRegistration = { state: 'registered' | 'registering' | 'unavailable' }
 
 export type PositionMarket = {
@@ -137,6 +138,26 @@ export type PositionMarket = {
   collateralToken: Address
   loanDecimals: number
   collateralDecimals: number
+  /** The Executor's configured Chainlink feeds; `description` from the deployment manifest, null when not listed there. */
+  feeds: { address: Address; description: string | null; maxAge: number; updatedAt: bigint | null }[]
+}
+
+/** S6: what closing needs, read at one block (relayer.py l.516-529; Executor.close l.226-240; PRD S6, R10). */
+export type ClosePlan = {
+  blockNumber: bigint
+  blockTime: bigint
+  /** Markets holding debt or collateral, each to be closed by one owner call. */
+  markets: { id: Hex; borrowShares: bigint; collateral: bigint; debtNow: bigint; debtAhead: bigint }[]
+  /** Σ debt accrued to the read block, and to the read block + the message lifetime (600 s). */
+  debtNow: bigint
+  debtAhead: bigint
+  /** The relayer's requirement (debt + debt // 100) on debtNow and on debtAhead. */
+  needNow: bigint
+  needAhead: bigint
+  /** Collateral that close releases (Σ Morpho collateral). */
+  collateral: bigint
+  idle: { eth: bigint; weth: bigint; usdc: bigint }
+  walletUsdc: bigint
 }
 
 /** S5: one snapshot at one block (PRD S5, FR-9). */
@@ -220,6 +241,10 @@ export interface ProtocolAdapter {
   readAgent(app: LoadedConfig, vaultId: string): Promise<AgentFacts>
   /** Executor events and WETH/USDC transfers of the position address in one window of at most 10,000 blocks ending at `toBlock` (head when null). */
   readActivity(app: LoadedConfig, positionAddress: Address, toBlock: bigint | null): Promise<ActivityWindow>
+
+  // ---- Phase 5 (S6) --------------------------------------------------------------------------------------------
+  /** Debt now and `messageExpirySecs` ahead with the relayer's 1% headroom, idle balances, the owner's wallet USDC (relayer.py l.72, l.516-529; Morpho accrual). */
+  readClosePlan(app: LoadedConfig, vaultId: string, owner: Address): Promise<ClosePlan>
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

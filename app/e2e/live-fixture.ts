@@ -123,6 +123,8 @@ export class LiveFixture {
   /** /agent/vaults rows; null answers 503. */
   agentRows: Record<string, unknown>[] | null = []
   logWindows: [bigint, bigint][] = []
+  // S6 (Phase 5)
+  closes = 0
   // S4 (Phase 3) knobs
   nearNow = NOW
   feedStale = false
@@ -134,7 +136,7 @@ export class LiveFixture {
   floatWei = 5n * 10n ** 15n
   gasNeed = 10n ** 15n
   /** Reject one prompt of each listed kind. */
-  rejectOnce = new Set<'setup' | 'open' | 'withdraw' | 'wrap' | 'transfer'>()
+  rejectOnce = new Set<'setup' | 'open' | 'withdraw' | 'close' | 'wrap' | 'transfer'>()
   jobs = new Map<string, Record<string, unknown>>()
   receipts = new Set<string>()
   // records
@@ -146,7 +148,7 @@ export class LiveFixture {
   config() {
     const market = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, slice_max: '1000000000' })
     return {
-      ...guidedValues(appValues, { base: { morpho: MORPHO, executorDeployBlock: 1, gasPriceOracle: GAS_ORACLE, tokens: { weth: WETH, usdc: USDC } } }),
+      ...guidedValues(appValues, { base: { morpho: MORPHO, executorDeployBlock: 1, gasPriceOracle: GAS_ORACLE, tokens: { weth: WETH, usdc: USDC }, chainlink: { ethUsd: { address: FEED, description: 'ETH / USD', maxAgeSeconds: 1200 } } } }),
       baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: 'https://near.fixture.test', baseRpcUrl: 'https://base.fixture.test',
       relayerUrl: 'https://relayer.fixture.test', relayerUrlFallback: 'https://fallback.fixture.test', near: { factory: FACTORY },
       marketLabels: { [LIVE.toLowerCase()]: 'live', [BACKUP.toLowerCase()]: 'backup' },
@@ -328,6 +330,12 @@ export class LiveFixture {
     if (this.createMode === 'ok') this.jobs.set(id, { ok: true, job: id, kind: 'create_vault', stage: 'done', vault: `v${n}.${FACTORY}`, base_address: BASE, near_tx: 'C'.repeat(44) })
   }
 
+  /** Morpho toAssetsUp(borrowShares, totalBorrowAssets, totalBorrowShares) with the fixture's totals. */
+  debtOf(v: VaultFixture): bigint {
+    const num = v.borrowShares * (this.borrowed + 1n), den = this.borrowed + 1_000_000n
+    return (num + den - 1n) / den
+  }
+
   /** relayer.py owner_call: verify message and signature, check gas (check_funds), run the method, advance owner_nonce. */
   private async ownerCall(id: string, body: { vault: string; message: string; signature: Hex }) {
     const n = Number(/^v(\d+)\./.exec(body.vault)?.[1] ?? 0), v = this.vaults.get(n)
@@ -339,7 +347,22 @@ export class LiveFixture {
       this.jobs.set(id, { ok: false, job: id, kind: 'owner_call', stage: 'failed', vault: body.vault, error: `the vault Base address holds ${v.idle.eth} wei, below the ${this.gasNeed} wei the transactions may cost`, http_status: 400 })
       return
     }
+    if (m.method === 'close') {
+      // relayer.py l.516-529: the vault must hold debt (Morpho stored totals) + debt // 100 of the loan token
+      const debt = this.debtOf(v), need = debt + debt / 100n
+      if (v.idle.usdc < need) {
+        this.jobs.set(id, { ok: false, job: id, kind: 'owner_call', stage: 'failed', vault: body.vault, error: `close: the vault holds ${v.idle.usdc} of the loan token, below the ${need} it pulls (debt plus 1%)`, http_status: 400 })
+        return
+      }
+    }
     v.ownerNonce = m.nonce
+    if (m.method === 'close') {
+      // Executor.close l.226-240: repay all shares (accrued debt; the fixture's lastUpdate is the block time), release all collateral
+      if (String(m.args.market).toLowerCase() !== LIVE.toLowerCase()) throw Error(`close of an unexpected market ${m.args.market}`)
+      v.idle.usdc -= this.debtOf(v); v.borrowShares = 0n
+      v.idle.weth += v.collateral; v.collateral = 0n
+      this.closes++
+    }
     if (m.method === 'setup') { v.authorized = true; v.loanAllowance = (1n << 256n) - 1n; v.collateralAllowance = (1n << 256n) - 1n; v.corridorSet = true; v.approved = MEASUREMENT }
     if (m.method === 'open') {
       const collateralIn = BigInt(m.args.collateral_in), target = BigInt(m.args.target_ltv)
@@ -347,7 +370,11 @@ export class LiveFixture {
       const borrowed = v.collateral * (this.price ?? 0n) / 10n ** 36n * target / 10n ** 18n - 2n
       v.borrowShares += borrowed; v.idle.usdc += borrowed
     }
-    if (m.method === 'withdraw') { const amount = BigInt(m.args.amount); v.idle.usdc -= amount; this.wallet.usdc += amount }
+    if (m.method === 'withdraw') {
+      const amount = BigInt(m.args.amount), key = String(m.args.token).toLowerCase() === WETH.toLowerCase() ? 'weth' : 'usdc'
+      if (v.idle[key] < amount) throw Error(`withdraw of ${amount} ${key} above the idle ${v.idle[key]}`)
+      v.idle[key] -= amount; this.wallet[key] += amount
+    }
     const hash = keccak256(toHex(`fixture-owner-call-${id}`))
     this.receipts.add(hash)
     v.idle.eth -= 10n ** 14n

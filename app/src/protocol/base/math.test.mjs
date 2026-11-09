@@ -112,3 +112,18 @@ test('remaining sell budget mirrors CorridorMath.remainingBudget: (active + sold
   assert.equal(remainingSellBudget(0n, 100n, fifth), 0n)
   assert.equal(remainingSellBudget(100n, 0n, 0n), 0n)
 })
+
+test('close need: relayer REPAY_HEADROOM is debt + debt // 100; debt ahead accrues Morpho interest to the given time', async () => {
+  const { repayNeed, debtAt, accrue, toAssetsUp } = await import('./math.ts')
+  assert.equal(repayNeed(160_000_000n), 161_600_000n)
+  assert.equal(repayNeed(199n), 200n) // integer division, as relayer.py `need // REPAY_HEADROOM`
+  const totals = { totalBorrowAssets: 2_000_000_000n, totalBorrowShares: 2_000_000_000n, lastUpdate: 1_000n }
+  const rate = 1_585_489_600n // 5% simple APR per second (WAD)
+  // at lastUpdate: no interest; 600 s later: Morpho's Taylor accrual on the totals, then toAssetsUp
+  assert.equal(debtAt(160_080_000n, totals, rate, 1_000n), 160_000_001n)
+  const ahead = debtAt(160_080_000n, totals, rate, 1_600n)
+  assert.equal(ahead, toAssetsUp(160_080_000n, accrue(2_000_000_000n, rate, 600n), 2_000_000_000n))
+  assert.equal(ahead, 160_000_153n)
+  // a time before lastUpdate never accrues negatively
+  assert.equal(debtAt(160_080_000n, totals, rate, 500n), 160_000_001n)
+})

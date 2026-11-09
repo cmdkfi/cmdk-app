@@ -103,7 +103,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     if (d.kind === 'checking' || d.kind === 'not-checked') positionText = 'Checking your vaults…'
     else if (d.kind === 'failed') positionText = <Unavailable>could not be read</Unavailable>
     else if (d.status === null) positionText = 'None for this wallet'
-    else positionText = discovery.result?.summary?.vault.accountId ?? 'Found'
+    else positionText = `${discovery.result?.summary?.vault.accountId ?? 'Found'}${d.status === 'ready' ? ' · ready for a deposit' : ''}`
 
     const blocked = account.data === 'contract'
     const status = d.kind === 'found' ? d.status : undefined
@@ -152,7 +152,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
       </dl>
       {need && !need.enough && !panelClosed && <GetEth address={address} missing={need.missing} guided={guided} checkedAt={funding.dataUpdatedAt} onClose={() => setPanelClosed(true)} />}
       <div className="create-action">
-        <button type="button" className="prototype-button is-primary" disabled={createReason !== null} aria-describedby="create-reason" onClick={create}>Create position</button>
+        <button type="button" className="prototype-button is-primary" disabled={createReason !== null} aria-describedby="create-reason" onClick={create}>{status === 'ready' ? 'Deposit' : 'Create position'}</button>
         {createReason && <p id="create-reason">{createReason}</p>}
         <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside MetaMask.</p>
       </div>

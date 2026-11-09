@@ -45,6 +45,13 @@ export function guidedValues(appValues, deployment) {
   const addresses = { morpho: base?.morpho, weth: base?.tokens?.weth, usdc: base?.tokens?.usdc, gasPriceOracle: base?.gasPriceOracle }
   for (const [key, value] of Object.entries(addresses)) if (!ADDRESS.test(value ?? '')) fail(`deployment base.${key} is missing or invalid`)
   if (!Number.isInteger(base.executorDeployBlock) || base.executorDeployBlock <= 0) fail('deployment base.executorDeployBlock is missing')
+  // Feed names for the market card's oracle line (PRD S5): deployments/testnet.json `base.chainlink` (address,
+  // description); the Executor's configured feeds are matched against them by address.
+  const feeds = Object.entries(base.chainlink ?? {}).filter(([key]) => !key.startsWith('_')).map(([key, feed]) => {
+    if (!ADDRESS.test(feed?.address ?? '') || typeof feed.description !== 'string' || !feed.description.trim()) fail(`deployment base.chainlink.${key} needs address and description`)
+    return { address: feed.address, description: feed.description }
+  })
+  if (feeds.length === 0) fail('deployment base.chainlink lists no feeds')
 
   return {
     guided: { corridor: { ...c }, minDepositEth: guided.minDepositEth, messageExpirySecs: guided.messageExpirySecs, walletTxGasLimit: guided.walletTxGasLimit, usdcDust: guided.usdcDust, firstVaultNumber: guided.firstVaultNumber },
@@ -61,6 +68,6 @@ export function guidedValues(appValues, deployment) {
       ethFaucets: links(help.ethFaucets, 'help.ethFaucets'),
       usdcFaucets: links(help.usdcFaucets, 'help.usdcFaucets'),
     },
-    base: { ...addresses, executorDeployBlock: base.executorDeployBlock },
+    base: { ...addresses, executorDeployBlock: base.executorDeployBlock, feeds },
   }
 }

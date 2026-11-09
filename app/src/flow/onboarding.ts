@@ -8,7 +8,7 @@ export const STEPS = ['create', 'setup', 'wrap', 'transfer', 'open', 'withdraw']
 export type StepId = (typeof STEPS)[number]
 
 /** "submitted" and "confirming" are never shown as done; only a chain predicate makes a step done (PRD S4). */
-export type StepStatus = 'waiting' | 'prompting' | 'submitted' | 'confirming' | 'checking' | 'stale' | 'done' | 'skipped' | 'paused'
+export type StepStatus = 'waiting' | 'prompting' | 'submitted' | 'confirming' | 'checking' | 'stale' | 'funding' | 'done' | 'skipped' | 'paused'
 
 /** What the user can do on a paused step. */
 export type RetryKind =
@@ -46,6 +46,8 @@ export type StepState = {
   attempted?: boolean
   /** open: the LTV the market could lend when below the target (WAD), shown as "opened below target". */
   belowTarget?: string
+  /** close transfer: the wallet holds less USDC than the shortfall; the Get test USDC panel shows these (S6a). */
+  funding?: { shortfall: string; wallet: string; missing: string; checkedAt: number }
 }
 
 export type OnboardingRecord = {
@@ -87,8 +89,8 @@ export function activeStep(r: OnboardingRecord): StepId | null {
   return STEPS.find(id => !isFinished(r.steps[id].status)) ?? null
 }
 
-/** Replace fields of one step; `undefined` in the patch removes a field. */
-export function patchStep(r: OnboardingRecord, id: StepId, patch: Partial<StepState>): OnboardingRecord {
+/** Replace fields of one step of any step record (onboarding or close); `undefined` in the patch removes a field. */
+export function patchStep<Id extends string, R extends { steps: Record<Id, StepState> }>(r: R, id: Id, patch: Partial<StepState>): R {
   const next: StepState = { ...r.steps[id], ...patch }
   for (const key of Object.keys(patch) as (keyof StepState)[]) if (patch[key] === undefined) delete next[key]
   return { ...r, steps: { ...r.steps, [id]: next } }

@@ -1,100 +1,21 @@
-// S4 effects runner (PRD S4, D11, FR-5/5a/6/7/8, R1, R2, R4). The only place S4 calls adapters. Rules:
-// - one step at a time, one open MetaMask prompt at a time; after a reload nothing prompts until Continue (armed);
-// - every state change is written to the record before the next await, so a reload resumes where it stopped;
-// - a step is done only when its chain check holds; "submitted"/"confirming" never count as done;
-// - an account or chain change stops the run (the record is re-keyed to the new owner by the caller).
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Address, Hex } from 'viem'
+// S4 onboarding (PRD S4, D11, FR-5/5a/6/7/8, R1, R2, R4): the step drivers on the shared runner (runner.ts). The only
+// place S4 calls adapters.
+import { useEffect, useState } from 'react'
+import type { Address } from 'viem'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
-import { ProtocolError, type AgentRegistration, type JobView, type OwnerIntent, type ProtocolAdapter, type VaultView, type WalletAdapter } from '../adapters/types.ts'
+import { ProtocolError, type AgentRegistration } from '../adapters/types.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import { formatUnits, formatWadPercent } from '../flow/format.ts'
-import { reconcileLock, type OwnerLock } from '../flow/lock.ts'
-import { activeStep, belowShown, jobPollDelay, patchStep, retryMode, topUpAmount, type OnboardingRecord, type RetryKind, type StepId, type StepState } from '../flow/onboarding.ts'
-import { clearLock, clearRecord, loadLock, loadRecord, saveLock, saveRecord } from '../flow/onboarding-record.ts'
+import { activeStep, belowShown, type OnboardingRecord, type RetryKind, type StepId } from '../flow/onboarding.ts'
+import { clearLock, clearRecord, loadRecord, saveRecord } from '../flow/onboarding-record.ts'
 import type { Mode } from '../flow/routes.ts'
+import { confirmed, message, ownerStep, pollJob, prompted, useStepChain, type Env as ChainEnv, type OwnerSpec as ChainSpec } from './runner.ts'
 
-type Env = {
-  app: LoadedConfig
-  protocol: ProtocolAdapter
-  wallet: WalletAdapter
-  mode: Mode
-  owner: Address
-  get(): OnboardingRecord
-  patch(id: StepId, patch: Partial<StepState>): void
-  setVault(vault: NonNullable<OnboardingRecord['vault']>): void
-  armed(): boolean
-  live(): boolean
-  /** A user action waiting for the step it targets (Retry variants). */
-  take(id: StepId): RetryKind | null
-  sleep(ms: number): Promise<void>
-}
+type Env = ChainEnv<StepId, OnboardingRecord>
+type OwnerSpec = ChainSpec<StepId, OnboardingRecord>
 
 const now = () => Date.now()
-
-function rejected(error: unknown): boolean {
-  for (let e = error as { code?: number; name?: string; message?: string; cause?: unknown } | undefined, depth = 0; e && depth < 6; e = e.cause as typeof e, depth++) {
-    if (e.code === 4001 || /UserRejected/.test(e.name ?? '') || /rejected|denied/i.test(e.message ?? '')) return true
-  }
-  return false
-}
-
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
-
-/** Run a MetaMask prompt; a rejection pauses the step with Retry and returns null. */
-async function prompted<T>(env: Env, id: StepId, action: () => Promise<T>): Promise<T | null> {
-  env.patch(id, { status: 'prompting', pause: undefined })
-  try {
-    return await action()
-  } catch (error) {
-    if (!env.live()) return null
-    if (rejected(error)) env.patch(id, { status: 'paused', pause: { line: 'You declined the request in MetaMask. Nothing was sent.', retry: 'prompt' } })
-    else env.patch(id, { status: 'paused', pause: { line: 'MetaMask returned an error. Nothing was confirmed.', text: message(error), retry: 'prompt' } })
-    return null
-  }
-}
-
-/** Wait until every receipt has status 1 and two confirmations (FR-5); a revert or a 180 s wait pauses the step. */
-async function confirmed(env: Env, id: StepId, hashes: Hex[]): Promise<boolean> {
-  if (hashes.length === 0) return true
-  const started = now()
-  env.patch(id, { status: 'confirming' })
-  for (;;) {
-    if (!env.live()) return false
-    const receipts = await env.protocol.readReceipts(env.app, hashes).catch(() => null)
-    if (receipts?.some(r => r.status === 'reverted')) {
-      env.patch(id, { status: 'paused', pause: { line: 'A Base transaction reverted. Check it on BaseScan before trying again.', text: receipts.filter(r => r.status === 'reverted').map(r => r.hash).join(', '), retry: 'check' } })
-      return false
-    }
-    if (receipts && receipts.every(r => r.status === 'success' && r.confirmations >= 2)) return true
-    if (now() - started > 180_000) {
-      env.patch(id, { status: 'paused', pause: { line: 'Still waiting for two confirmations on Base.', text: hashes.join(', '), retry: 'check' } })
-      return false
-    }
-    await env.sleep(2_000)
-  }
-}
-
-/** FR-5 job polling. Returns the finished job, 'lost' (404 or unanswerable), or null when paused ("Still waiting"). */
-async function pollJob(env: Env, id: StepId, job: string): Promise<JobView | 'lost' | null> {
-  const started = now()
-  for (;;) {
-    if (!env.live()) return null
-    try {
-      const j = await env.protocol.readJob(env.app, job)
-      if (j.stage === 'done' || j.stage === 'failed') return j
-    } catch (error) {
-      if (error instanceof ProtocolError && error.kind === 'lost') return 'lost'
-    }
-    const delay = jobPollDelay(now() - started)
-    if (delay === null) {
-      env.patch(id, { status: 'paused', pause: { line: 'Still waiting for the relayer. The job keeps running on its side.', job, retry: 'check' } })
-      return null
-    }
-    await env.sleep(delay)
-  }
-}
+const setVault = (env: Env, vault: NonNullable<OnboardingRecord['vault']>) => env.update(r => ({ ...r, vault }))
 
 // ---- create (no prompt) -------------------------------------------------------------------------------------------
 
@@ -110,7 +31,7 @@ async function rediscover(env: Env): Promise<'adopted' | 'none' | 'unknown'> {
     return 'unknown'
   }
   if (found) {
-    env.setVault({ accountId: found.vault.accountId, number: found.vault.number, baseAddress: found.vault.baseAddress })
+    setVault(env, { accountId: found.vault.accountId, number: found.vault.number, baseAddress: found.vault.baseAddress })
     env.patch('create', { status: 'done', job: undefined, note: 'Your vault was found on NEAR; it is used as is.' })
     return 'adopted'
   }
@@ -132,7 +53,7 @@ async function createStep(env: Env): Promise<boolean> {
     const job = await pollJob(env, 'create', step.job)
     if (job === null) return false
     if (job === 'lost') return adoptOrPause(env)
-    if (job.vault && job.baseAddress) env.setVault({ accountId: job.vault, number: Number(/^v(\d+)\./.exec(job.vault)?.[1] ?? 0), baseAddress: job.baseAddress })
+    if (job.vault && job.baseAddress) setVault(env, { accountId: job.vault, number: Number(/^v(\d+)\./.exec(job.vault)?.[1] ?? 0), baseAddress: job.baseAddress })
     if (job.stage === 'done') { env.patch('create', { status: 'done', job: undefined }); return true }
     if (job.vault) { env.patch('create', { status: 'done', job: undefined, note: 'Vault created; the relayer did not send its gas float. The gas step tops it up if needed.' }); return true }
     env.patch('create', { status: 'paused', job: undefined, pause: { line: 'The relayer could not create the vault.', text: job.error, retry: 'post' } })
@@ -170,169 +91,7 @@ async function createStep(env: Env): Promise<boolean> {
 
 // ---- owner calls: setup, open, withdraw (FR-6) -------------------------------------------------------------------
 
-type OwnerSpec = {
-  id: 'setup' | 'open' | 'withdraw'
-  /** The chain shows the step's result. */
-  complete(v: VaultView, env: Env): boolean
-  /** Nothing to do (e.g. no USDC to withdraw). */
-  skip?(v: VaultView, env: Env): boolean
-  /** Checks before the prompt; returns the intent, or null when the step paused. `action` is the user's pending choice. */
-  intent(v: VaultView, env: Env, action: RetryKind | null): Promise<OwnerIntent | null>
-  doneNote?(v: VaultView, env: Env): string | undefined
-}
-
-async function finishOwnerCall(env: Env, spec: OwnerSpec, lock: OwnerLock): Promise<boolean> {
-  const v = await env.protocol.readVault(env.app, lock.vault)
-  clearLock(env.mode, lock.vault, env.owner)
-  if (spec.complete(v, env)) { env.patch(spec.id, { status: 'done', pause: undefined, job: undefined, note: spec.doneNote?.(v, env) }); return true }
-  env.patch(spec.id, { status: 'paused', job: undefined, pause: { line: 'The call ran, but the chain does not show the expected result. Sign again to retry.', retry: 'resign' } })
-  return false
-}
-
-/** Lost job or uncertain POST: resolve from owner_nonce and NEAR time only (FR-6, R4). */
-async function checkLock(env: Env, spec: OwnerSpec, lock: OwnerLock): Promise<boolean | 'resign'> {
-  env.patch(spec.id, { status: 'checking', pause: undefined })
-  for (;;) {
-    if (!env.live()) return false
-    const [v, nearNow] = await Promise.all([env.protocol.readVault(env.app, lock.vault), env.protocol.readNearTime(env.app)]).catch(() => [null, null] as const)
-    if (v && nearNow !== null) {
-      const verdict = reconcileLock(lock, { ownerNonce: v.ownerNonce, nearNow, job: 'lost' })
-      if (verdict === 'executed') return finishOwnerCall(env, spec, lock)
-      if (verdict === 'expired') {
-        clearLock(env.mode, lock.vault, env.owner)
-        env.patch(spec.id, { status: 'paused', job: undefined, pause: { line: 'The signed message expired without being used. Sign again.', retry: 'resign' } })
-        return false
-      }
-    }
-    await env.sleep(10_000)
-  }
-}
-
-async function post(env: Env, spec: OwnerSpec, lock: OwnerLock): Promise<boolean | 'resign'> {
-  env.patch(spec.id, { status: 'submitted', pause: undefined })
-  try {
-    const job = await env.protocol.ownerCall(env.app, lock.vault, lock.message, lock.signature)
-    const next = { ...lock, job, postedAt: now() }
-    saveLock(env.mode, next)
-    env.patch(spec.id, { job, status: 'confirming' })
-    return follow(env, spec, next)
-  } catch (error) {
-    if (error instanceof ProtocolError && error.kind === 'uncertain') return checkLock(env, spec, lock)
-    env.patch(spec.id, { status: 'paused', pause: { line: 'The relayer refused the request before sending anything.', text: message(error), retry: 'resign' } })
-    clearLock(env.mode, lock.vault, env.owner)
-    return false
-  }
-}
-
-/** Follow a posted job to its end (FR-5, FR-6, D7). */
-async function follow(env: Env, spec: OwnerSpec, lock: OwnerLock): Promise<boolean | 'resign'> {
-  const job = await pollJob(env, spec.id, lock.job!)
-  if (job === null) return false
-  if (job === 'lost') return checkLock(env, spec, lock)
-  if (job.stage === 'done') {
-    if (!await confirmed(env, spec.id, job.receipts.map(r => r.hash))) return false
-    return finishOwnerCall(env, spec, lock)
-  }
-  if (job.httpStatus === 400) return refused(env, spec, lock, job)
-  if (/StaleFeed/.test(job.error ?? '')) {
-    env.patch(spec.id, { status: 'paused', pause: { line: 'Price feed is stale on testnet; open is retried when it updates.', text: job.error, retry: 'resign' } })
-    return checkLock(env, spec, lock).then(() => false)
-  }
-  // Failed after the relayer may have reached NEAR: owner_nonce decides (FR-6).
-  env.patch(spec.id, { note: job.error })
-  return checkLock(env, spec, lock)
-}
-
-/** Refused before sending (job failed, http_status 400): the lock stays; the user re-sends or re-signs. */
-async function refused(env: Env, spec: OwnerSpec, lock: OwnerLock, job: JobView): Promise<boolean | 'resign'> {
-  const vault = env.get().vault!
-  const short = env.protocol.fundsShortfall(job.error)
-  const step = env.get().steps[spec.id]
-  const action = env.take(spec.id)
-  const nearNow = await env.protocol.readNearTime(env.app).catch(() => Math.floor(now() / 1000))
-  const mode = retryMode(lock.expiry, nearNow)
-  if (short) {
-    // Reactive gas top-up (FR-8, D7, Q2).
-    const topUp = step.topUp && step.topUp.status !== 'done' ? step.topUp : { amountWei: topUpAmount(short.have, short.need).toString(), status: 'needed' as const }
-    if (topUp.status === 'confirming' && topUp.txHash) {
-      if (!await confirmed(env, spec.id, [topUp.txHash])) return false
-      env.patch(spec.id, { topUp: { ...topUp, status: 'done' } })
-      return afterTopUp(env, spec, lock, mode)
-    }
-    if (action === 'topUp') {
-      const tx = env.protocol.walletTx(env.app, { kind: 'topUp', to: vault.baseAddress, amount: BigInt(topUp.amountWei) })
-      env.patch(spec.id, { topUp: { ...topUp, status: 'prompting' } })
-      const hash = await prompted(env, spec.id, () => env.wallet.sendTransaction(tx))
-      if (!hash) { env.patch(spec.id, { topUp: { ...topUp, status: 'needed' } }); return false }
-      env.patch(spec.id, { topUp: { ...topUp, status: 'confirming', txHash: hash } })
-      if (!await confirmed(env, spec.id, [hash])) return false
-      env.patch(spec.id, { topUp: { ...topUp, status: 'done', txHash: hash } })
-      return afterTopUp(env, spec, lock, mode)
-    }
-    env.patch(spec.id, { status: 'paused', topUp, pause: { line: `Your position address needs more ETH for gas. Send ${formatUnits(BigInt(topUp.amountWei), 18, 6)} ETH from your wallet, then the request goes again.`, text: job.error, retry: 'topUp' } })
-    return false
-  }
-  if (action === 'resend' && mode === 'resend') return post(env, spec, lock)
-  if (action === 'resend' || action === 'resign') { clearLock(env.mode, lock.vault, env.owner); env.patch(spec.id, { job: undefined }); return 'resign' }
-  env.patch(spec.id, { status: 'paused', pause: { line: mode === 'resend' ? 'The relayer refused the request before sending anything. You can send the same signed message again.' : 'The relayer refused the request before sending anything. The signed message is about to expire; sign again.', text: job.error, retry: mode } })
-  return false
-}
-
-/** After the top-up confirms: re-post the same message if it is still ≥ 45 s valid, otherwise sign again (D7). */
-async function afterTopUp(env: Env, spec: OwnerSpec, lock: OwnerLock, mode: 'resend' | 'resign'): Promise<boolean | 'resign'> {
-  if (mode === 'resend') return post(env, spec, lock)
-  clearLock(env.mode, lock.vault, env.owner)
-  env.patch(spec.id, { job: undefined })
-  return 'resign'
-}
-
-async function ownerStep(env: Env, spec: OwnerSpec): Promise<boolean> {
-  const vault = env.get().vault!
-  for (let round = 0; round < 3; round++) {
-    let v = await env.protocol.readVault(env.app, vault.accountId)
-    if (v.owner.toLowerCase() !== env.owner.toLowerCase()) {
-      env.patch(spec.id, { status: 'paused', pause: { line: 'This vault belongs to another wallet. Connect its owner to continue.' } })
-      return false
-    }
-    const lock = loadLock(env.mode, vault.accountId, env.owner)
-    if (lock && lock.method !== spec.id) {
-      env.patch(spec.id, { status: 'checking', note: `Waiting for an earlier ${lock.method} request to settle.` })
-      return false
-    }
-    if (lock) {
-      const outcome = lock.job ? await follow(env, spec, lock) : await checkLock(env, spec, lock)
-      if (outcome !== 'resign') return outcome
-      v = await env.protocol.readVault(env.app, vault.accountId)
-    } else {
-      if (spec.complete(v, env)) { env.patch(spec.id, { status: 'done', pause: undefined, note: spec.doneNote?.(v, env) ?? 'Already on chain' }); return true }
-      if (spec.skip?.(v, env)) { env.patch(spec.id, { status: 'skipped', pause: undefined }); return true }
-    }
-    if (!env.armed()) { env.patch(spec.id, { status: 'waiting' }); return false }
-    const intent = await spec.intent(v, env, env.take(spec.id))
-    if (!intent || !env.live()) return false
-    const [nearNow, before] = await Promise.all([env.protocol.readNearTime(env.app), Promise.resolve(v.ownerNonce)])
-    const nonce = before + 1, expiry = nearNow + env.app.guided.messageExpirySecs
-    const text = env.protocol.composeOwnerMessage(env.app, v, intent, nonce, expiry)
-    const signature = await prompted(env, spec.id, () => env.wallet.signMessage(text))
-    if (!signature) return false
-    if (!await env.protocol.checkOwnerSignature(text, signature, env.owner)) {
-      env.patch(spec.id, { status: 'paused', pause: { line: 'MetaMask signed with a different account than the vault owner. Nothing was sent.', retry: 'prompt' } })
-      return false
-    }
-    const after = await env.protocol.readVault(env.app, vault.accountId)
-    if (after.ownerNonce !== before) {
-      env.patch(spec.id, { status: 'paused', pause: { line: 'The vault changed while you were signing. Nothing was sent; sign again.', retry: 'prompt' } })
-      return false
-    }
-    const next: OwnerLock = { vault: vault.accountId, owner: env.owner.toLowerCase(), method: spec.id, nonce, expiry, message: text, signature }
-    saveLock(env.mode, next)
-    const outcome = await post(env, spec, next)
-    if (outcome !== 'resign') return outcome
-  }
-  return false
-}
-
-const live = (env: Env, v: VaultView) => v.markets.find(m => m.id.toLowerCase() === env.app.guided.liveMarket.id.toLowerCase())
+const live = (env: Env, v: { markets: { id: string; collateral: bigint }[] }) => v.markets.find(m => m.id.toLowerCase() === env.app.guided.liveMarket.id.toLowerCase())
 
 const setupSpec: OwnerSpec = {
   id: 'setup',
@@ -347,7 +106,7 @@ const openSpec: OwnerSpec = {
     const below = env.get().steps.open.belowTarget
     return below ? `Opened below target (${formatWadPercent(BigInt(below))})` : undefined
   },
-  async intent(v, env, action) {
+  async intent(v, env, action: RetryKind | null) {
     const collateralIn = v.idle.weth
     if (collateralIn === 0n) { env.patch('open', { status: 'paused', pause: { line: 'There is no WETH at your position address to open with.', retry: 'check' } }); return null }
     for (;;) {
@@ -380,7 +139,7 @@ const withdrawSpec: OwnerSpec = {
   // PRD S4 step 6 (Phase 3 note): job done and the USDC idle at the position address below usdcDust.
   complete: (v, env) => env.get().steps.withdraw.job !== undefined && v.idle.usdc <= env.app.guided.usdcDust,
   skip: (v, env) => v.idle.usdc <= env.app.guided.usdcDust,
-  intent: async (v, env) => ({ method: 'withdraw', amount: v.idle.usdc, destination: env.owner }),
+  intent: async (v, env) => ({ method: 'withdraw', token: 'usdc', amount: v.idle.usdc, destination: env.owner }),
 }
 
 // ---- wallet transactions: wrap and transfer (FR-7) ---------------------------------------------------------------
@@ -420,7 +179,7 @@ async function transferStep(env: Env): Promise<boolean> {
   }
   if (await atPosition()) { env.patch('transfer', { status: 'done', note: 'Already at your position address' }); return true }
   if (!env.armed()) { env.patch('transfer', { status: 'waiting' }); return false }
-  const hash = await prompted(env, 'transfer', () => env.wallet.sendTransaction(env.protocol.walletTx(env.app, { kind: 'transfer', to: vault.baseAddress, amount })))
+  const hash = await prompted(env, 'transfer', () => env.wallet.sendTransaction(env.protocol.walletTx(env.app, { kind: 'transfer', token: 'weth', to: vault.baseAddress, amount })))
   if (!hash) return false
   env.patch('transfer', { txHash: hash, status: 'submitted' })
   return transferStep(env)
@@ -450,94 +209,28 @@ export type Onboarding = {
 }
 
 export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: Address | undefined, chainOk: boolean, onFinished: () => void): Onboarding {
-  const { protocol, wallet } = useAdapters()
-  const queryClient = useQueryClient()
+  const { protocol } = useAdapters()
   const factory = app?.config.near.factory
-  const [record, setRecord] = useState<OnboardingRecord | null>(null)
-  const [running, setRunning] = useState(false)
-  const [registration, setRegistration] = useState<AgentRegistration['state'] | null>(null)
-  const ref = useRef<OnboardingRecord | null>(null)
-  const armed = useRef(false), busy = useRef(false), epoch = useRef(0)
-  const actions = useRef(new Map<StepId, RetryKind>())
-  const deps = useRef({ app, owner, chainOk, onFinished })
-  deps.current = { app, owner, chainOk, onFinished }
-
-  const commit = useCallback((next: OnboardingRecord | null) => {
-    ref.current = next
-    if (next) saveRecord(mode, next)
-    setRecord(next)
-  }, [mode])
-
-  // Re-key on owner (or factory) change: stop the run, load that owner's record, never prompt until armed.
-  useEffect(() => {
-    epoch.current++
-    armed.current = false
-    actions.current.clear()
-    const r = owner && factory ? loadRecord(mode, factory, owner) : null
-    ref.current = r
-    setRecord(r)
-  }, [mode, factory, owner])
-
-  // A chain change stops the run; a step that was prompting is paused.
-  useEffect(() => {
-    if (chainOk) return
-    epoch.current++
-    armed.current = false
-    const r = ref.current, id = r && activeStep(r)
-    if (r && id && r.steps[id].status === 'prompting') commit(patchStep(r, id, { status: 'paused', pause: { line: 'The wallet left Base Sepolia. Switch back, then continue.', retry: 'prompt' } }))
-  }, [chainOk, commit])
-
-  const run = useCallback(async () => {
-    const { app: a, owner: o, chainOk: ok } = deps.current
-    if (busy.current || !a || !o || !ok || !ref.current) return
-    busy.current = true
-    setRunning(true)
-    const my = epoch.current
-    const env: Env = {
-      app: a, protocol, wallet, mode, owner: o,
-      get: () => ref.current!,
-      patch: (id, p) => { if (epoch.current === my && ref.current) commit(patchStep(ref.current, id, p)) },
-      setVault: vault => { if (epoch.current === my && ref.current) commit({ ...ref.current, vault }) },
-      armed: () => armed.current && epoch.current === my,
-      live: () => epoch.current === my,
-      take: id => { const kind = actions.current.get(id) ?? null; actions.current.delete(id); return kind },
-      sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
-    }
-    try {
-      for (;;) {
-        if (!env.live()) return
-        const id = activeStep(env.get())
-        if (!id) {
-          const r = env.get()
-          clearRecord(mode, r.factory, r.owner)
-          if (r.vault) clearLock(mode, r.vault.accountId, o)
-          ref.current = null
-          setRecord(null)
-          await queryClient.invalidateQueries({ queryKey: ['discovery'] })
-          deps.current.onFinished()
-          return
-        }
-        if (!await DRIVERS[id](env)) return
-      }
-    } catch (error) {
-      const r = ref.current, id = r && activeStep(r)
-      if (r && id && epoch.current === my) commit(patchStep(r, id, { status: 'paused', pause: { line: 'A read failed, so nothing more was requested.', text: message(error), retry: 'check' } }))
-    } finally {
-      if (epoch.current === my) { busy.current = false; setRunning(false) }
-      else busy.current = false
-    }
-  }, [protocol, wallet, mode, commit, queryClient])
-
-  // On load and after re-keying: reconcile (reads only, nothing prompts) — or arm once after Create position.
-  useEffect(() => {
-    const r = ref.current
-    if (!r || !app || !owner || !chainOk) return
-    if (r.autostart) { armed.current = true; commit({ ...r, autostart: undefined }) }
-    void run()
-  }, [record?.createdAt, record?.owner, app, owner, chainOk, run, commit])
+  const chain = useStepChain<StepId, OnboardingRecord>({
+    mode, app, owner, chainOk,
+    key: `${factory ?? ''}:${owner?.toLowerCase() ?? ''}`,
+    load: () => (owner && factory ? loadRecord(mode, factory, owner) : null),
+    save: r => saveRecord(mode, r),
+    active: activeStep,
+    vault: r => r.vault,
+    drivers: DRIVERS,
+    finish: r => {
+      clearRecord(mode, r.factory, r.owner)
+      if (r.vault && owner) clearLock(mode, r.vault.accountId, owner)
+      return null
+    },
+    invalidate: [['discovery']],
+    onFinished,
+  })
 
   // Agent registration (step 3): non-blocking, every 30 s while S4 is shown.
-  const vaultId = record?.vault?.accountId
+  const [registration, setRegistration] = useState<AgentRegistration['state'] | null>(null)
+  const vaultId = chain.record?.vault?.accountId
   useEffect(() => {
     if (!app || !vaultId) return
     let stop = false
@@ -547,22 +240,5 @@ export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: 
     return () => { stop = true; window.clearInterval(timer) }
   }, [app, vaultId, protocol])
 
-  return {
-    record, running, registration,
-    start: () => { armed.current = true; void run() },
-    act: (id, kind) => {
-      armed.current = true
-      actions.current.set(id, kind)
-      const r = ref.current
-      if (r) {
-        let next = patchStep(r, id, { status: 'waiting', pause: undefined })
-        if (id === 'create' && kind === 'post') next = patchStep(next, 'create', { job: undefined })
-        if (kind === 'prompt' && (id === 'wrap' || id === 'transfer')) next = patchStep(next, id, { txHash: undefined })
-        commit(next)
-      }
-      void run()
-    },
-    begin: next => { armed.current = true; commit(next); void run() },
-  }
+  return { ...chain, registration }
 }
-

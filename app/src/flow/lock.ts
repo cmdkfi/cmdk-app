@@ -6,7 +6,8 @@ import type { Hex } from 'viem'
 export type OwnerLock = {
   vault: string
   owner: string
-  method: 'setup' | 'open' | 'withdraw'
+  /** The step that signed it: S4 setup/open/withdraw or S6 close/withdrawWeth/withdrawUsdc (one lock per vault:owner). */
+  method: string
   nonce: number
   expiry: number
   message: string

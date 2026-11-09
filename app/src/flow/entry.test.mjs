@@ -130,3 +130,15 @@ test('after connect: waits for discovery, then moves only when a vault needs S4 
   assert.deepEqual(afterConnect('connect', input('connected', found(null))), route('connect'))
   assert.deepEqual(afterConnect('connect', input('connected', { kind: 'failed' })), route('connect', { banner: 'discovery-failed' }))
 })
+
+test('a close in progress stays on the position screen at every step; once completed it is the closed variant', () => {
+  const base = { wallet: 'connected', onboardingRecord: false, closeRecord: false }
+  for (const status of ['active', 'deposited', 'ready', 'active-idle-usdc']) {
+    assert.deepEqual(landing({ ...base, closing: true, discovery: { kind: 'found', status } }), { kind: 'route', route: 'position', variant: 'active' })
+  }
+  assert.deepEqual(guard('progress', { ...base, closing: true, discovery: { kind: 'found', status: 'deposited' } }), { kind: 'route', route: 'start' })
+  assert.deepEqual(landing({ ...base, closeRecord: true, discovery: { kind: 'found', status: 'ready' } }), { kind: 'route', route: 'position', variant: 'closed' })
+  // after Start over the record is gone: #start stays on S1 (no landing redirect), "/" lands on S4 deposit
+  assert.deepEqual(guard('start', { ...base, discovery: { kind: 'found', status: 'ready' } }), { kind: 'route', route: 'start' })
+  assert.deepEqual(landing({ ...base, discovery: { kind: 'found', status: 'ready' } }), { kind: 'route', route: 'progress', step: 'deposit' })
+})

@@ -3,13 +3,13 @@
 import type { Address, Hex } from 'viem'
 import { accountKind } from '../../flow/account.ts'
 import { parseConfig, type LoadedConfig } from '../../flow/config.ts'
-import { borrowApr, collateralValue, depositEstimate, lendable, openTargetLtv } from '../../protocol/base/math.ts'
+import { borrowApr, collateralValue, debtAt, depositEstimate, lendable, openTargetLtv, repayNeed } from '../../protocol/base/math.ts'
 import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding } from '../../protocol/base/reads.ts'
 import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRegistered, agentRow, measurementMatches } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList } from '../../protocol/near/rpc.ts'
 import { discover, getState } from '../../protocol/near/vault.ts'
-import { openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
+import { closeArgs, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
 import { agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
 import { sendEth, transferToken, wrapEth } from '../../protocol/wallet/tx.ts'
 import { ProtocolError, type ProtocolAdapter } from '../types.ts'
@@ -73,7 +73,7 @@ export function createLiveProtocol(): ProtocolAdapter {
         accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address,
         ownerNonce: state.owner_nonce, agentPublicKey: state.agent?.public_key ?? null,
         setupComplete: setupComplete(snapshot.setup, measurementApproved), measurementApproved,
-        idle: snapshot.idle, markets: snapshot.markets.map(m => ({ id: m.id, collateral: m.collateral, debt: m.debt })), setup: snapshot.setup,
+        idle: snapshot.idle, markets: snapshot.markets.map(m => ({ id: m.id, collateral: m.collateral, borrowShares: m.borrowShares, debt: m.debt })), setup: snapshot.setup,
       }
     },
     readNearTime: ({ config }) => finalBlockTime(config.nearRpcUrl),
@@ -111,7 +111,9 @@ export function createLiveProtocol(): ProtocolAdapter {
         ? setupArgs(vault.setup as SetupFact[], guided.corridor, config.agent.measurement, vault.measurementApproved)
         : intent.method === 'open'
           ? openArgs(guided.liveMarket.id, intent.collateralIn, intent.targetLtv)
-          : withdrawArgs(guided.base.usdc, intent.amount, intent.destination)
+          : intent.method === 'close'
+            ? closeArgs(intent.market)
+            : withdrawArgs(intent.token === 'weth' ? guided.base.weth : guided.base.usdc, intent.amount, intent.destination)
       return ownerMessage({ vault: vault.accountId, method: intent.method, args, nonce, expiry })
     },
     async checkOwnerSignature(message, signature, owner) {
@@ -119,7 +121,7 @@ export function createLiveProtocol(): ProtocolAdapter {
     },
     walletTx({ guided }, intent) {
       if (intent.kind === 'wrap') return wrapEth(guided.base.weth, intent.amount)
-      if (intent.kind === 'transfer') return transferToken(guided.base.weth, intent.to, intent.amount)
+      if (intent.kind === 'transfer') return transferToken(intent.token === 'weth' ? guided.base.weth : guided.base.usdc, intent.to, intent.amount)
       return sendEth(intent.to, intent.amount)
     },
     fundsShortfall: error => fundsShortfall(error),
@@ -139,7 +141,8 @@ export function createLiveProtocol(): ProtocolAdapter {
       return {
         blockNumber: s.blockNumber, blockTime: s.blockTime, morpho: state.morpho,
         vault: { accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address },
-        markets: s.markets.map(m => ({ id: m.id, executor: m.executor, collateral: m.collateral, debt: m.debt, value: m.value, ltv: m.ltv, lltv: m.lltv, corridor: { target: m.corridor.target, act: m.corridor.act, floor: m.corridor.floor, sellBudget: m.corridor.sellBudget, migrateAllowed: m.corridor.migrateAllowed, set: m.corridor.set }, closedForAgent: m.closedForAgent, collateralToken: m.collateralToken, loanDecimals: m.loanDecimals, collateralDecimals: m.collateralDecimals })),
+        markets: s.markets.map(m => ({ id: m.id, executor: m.executor, collateral: m.collateral, debt: m.debt, value: m.value, ltv: m.ltv, lltv: m.lltv, corridor: { target: m.corridor.target, act: m.corridor.act, floor: m.corridor.floor, sellBudget: m.corridor.sellBudget, migrateAllowed: m.corridor.migrateAllowed, set: m.corridor.set }, closedForAgent: m.closedForAgent, collateralToken: m.collateralToken, loanDecimals: m.loanDecimals, collateralDecimals: m.collateralDecimals,
+          feeds: m.feeds.map(f => ({ address: f.feed, description: guided.base.feeds.find(x => x.address.toLowerCase() === f.feed.toLowerCase())?.description ?? null, maxAge: f.maxAge, updatedAt: f.updatedAt })) })),
         idle: s.idle,
         sellBudgets: s.sellBudgets,
       }
@@ -168,6 +171,28 @@ export function createLiveProtocol(): ProtocolAdapter {
         .sort((a, b) => (a.blockNumber === b.blockNumber ? b.logIndex - a.logIndex : b.blockNumber > a.blockNumber ? 1 : -1))
         .map(e => ({ ...e, time: times.get(e.blockNumber) ?? null }))
       return { from, to, items, reachedStart: from === start }
+    },
+
+    async readClosePlan({ config, guided }, vaultId, owner) {
+      const client = baseClient(config.baseRpcUrl)
+      const state = await getState(config.nearRpcUrl, vaultId)
+      const [s, wallet] = await Promise.all([
+        readVaultSnapshot(client, state, { weth: guided.base.weth, usdc: guided.base.usdc }),
+        readTokenBalances(client, owner, { weth: guided.base.weth, usdc: guided.base.usdc }),
+      ])
+      const ahead = s.blockTime + BigInt(guided.messageExpirySecs)
+      const markets = s.markets.filter(m => m.borrowShares > 0n || m.collateral > 0n).map(m => {
+        // Without the IRM rate the amount to repay ahead is unknown; nothing is estimated in its place.
+        if (m.borrowShares > 0n && m.borrowRate === null) throw new Error('The borrow rate could not be read, so the amount to repay is unknown.')
+        return { id: m.id, borrowShares: m.borrowShares, collateral: m.collateral, debtNow: m.debt, debtAhead: m.borrowShares > 0n ? debtAt(m.borrowShares, m.totals, m.borrowRate!, ahead) : 0n }
+      })
+      const sum = (f: (m: (typeof markets)[number]) => bigint) => markets.reduce((total, m) => total + f(m), 0n)
+      return {
+        blockNumber: s.blockNumber, blockTime: s.blockTime, markets,
+        debtNow: sum(m => m.debtNow), debtAhead: sum(m => m.debtAhead),
+        needNow: sum(m => repayNeed(m.debtNow)), needAhead: sum(m => repayNeed(m.debtAhead)),
+        collateral: sum(m => m.collateral), idle: s.idle, walletUsdc: wallet.usdc,
+      }
     },
   }
 }

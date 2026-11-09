@@ -49,6 +49,7 @@ export function createSandboxProtocol(): ProtocolAdapter {
     readPosition: notImplemented,
     readAgent: notImplemented,
     readActivity: notImplemented,
+    readClosePlan: notImplemented,
   }
 }
 
