@@ -37,7 +37,7 @@ export type MarketRead = {
   params: Params
   loanDecimals: number
   collateralDecimals: number
-  feeds: { feed: Hex; maxAge: number; updatedAt: bigint | null }[]
+  feeds: { feed: Hex; maxAge: number; answer: bigint | null; updatedAt: bigint | null }[]
   totals: Totals | null
   /** Collateral in loan units ×1e36, or null when the oracle read failed. */
   price: bigint | null
@@ -92,8 +92,8 @@ export async function readMarket(client: PublicClient, m: { morpho: Hex; executo
   const borrowAccrued = totals && borrowRate !== null ? accrue(totals.totalBorrowAssets, borrowRate, blockTime > totals.lastUpdate ? blockTime - totals.lastUpdate : 0n) : null
   const feeds = settings.feeds.map((feed, index) => {
     const r = feedReads[index]
-    const updatedAt = r && r.status === 'fulfilled' ? (r.value as readonly [bigint, bigint, bigint, bigint, bigint])[3] : null
-    return { feed, maxAge: settings.maxAges[index], updatedAt }
+    const round = r && r.status === 'fulfilled' ? r.value as readonly [bigint, bigint, bigint, bigint, bigint] : null
+    return { feed, maxAge: settings.maxAges[index], answer: round ? round[1] : null, updatedAt: round ? round[3] : null }
   }).filter(f => f.feed !== ZERO)
   return {
     blockNumber, blockTime, id: m.id, params, loanDecimals, collateralDecimals, feeds, totals, price, borrowRate, borrowAccrued,
@@ -191,3 +191,35 @@ export async function readWalletFunding(client: PublicClient, w: { owner: Hex; w
 export async function readCode(client: PublicClient, address: Hex): Promise<Hex | undefined> {
   return client.getCode({ address })
 }
+
+/**
+ * Executor._requireFresh (executor/src/Executor.sol l.481-489): every configured feed must answer > 0 and be no older
+ * than its maxAge at the block. An unreadable feed counts as not fresh.
+ */
+export function feedsFresh(m: Pick<MarketRead, 'feeds' | 'blockTime'>): boolean {
+  return m.feeds.every(f => f.answer !== null && f.answer > 0n && f.updatedAt !== null && m.blockTime <= f.updatedAt + BigInt(f.maxAge))
+}
+
+export type ReceiptRead = { hash: Hex; status: 'success' | 'reverted' | 'pending'; confirmations: number }
+
+/** Receipt status and confirmation count (FR-5: two confirmations) for each hash; a missing receipt is pending. */
+export async function readReceipts(client: PublicClient, hashes: Hex[]): Promise<ReceiptRead[]> {
+  const head = await client.getBlockNumber()
+  return Promise.all(hashes.map(async hash => {
+    const receipt = await client.getTransactionReceipt({ hash }).catch(() => null)
+    if (!receipt) return { hash, status: 'pending' as const, confirmations: 0 }
+    return { hash, status: receipt.status, confirmations: Number(head - receipt.blockNumber + 1n) }
+  }))
+}
+
+/** ETH, WETH and USDC held by an address at one block (IERC20.balanceOf, Interfaces.sol l.83). */
+export async function readTokenBalances(client: PublicClient, holder: Hex, tokens: { weth: Hex; usdc: Hex }) {
+  const { blockNumber } = await pinned(client)
+  const [eth, weth, usdc] = await Promise.all([
+    client.getBalance({ address: holder, blockNumber }),
+    client.readContract({ address: tokens.weth, abi: erc20Abi, functionName: 'balanceOf', args: [holder], blockNumber }),
+    client.readContract({ address: tokens.usdc, abi: erc20Abi, functionName: 'balanceOf', args: [holder], blockNumber }),
+  ])
+  return { blockNumber, eth, weth, usdc }
+}
+

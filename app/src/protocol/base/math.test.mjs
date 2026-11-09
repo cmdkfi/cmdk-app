@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { V } from '../vectors.mjs'
-import { accrue, allowancePresent, borrowApr, collateralValue, depositEstimate, liquidatable, ltv, toAssetsUp, WAD } from './math.ts'
+import { accrue, allowancePresent, borrowApr, collateralValue, depositEstimate, depositForBorrow, lendable, liquidatable, ltv, openTargetLtv, toAssetsUp, WAD } from './math.ts'
 
 test('V14: stored debt, collateral value and LTV with the executor rounding', () => {
   const v = V.V14_marketMath
@@ -48,12 +48,26 @@ test('allowance present means above zero (relayer.py check_setup_flags)', () => 
   assert.equal(allowancePresent(1n), true)
 })
 
-test('deposit estimate: value, borrow at target, and the liquidity cap with its resulting LTV (R2)', () => {
+test('deposit estimate: value, borrow at target, and — with the 1% margin — the liquidity cap, its LTV and the deposit that reaches the target (R2, Q1)', () => {
   const price = 3200n * 10n ** 24n, half = WAD / 2n
-  assert.deepEqual(depositEstimate(10n ** 17n, price, 10n ** 12n, half), { value: 320_000_000n, target: 160_000_000n, borrow: 160_000_000n, limited: false, resultingLtv: null, liquidityKnown: true })
-  assert.deepEqual(depositEstimate(10n ** 17n, price, 80_000_000n, half), { value: 320_000_000n, target: 160_000_000n, borrow: 80_000_000n, limited: true, resultingLtv: 25n * 10n ** 16n, liquidityKnown: true })
-  assert.deepEqual(depositEstimate(10n ** 17n, null, 1n, half), { value: null, target: null, borrow: null, limited: false, resultingLtv: null, liquidityKnown: true })
+  assert.deepEqual(depositEstimate(10n ** 17n, price, 10n ** 12n, half), { value: 320_000_000n, target: 160_000_000n, borrow: 160_000_000n, limited: false, resultingLtv: null, liquidityKnown: true, maxAmountAtTarget: null })
+  // liquidity 80 USDC → lendable 79.2 USDC → LTV 24.75 %; 0.0495 ETH would open at 50 %
+  assert.deepEqual(depositEstimate(10n ** 17n, price, 80_000_000n, half), { value: 320_000_000n, target: 160_000_000n, borrow: 79_200_000n, limited: true, resultingLtv: 247_500_000_000_000_000n, liquidityKnown: true, maxAmountAtTarget: 49_500_000_000_000_000n })
+  assert.equal(depositEstimate(10n ** 17n, null, 1n, half).value, null)
   assert.equal(depositEstimate(10n ** 17n, price, null, half).liquidityKnown, false)
+  assert.equal(lendable(10_000n), 9_900n)
+  assert.equal(depositForBorrow(79_200_000n, price, half), 49_500_000_000_000_000n)
+})
+
+test('open target LTV: the configured target when the market can lend it, otherwise what it can lend (Executor._borrowTo)', () => {
+  const half = WAD / 2n
+  assert.deepEqual(openTargetLtv(320_000_000n, 0n, 10n ** 12n, half), { targetLtv: half, borrow: 160_000_000n, belowTarget: false })
+  // the live market on 9 Nov 2026: about 13 USDC lendable against 212 USDC of collateral
+  const low = openTargetLtv(212_640_000n, 0n, 13_000_189n, half)
+  assert.equal(low.belowTarget, true)
+  assert.equal(low.borrow, 12_870_187n)
+  assert.equal(low.targetLtv, 12_870_187n * WAD / 212_640_000n)
+  assert.deepEqual(openTargetLtv(100n, 0n, 0n, half), { targetLtv: 0n, borrow: 0n, belowTarget: true })
 })
 
 // Independent oracle: Morpho's own SDK (@morpho-org/blue-sdk, devDependency only; the boundary test keeps it out of app

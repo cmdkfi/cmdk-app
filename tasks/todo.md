@@ -33,6 +33,7 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 
 ## Phase 2 — Choose, Settings, Connect (S1–S3)
 - [x] Catalogue tiles with enabled/disabled + "Coming soon" tag (FR-1).
+- [x] S1 amount field prefilled with 0.01 ETH (PRD S1, product owner 9 Nov); applied in Phase 3 (`flow/amount.ts` `DEFAULT_DEPOSIT`, shared by S1, S3 and S4).
 - [x] Amount input with min (D7), USD estimate and "about N USDC" from live oracle/IRM reads; "unavailable" fallbacks (never mock). New read module `protocol/market-quote.ts` (Executor.config → Morpho market, oracle price, IRM borrowRateView at one block); liquidity warning (R2).
 - [x] Settings card from `config.json` with locked rows and explanations (FR-2); required acknowledgement checkbox. Corridor now in `config.app.json` `guided.corridor`; liquidation from the live LLTV read.
 - [x] Connect screen: detect MetaMask, switch Base Sepolia, on 4902 add the network with the exact values from PRD Appendix C (passed as `addEthereumChainParameter` from config), account check (contract wallets blocked, EIP-7702 delegated allowed, Q2), rejection keeps input, state in `sessionStorage` (FR-3). Create position visibly disabled until Phase 3.
@@ -56,18 +57,21 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [x] Review note + lessons entry; commit on `feat/guided-flow` (no push).
 
 ## Phase 3 — Onboarding progress (S4)
-- [ ] Step machine with persistence keyed `factory:owner:vault`; resume on reload; one active step.
-- [ ] Step 1 create: `startCreateVault`/`readCreateJob`, 429 countdown, uncertain-POST handling, NearBlocks link.
-- [ ] Step 2 setup: `repairSetupArgs` from `GET /vault/<id>` flags, sign, lock, `startSetupJob`/`readSetupJob`, receipts ×2 confirmations, verify flags/corridors after.
-- [ ] Step 3 agent registration: poll `/agent/vaults`, non-blocking, honest latency copy.
-- [ ] Prompt chaining (D11, FR-5a): automatic sequential MetaMask requests, one open prompt at a time, pause on rejection with Retry, no prompt on reload until Continue.
-- [ ] Step 4 deposit to the position address: sub-state 4a wrap (`WETH.deposit()` for the missing amount, gas headroom check, skipped when wallet WETH suffices) then 4b `WETH.transfer(base_address, amount)`; confirm via receipt and position-address balance read.
-- [ ] Step 5 open: `collateral_in` from the fresh WETH balance at the position address, `target_ltv` 0.5e18, simulate `Executor.open` before signing, feed-freshness error mapped to plain text; requested automatically after 4b.
-- [ ] Step 6 withdraw USDC to wallet (if D2 = yes); requested automatically after 5.
-- [ ] Reactive gas top-up step (FR-8, D7): on a relayer funds refusal show its message, offer a plain ETH transfer to the position address, then re-request the signature.
-- [ ] Minimal reconciliation (FR-6): one lock per vault; on reload poll the job; 404 or uncertain POST → read `owner_nonce`; advanced → re-read state and continue; unchanged → countdown to the message expiry, then re-sign. No raw-tx recovery, no cancellation.
-- [ ] Failure UX: relayer `error` verbatim, safe Retry only, "Needs manual check" with job id and NEAR hash otherwise.
-- [ ] Unit tests: step predicates, resume logic, nonce-based reconciliation, open argument derivation.
+- [x] Step machine (`flow/onboarding.ts`, runner `components/useOnboarding.ts`) with the record keyed `factory:owner`, vault inside (Q3); resume on reload; one active step; nothing prompts after a reload until Continue.
+- [x] Step 1 create: `/create-vault` once, job polling, 429 countdown, uncertain POST or 404 job → discovery re-run and the appeared vault adopted before any repeat POST (only on user Retry). The vault id and position address are shown; a NearBlocks link is **not** added (no NearBlocks URL in config yet).
+- [x] Step 2 setup: args from Base facts read by `readVault` (approve always true, authorize per executor, corridor where unset; Q4), sign, lock, `/owner-call`, job, receipts × 2 confirmations, then setup complete per fact 3.
+- [x] Step 3 agent registration: `/agent/vaults` row + NEAR key list every 30 s, non-blocking, "usually a few minutes".
+- [x] Prompt chaining (D11, FR-5a): five prompts in order, one at a time, pause on rejection with Retry.
+- [x] Step 4: 4a wrap only the missing WETH, skipped when the wallet holds enough (FR-7); 4b transfer; receipts × 2 and balance predicates.
+- [x] Step 5 open: `collateral_in` = WETH at the position address; feeds (R1) and liquidity re-read before the prompt; 1% margin; "opened below target (X%)"; pause under 1 USDC lendable; pause with the new figure when > 2 points below what S1 showed (Q1).
+- [ ] Step 5: simulate `Executor.open` (eth_call) before signing — **not done**; the feed and liquidity reads cover the known revert causes (StaleFeed, insufficient liquidity). Decide in Phase 7 whether to add it.
+- [x] Step 6 withdraw: all idle USDC to the owner; done = job done and idle USDC below `usdcDust`; skipped when none.
+- [x] Reactive gas top-up (FR-8, D7, Q2): relayer refusal text verbatim, top-up (need − have) × 1.25 rounded up to 0.0001 ETH, min 0.0005 ETH, then the same signed message if ≥ 45 s valid, else a new signature.
+- [x] Minimal reconciliation (FR-6, reworded in the PRD): lock keyed `vault:owner`; job → `owner_nonce` → NEAR time; "Checking…".
+- [x] Failure UX: relayer `error` verbatim + one plain line; Retry labels say whether they re-send or re-sign; "Still waiting" with the job id after 180 s (FR-5). Paused steps show the job id; the NEAR transaction hash is not shown (not needed by the FR-6 rules).
+- [x] S1 "Deposit up to N ETH to open at 50%" in the liquidity warning (Q1); S1 prefilled with 0.01 ETH.
+- [x] Unit tests: resume step, record/lock storage and keys, job poll schedule, top-up amount, retry mode, 2-point rule, lock reconciliation table, open target LTV, feed freshness, refusal parser.
+- [x] Browser: happy path (one click), reload at each prompt step without a prompt until Continue, rejection + Retry, gas refusal + top-up + same-message re-post, lost create job → adopted vault, lost owner-call job → owner_nonce, stale feed, Q1 accept-lower-LTV.
 
 ## Phase 4 — Position screen (S5)
 - [ ] React Query polling of `readLivePosition` (30 s, paused when hidden); hero debt/collateral/LTV with segmented track; freshness line; stale snapshot kept read-only on error.
@@ -104,7 +108,7 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [ ] Playwright (desktop project): happy path S1→S5 against `e2e/fixture.ts` (fake MetaMask, NEAR/Base/relayer fixtures), reload-resume at steps 2, 5, 6, rejection at each signature, relayer 400 and 404 job, close flow with and without shortfall, wallet short of USDC with faucet panel and auto-resume after the fixture credits USDC, wallet without Base Sepolia ETH with faucet panel and auto-continue, 4902 add-network prompt values, verification mismatch, desktop gate, no-MetaMask, one-click chaining (no page clicks between Create position and the position screen).
 - [ ] Update `e2e/harness.tsx` mounts for the new components; keep "unexpected request fails the test".
 - [ ] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm test:bundle-boundary`, `pnpm test:browser` green locally and in `frontend quality` CI on the PR.
-- [ ] Live rehearsal on Base Sepolia with a real MetaMask and a fresh wallet: record vault id, every job id, tx hashes, elapsed time per step, gas used; confirm USDC in wallet and Morpho position at ≈50% LTV; then full repay-and-close; then start over. Save notes in `tasks/rehearsal-<date>.md`.
+- [ ] Live rehearsal on Base Sepolia with a real MetaMask and a fresh wallet holding ≥0.015 ETH: deposit the default **0.01 ETH** (≈10–11 USDC of debt; live market liquidity was 66 USDC free on 9 Nov after the top-up, backup 17 USDC); record vault id, every job id, tx hashes, elapsed time per step, gas used; confirm ≈10 USDC in the wallet and a Morpho position at ≈50% LTV; then full repay-and-close (one Circle faucet claim of 20 USDC covers the shortfall); then start over. Save notes in `tasks/rehearsal-<date>.md`.
 - [ ] Live rehearsal with a wallet that owns an old-app vault: lands on S5 with correct numbers and events.
 - [ ] Copy review against README honesty constraints (PRD §1 item 15): testnet, unaudited, not insurance, no "verified" without result, submitted ≠ done.
 - [ ] Preview deploy: run `deploy testnet` via `workflow_dispatch` from `feat/guided-flow`; smoke test on testnet.cmdk.fi (CORS, config.json, fonts, one full read of an existing vault).
@@ -163,4 +167,23 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
 - `@morpho-org/blue-sdk@8.0.1` (with `morpho-ts@4.0.1`, both three weeks old) is a test-only oracle. `math.test.mjs` cross-checks `accrue`, `toAssetsUp`, collateral value and LTV against `MathLib.wTaylorCompounded`, `MathLib.mulDivDown`/`mulDivUp` and `SharesMath.toAssets`, alongside the VERIFY.md vectors. The boundary test fails if the SDK appears in app code.
 - Hand-rolled pieces carry a comment saying why: WETH `deposit()`, NEAR view calls, hash router, step reducers.
 - Lockfile: adding the SDK changed no resolved version. It added 3 packages; pnpm also recomputed peer-context suffixes on 54 existing lines.
+
+**Phase 3 (9 Nov 2026, cmdkfi/app still `47fd4fb`).** S4 onboarding is built as the approved design.
+- *Structure:* a pure step model (`flow/onboarding.ts`), lock reconciliation (`flow/lock.ts`) and storage (`flow/onboarding-record.ts`). The record is keyed `factory:owner` with the vault inside; the lock is keyed `vault:owner`. One runner (`components/useOnboarding.ts`) is the only place S4 calls adapters.
+- *Chaining:* after Create position, the five prompts (setup, wrap, transfer, open, withdraw) are requested in order, one at a time. After a reload, reads reconcile on their own and nothing prompts until Continue.
+- *Owner calls (FR-6, reworded in the PRD):*
+  - Sign `owner_nonce + 1` with an expiry of NEAR time + 600 s; re-read `owner_nonce` after signing.
+  - Follow the job (FR-5 schedule, "Still waiting" after 180 s), then two receipt confirmations, then the step's chain check.
+  - A lost job or uncertain POST resolves from `owner_nonce` and NEAR time only.
+- *Create:* re-runs discovery before any repeat POST and adopts a vault that appeared meanwhile.
+- *Gas refusal:* shows the relayer's text verbatim and offers the top-up ((need − have) × 1.25, 0.0001 ETH steps, minimum 0.0005 ETH). After it confirms, the same signed message is posted again while ≥ 45 s valid; otherwise a new signature is requested.
+- *Open:* re-reads feeds (R1) and liquidity first. It opens below target with a 1% margin when the market can't lend 50%, pauses under 1 USDC, and pauses with the new figure when more than 2 points below what S1 showed (Q1). S1's warning adds "Deposit up to N ETH to open at 50%". S1 is prefilled with 0.01 ETH (your on-disk PRD edit).
+- *Withdraw:* done = job done and idle USDC below `usdcDust`.
+- *Adapter additions*, each citing its protocol source: `readVault`, `readNearTime` (new `near/rpc.finalBlockTime`), `readWalletTokens`, `readOpenPlan` (new `base/math.openTargetLtv`, `feedsFresh`), `readReceipts`, `createVault`, `ownerCall`, `readJob`, `composeOwnerMessage`, `checkOwnerSignature`, `walletTx`, `fundsShortfall` (new parser of `relayer.py` l.814-819) and `readAgentRegistration`. WalletAdapter is unchanged.
+- *Fixture:* `e2e/live-fixture.ts` gained relayer jobs and owner-call effects. It checks that the signature recovers to the owner and that the nonce is `owner_nonce + 1`, applies the relayer's gas check with its exact text, and has lost-job, rejection and stale-feed knobs.
+- *Not done:*
+  - `eth_call` simulation of `Executor.open` before signing (left unticked)
+  - a NearBlocks link (no URL in config)
+  - a browser test of an account switch mid-flow (the runner stops and re-keys on owner or chain change; that code path has no browser test)
+- *Results:* typecheck, 103/103 unit tests, build, bundle boundary, 27/27 Playwright desktop; the 8 onboarding scenarios also passed 3× repeated. No live signed rehearsal (Phase 7).
 

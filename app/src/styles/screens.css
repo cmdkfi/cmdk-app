@@ -77,3 +77,24 @@
 .network-help dl>div{display:flex;justify-content:space-between;gap:16px}
 .network-help dd{margin:0;color:var(--ink);font-family:ui-monospace,monospace}
 .network-help a{text-decoration:underline;text-underline-offset:3px}
+
+/* S4 progress (Phase 3): steps 1.4fr / rail 1fr (PRD §7). */
+.progress__grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding:14px 16px;border-radius:12px;background:var(--surface)}
+.step__index{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--raised);font-size:12px;color:var(--muted)}
+.step--done .step__index,.step--skipped .step__index{background:var(--ink);color:var(--bg)}
+.step__body{display:grid;gap:6px;min-width:0}
+.step__head{display:flex;justify-content:space-between;gap:12px}
+.step__status{font-size:12px;color:var(--muted);white-space:nowrap}
+.step--paused .step__status,.step--stale .step__status{color:#e4ba69}
+.step--done .step__status{color:#73c7a2}
+.step__note{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.step__note a{text-decoration:underline;text-underline-offset:3px}
+.step__pause{display:grid;gap:8px;justify-items:start;padding:10px 12px;border-radius:10px;background:var(--raised);box-shadow:inset 3px 0 0 #e4ba69;font-size:13px}
+.step__error{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:var(--muted)}
+.step__why{font-size:12px;color:var(--muted)}
+.step__why summary{cursor:pointer}
+.progress__rail{display:grid;gap:10px}
+.progress__rail h2{font-size:16px}
+.progress__rail code{overflow-wrap:anywhere;font-size:12px}

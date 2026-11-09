@@ -33,6 +33,19 @@ export function createSandboxProtocol(): ProtocolAdapter {
     readAccountKind: notImplemented,
     discoverPosition: notImplemented,
     relayerReadiness: notImplemented,
+    readVault: notImplemented,
+    readNearTime: notImplemented,
+    readWalletTokens: notImplemented,
+    readOpenPlan: notImplemented,
+    readReceipts: notImplemented,
+    createVault: notImplemented,
+    ownerCall: notImplemented,
+    readJob: notImplemented,
+    composeOwnerMessage: () => { throw new Error(MESSAGE) },
+    checkOwnerSignature: notImplemented,
+    walletTx: () => { throw new Error(MESSAGE) },
+    fundsShortfall: () => null,
+    readAgentRegistration: notImplemented,
   }
 }
 

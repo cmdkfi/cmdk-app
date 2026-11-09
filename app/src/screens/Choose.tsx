@@ -1,6 +1,6 @@
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import { useMarketQuote, useAppConfig } from '../components/data.ts'
-import { checkDeposit } from '../flow/amount.ts'
+import { checkDeposit, DEFAULT_DEPOSIT } from '../flow/amount.ts'
 import { formatFractionPercent, formatUnits, formatWadPercent } from '../flow/format.ts'
 import { DiscoveryBanner, go, Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
@@ -37,7 +37,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
   const { protocol } = useAdapters()
   const app = useAppConfig()
   const quote = useMarketQuote()
-  const [text, setText] = useSessionValue(mode, 'amount', '')
+  const [text, setText] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
   const guided = app.data?.guided
   const check = guided ? checkDeposit(text, guided.minDepositWei) : { kind: 'empty' as const }
   const q = quote.data
@@ -72,7 +72,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
       <dl className="estimate">
         {estimate?.limited ? <div className="estimate__row estimate__row--warning" role="status">
           <dt>The market cannot lend the full amount now</dt>
-          <dd>{usdc(estimate.borrow!)} available{estimate.resultingLtv !== null ? ` · the position would open at ${formatWadPercent(estimate.resultingLtv)} LTV` : ''}</dd>
+          <dd>{usdc(estimate.borrow!)} available{estimate.resultingLtv !== null ? ` · the position would open at ${formatWadPercent(estimate.resultingLtv)} LTV` : ''}{estimate.maxAmountAtTarget !== null && estimate.maxAmountAtTarget > 0n && guided ? <><br />Deposit up to {formatUnits(estimate.maxAmountAtTarget, 18, 6)} ETH to open at {guided.corridor.target}%</> : null}</dd>
         </div> : <div className="estimate__row">
           <dt>You borrow at {guided ? `${guided.corridor.target}%` : '—'} LTV</dt>
           <dd>{estimate?.borrow != null ? `about ${usdc(estimate.borrow)}` : check.kind === 'ok' ? <Unavailable /> : '—'}</dd>

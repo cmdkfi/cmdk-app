@@ -167,3 +167,13 @@ export async function agentEvidence(urls: RelayerUrls, name: string, fetcher: Fe
   if (!response.ok) throw new RelayerError(`Evidence file ${name} is unavailable.`, { status: response.status })
   return new Uint8Array(await response.arrayBuffer())
 }
+
+/**
+ * The relayer's gas refusal (scripts/relayer.py l.814-819 `check_funds`: "the vault Base address holds %d wei, below
+ * the %d wei the transactions may cost"; its estimate leaves out the L1 fee). Null for any other error.
+ */
+export function fundsShortfall(error: string | undefined): { have: bigint; need: bigint } | null {
+  const m = /holds (\d+) wei, below the (\d+) wei/.exec(error ?? '')
+  return m ? { have: BigInt(m[1]), need: BigInt(m[2]) } : null
+}
+

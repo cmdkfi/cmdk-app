@@ -37,13 +37,18 @@ test('S1: when the market cannot lend the full amount, a warning replaces the es
   await fx.install(context); await page.goto('/')
   await page.getByLabel('Amount to deposit').fill('0.1')
   await expect(page.getByText('The market cannot lend the full amount now')).toBeVisible()
-  await expect(page.getByText(/^100 USDC available · the position would open at 31\.2% LTV$/)).toBeVisible()
+  // liquidity 100 USDC, 1% margin → 99 USDC; 99 / 320 = 30.9 %; 99 USDC at 50 % needs 198 USDC of collateral = 0.061875 ETH
+  await expect(page.getByText('99 USDC available · the position would open at 30.9% LTV')).toBeVisible()
+  await expect(page.getByText('Deposit up to 0.061875 ETH to open at 50%')).toBeVisible()
 })
 
 test('S1/S2 gating: amount below minimum blocks Continue; the acknowledgement blocks S3', async ({ page, context, fx }) => {
   await fx.install(context); await page.goto('/')
   const next = page.getByRole('button', { name: 'Continue', exact: true })
-  await expect(next).toBeDisabled()
+  // PRD S1: prefilled with 0.01 ETH, editable
+  await expect(page.getByLabel('Amount to deposit')).toHaveValue('0.01')
+  await expect(next).toBeEnabled()
+  await page.getByLabel('Amount to deposit').fill(''); await expect(next).toBeDisabled()
   await page.getByLabel('Amount to deposit').fill('0.0005'); await expect(page.getByText('The minimum deposit is 0.001 ETH.')).toBeVisible(); await expect(next).toBeDisabled()
   await page.getByLabel('Amount to deposit').fill('0.001'); await expect(next).toBeEnabled(); await next.click()
   await expect(page.getByText('Liquidation 86%')).toBeVisible()
@@ -66,8 +71,8 @@ test('S3: short on Base Sepolia ETH opens the faucet panel and continues by itse
   fx.wallet.eth = 10n ** 18n; await page.clock.runFor(10_500)
   await expect(panel).toBeHidden()
   await expect(page.getByText('Enough')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Create position' })).toBeDisabled()
-  await expect(page.getByText('Creating a position starts in Phase 3 of this build.')).toBeVisible()
+  // funded now: Create position is enabled and nothing has been requested yet
+  await expect(page.getByRole('button', { name: 'Create position' })).toBeEnabled()
   expect(fx.signs).toEqual([]); expect(fx.posts).toEqual([]); expect(fx.txs).toEqual([])
   expect([...fx.hosts].sort()).toEqual(['base.fixture.test', 'localhost:5177', 'near.fixture.test', 'relayer.fixture.test'])
 })
@@ -136,7 +141,7 @@ test('Q4: a used USDC allowance below max still counts as setup complete; a zero
   await expect(page.getByText('Your vault is ready. Deposit to open a position.')).toBeVisible()
   fx.vaults.set(10, vault({ collateral: 0n, loanAllowance: 0n }))
   await page.reload()
-  await expect(page.getByText('Resumes at: Approve agent and rules')).toBeVisible()
+  await expect(page.getByText('Your vault exists but its setup is not complete. One signature finishes it.')).toBeVisible()
 })
 
 test('active vault with idle USDC and no local onboarding record lands on S5, not S4', async ({ page, context, fx }) => {

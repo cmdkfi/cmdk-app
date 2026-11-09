@@ -36,3 +36,9 @@
 - **Rule:** check for a maintained library before writing chain plumbing (ABIs of standard tokens, fee estimation, unit conversion, reference math). Keep own code only for protocol-specific pieces (fragments copied from cmdkfi/app) or trivially small ones, and say why in a comment.
 - **Also:** a reference library can be a test oracle without becoming a runtime dependency (Morpho SDK as devDependency, kept out of app code by the boundary test).
 
+## 2026-11-09 — Phase 3: completion checks read what the protocol controls; re-read the docs diff at phase start
+- **What happened:** the design had step 6 complete when "wallet USDC increased", taken from the PRD table; the product owner changed it to "job done and idle USDC at the position address below dust". The wallet balance can move for unrelated reasons; the position address only moves through the vault. The product owner also asked that a Retry after a refusal say explicitly whether it re-sends the same signed message or asks for a new one, and that the open pre-check re-read liquidity as well as feeds.
+- **Rule:** a step's completion predicate reads state only the protocol moves (position address, vault, Morpho), never a balance the user or anyone else can change independently.
+- **Rule:** a Retry label names exactly what will happen (same signature vs new signature vs new request); never a generic "Retry" on a signed action.
+- **Also:** the PRD and todo were edited on disk during the phase (S1 0.01 ETH prefill) and I found it only while editing the PRD at the end. Run `git diff HEAD -- docs tasks` at the start of each phase and before the Review note, and apply what the product owner added.
+

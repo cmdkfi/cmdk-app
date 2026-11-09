@@ -19,11 +19,11 @@ const DEFAULT_COOLDOWN_MS = 60_000
 const inflight = new Map<string, Promise<unknown>>()
 const cooldown = new Map<string, number>()
 
-/** One NEAR `query` call: 12 s timeout, identical in-flight requests shared, 429 honoured per RPC URL. */
-async function query<T>(rpcUrl: string, params: Record<string, unknown>, fetcher: Fetch): Promise<T> {
+/** One NEAR JSON-RPC call: 12 s timeout, identical in-flight requests shared, 429 honoured per RPC URL. */
+async function call<T>(rpcUrl: string, method: string, params: Record<string, unknown>, fetcher: Fetch): Promise<T> {
   const until = cooldown.get(rpcUrl)
   if (until && until > Date.now()) throw new NearRpcError(`NEAR RPC is rate limited. Retry after ${new Date(until).toISOString()}.`, true, until)
-  const key = `${rpcUrl}\n${JSON.stringify(params)}`
+  const key = `${rpcUrl}\n${method}\n${JSON.stringify(params)}`
   const existing = inflight.get(key)
   if (existing) return existing as Promise<T>
   const task = (async () => {
@@ -32,7 +32,7 @@ async function query<T>(rpcUrl: string, params: Record<string, unknown>, fetcher
       response = await fetcher(rpcUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 'cmdk', method: 'query', params }),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'cmdk', method, params }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       })
     } catch {
@@ -59,6 +59,7 @@ async function query<T>(rpcUrl: string, params: Record<string, unknown>, fetcher
   }
 }
 
+const query = <T>(rpcUrl: string, params: Record<string, unknown>, fetcher: Fetch) => call<T>(rpcUrl, 'query', params, fetcher)
 const base64Json = (value: unknown) => btoa(JSON.stringify(value))
 
 /** View method call, decoded as JSON. Mirrors scripts/relayer.py `near_view` (l.162-163). */
@@ -88,3 +89,15 @@ export async function viewAccessKeyList(rpcUrl: string, account: string, fetcher
   if (!Array.isArray(result.keys)) throw new NearRpcError('NEAR access-key list is unavailable.', true)
   return result.keys
 }
+
+/**
+ * Time of the latest final NEAR block, in seconds. The vault checks an owner message's expiry against this clock
+ * (vault/src/lib.rs l.49-51 `now_secs` = block_timestamp); request shape as scripts/attack-key.sh l.98.
+ */
+export async function finalBlockTime(rpcUrl: string, fetcher: Fetch = fetch): Promise<number> {
+  const block = await call<{ header?: { timestamp_nanosec?: string } }>(rpcUrl, 'block', { finality: 'final' }, fetcher)
+  const nanos = block.header?.timestamp_nanosec
+  if (!nanos || !/^\d+$/.test(nanos)) throw new NearRpcError('NEAR returned no block time.', true)
+  return Number(BigInt(nanos) / 1_000_000_000n)
+}
+

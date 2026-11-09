@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { V } from '../vectors.mjs'
-import { assessHealth, createVault, health, job, ownerCall, RelayerError } from './client.ts'
+import { assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from './client.ts'
 
 const urls = { primary: 'https://primary', fallback: 'https://fallback' }
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
@@ -60,3 +60,10 @@ test('V4/V23: a lost POST response and a forgotten (404) job are uncertain; a fa
   const vaultChecked = await job(urls, V.V3_ownerCall.job, async () => json(200, { ok: true, job: V.V3_ownerCall.job, kind: 'owner_call', stage: 'vault_checked', vault: 'v10.factory.testnet' }))
   assert.equal(vaultChecked.stage, 'vault_checked')
 })
+
+test('gas refusal text of relayer.py check_funds parses to have/need; anything else is null', () => {
+  assert.deepEqual(fundsShortfall('the vault Base address holds 200000000000000 wei, below the 960000000000000 wei the transactions may cost'), { have: 200000000000000n, need: 960000000000000n })
+  assert.equal(fundsShortfall('message expired or expires within 30 s'), null)
+  assert.equal(fundsShortfall(undefined), null)
+})
+

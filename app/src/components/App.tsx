@@ -5,7 +5,9 @@ import { afterConnect, guard, landing, type EntryInput, type Resolution, type Wa
 import { hashFor, parseHash, type Mode, type Route } from '../flow/routes.ts'
 import { Choose } from '../screens/Choose.tsx'
 import { Connect } from '../screens/Connect.tsx'
-import { Position, Progress } from '../screens/index.tsx'
+import { Position } from '../screens/index.tsx'
+import { Progress } from '../screens/Progress.tsx'
+import { loadRecord } from '../flow/onboarding-record.ts'
 import { Settings } from '../screens/Settings.tsx'
 import { useAppConfig, useDiscovery } from './data.ts'
 import { DesktopGate } from './DesktopGate.tsx'
@@ -52,8 +54,10 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   const owner = state.status === 'connected' ? state.address : undefined
   const discovery = useDiscovery(owner)
   const href = useCallback((to: Route) => hashFor({ mode, route: to }), [mode])
-  // Onboarding records arrive in Phase 3, close records in Phase 5.
-  const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord: false, closeRecord: false }
+  // The onboarding record is local (flow/onboarding-record.ts); close records arrive in Phase 5.
+  const factory = app.data?.config.near.factory
+  const onboardingRecord = mode === 'live' && !!owner && !!factory && loadRecord(mode, factory, owner) !== null
+  const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord, closeRecord: false }
 
   // The landing table runs once on "/" or "#start", and again when discovery resolves after a connect
   // from S1–S3 (PRD S0, S3). Otherwise only the route guards run, so Start over can reach S1.
@@ -87,7 +91,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     case 'start': screen = <Choose mode={mode} href={href} banner={banner} />; break
     case 'settings': screen = <Settings mode={mode} href={href} banner={banner} />; break
     case 'connect': screen = <Connect mode={mode} href={href} banner={banner} discovery={discovery} />; break
-    case 'progress': screen = <Progress step={resolution.step} />; break
+    case 'progress': screen = <Progress mode={mode} href={href} discovery={discovery} resume={resolution.step} />; break
     case 'position': screen = <Position variant={resolution.variant} />; break
   }
 

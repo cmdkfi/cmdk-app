@@ -68,17 +68,46 @@ export function allowancePresent(allowance: bigint): boolean {
   return allowance > 0n
 }
 
-export type DepositEstimate = { value: bigint | null; target: bigint | null; borrow: bigint | null; limited: boolean; resultingLtv: bigint | null; liquidityKnown: boolean }
+/** Share of the market's liquidity the app plans to borrow: 1% stays free for accrual between read and open (Q1). */
+export const LIQUIDITY_MARGIN_BPS = 100n
+
+/** What the app may plan to borrow from `liquidity` now. */
+export function lendable(liquidity: bigint): bigint {
+  return liquidity * (10_000n - LIQUIDITY_MARGIN_BPS) / 10_000n
+}
+
+export type DepositEstimate = { value: bigint | null; target: bigint | null; borrow: bigint | null; limited: boolean; resultingLtv: bigint | null; liquidityKnown: boolean; maxAmountAtTarget: bigint | null }
 
 /**
  * What a deposit would open (PRD S1, R2): value at the oracle price, the borrow to the target LTV, and — when the
- * market cannot lend that much now — the liquidity cap and the LTV it would open at. Missing price → nothing.
+ * market cannot lend that much now (after the 1% margin) — what it can lend, the LTV that gives, and the largest
+ * deposit that would still open at the target. Missing price → nothing.
  */
 export function depositEstimate(amount: bigint, price: bigint | null, liquidity: bigint | null, targetWad: bigint): DepositEstimate {
   const liquidityKnown = liquidity !== null
-  if (price === null || amount <= 0n) return { value: null, target: null, borrow: null, limited: false, resultingLtv: null, liquidityKnown }
+  const none = { value: null, target: null, borrow: null, limited: false, resultingLtv: null, liquidityKnown, maxAmountAtTarget: null }
+  if (price === null || amount <= 0n) return none
   const value = collateralValue(amount, price)
   const target = borrowAt(value, targetWad)
-  if (liquidity === null || liquidity >= target) return { value, target, borrow: target, limited: false, resultingLtv: null, liquidityKnown }
-  return { value, target, borrow: liquidity, limited: true, resultingLtv: value === 0n ? null : liquidity * WAD / value, liquidityKnown }
+  if (liquidity === null || lendable(liquidity) >= target) return { value, target, borrow: target, limited: false, resultingLtv: null, liquidityKnown, maxAmountAtTarget: null }
+  const can = lendable(liquidity)
+  return { value, target, borrow: can, limited: true, resultingLtv: value === 0n ? null : can * WAD / value, liquidityKnown, maxAmountAtTarget: depositForBorrow(can, price, targetWad) }
+}
+
+/** Largest collateral amount whose borrow at `targetWad` stays within `borrow` (inverse of collateralValue/borrowAt). */
+export function depositForBorrow(borrow: bigint, price: bigint, targetWad: bigint): bigint {
+  if (price === 0n || targetWad === 0n) return 0n
+  return borrow * WAD / targetWad * ORACLE_SCALE / price
+}
+
+/**
+ * `target_ltv` for Executor.open (executor/src/Executor.sol l.519-536 borrows value × targetLtv − debt − 2 from
+ * Morpho, which reverts when the market cannot lend it): the configured target when the market can lend enough now,
+ * otherwise the LTV the lendable amount gives (rounded down).
+ */
+export function openTargetLtv(value: bigint, debt: bigint, liquidity: bigint, targetWad: bigint): { targetLtv: bigint; borrow: bigint; belowTarget: boolean } {
+  const wanted = borrowAt(value, targetWad) > debt ? borrowAt(value, targetWad) - debt : 0n
+  const can = lendable(liquidity)
+  if (can >= wanted) return { targetLtv: targetWad, borrow: wanted, belowTarget: false }
+  return { targetLtv: value === 0n ? 0n : (debt + can) * WAD / value, borrow: can, belowTarget: true }
 }

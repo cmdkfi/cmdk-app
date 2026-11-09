@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
-import { useAccountKind, useAppConfig, useDiscovery, useRelayerReadiness, useWalletFunding } from '../components/data.ts'
-import { checkDeposit } from '../flow/amount.ts'
+import { useAccountKind, useAppConfig, useDiscovery, useMarketQuote, useRelayerReadiness, useWalletFunding } from '../components/data.ts'
+import { newRecord, resumeStep } from '../flow/onboarding.ts'
+import { saveRecord } from '../flow/onboarding-record.ts'
+import { checkDeposit, DEFAULT_DEPOSIT } from '../flow/amount.ts'
 import { fundingNeed } from '../flow/funding.ts'
 import type { AddChainParams, Guided } from '../flow/config.ts'
 import { connectionError, formatUnits, shortAddress } from '../flow/format.ts'
@@ -48,14 +50,15 @@ function GetEth({ address, missing, guided, checkedAt, onClose }: { address: str
 }
 
 export function Connect({ mode, href, banner, discovery }: ScreenProps & { discovery: ReturnType<typeof useDiscovery> }) {
-  const { wallet } = useAdapters()
+  const { wallet, protocol } = useAdapters()
+  const quote = useMarketQuote()
   const state = useWalletState()
   const app = useAppConfig()
   const guided = app.data?.guided
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [panelClosed, setPanelClosed] = useState(false)
-  const [text] = useSessionValue(mode, 'amount', '')
+  const [text] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
   const check = guided ? checkDeposit(text, guided.minDepositWei) : { kind: 'empty' as const }
   const amount = check.kind === 'ok' ? check.wei : null
   const onBase = state.status === 'connected' && state.chainId === BASE_SEPOLIA
@@ -103,8 +106,30 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     else positionText = discovery.result?.summary?.vault.accountId ?? 'Found'
 
     const blocked = account.data === 'contract'
-    let createReason = 'Creating a position starts in Phase 3 of this build. Nothing is requested from your wallet yet.'
+    const status = d.kind === 'found' ? d.status : undefined
+    const summary = discovery.result?.summary
+    // Create position needs every precondition known and true; each blocking reason is stated (PRD S3).
+    let createReason: string | null = null
     if (d.kind === 'failed') createReason = 'Your vaults could not be read, so a position cannot be created. Retry above.'
+    else if (d.kind !== 'found') createReason = 'Checking your vaults…'
+    else if (blocked) createReason = 'Contract wallets are not supported.'
+    else if (amount === null) createReason = 'Choose how much ETH to deposit first.'
+    else if (!need) createReason = 'Reading your balances…'
+    else if (!need.enough) createReason = 'Your wallet needs more Base Sepolia ETH (see above).'
+    else if (status !== null && status !== 'setup' && status !== 'ready' && status !== 'deposited') createReason = 'This wallet already has a position.'
+    else if (status !== null && !summary) createReason = 'Checking your vault…'
+    else if (creationNeeded && relayer.data?.kind !== 'ready') createReason = relayer.isError || relayer.data ? 'Creation is temporarily unavailable.' : 'Checking the relayer…'
+    const create = () => {
+      if (createReason !== null || amount === null || !app.data) return
+      const estimate = quote.data ? protocol.estimateDeposit(app.data, quote.data, amount) : null
+      const shownLtv = estimate ? (estimate.limited ? estimate.resultingLtv : BigInt(guided.corridor.target) * 10n ** 16n) : null
+      saveRecord(mode, newRecord({
+        factory: app.data.config.near.factory, owner: address, amountWei: amount, shownLtv, now: Date.now(), autostart: true,
+        vault: summary ? { accountId: summary.vault.accountId, number: summary.vault.number, baseAddress: summary.vault.baseAddress } : undefined,
+        resumeAt: resumeStep(status ?? null),
+      }))
+      window.location.hash = href('progress')
+    }
 
     body = <>
       <dl className="facts prototype-surface">
@@ -127,9 +152,9 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
       </dl>
       {need && !need.enough && !panelClosed && <GetEth address={address} missing={need.missing} guided={guided} checkedAt={funding.dataUpdatedAt} onClose={() => setPanelClosed(true)} />}
       <div className="create-action">
-        <button type="button" className="prototype-button is-primary" disabled aria-describedby="create-reason">Create position</button>
-        <p id="create-reason">{createReason}</p>
-        <p className="create-action__small">When it is enabled, this is the only click: every signature and transaction after it is requested automatically, and you only act inside MetaMask.</p>
+        <button type="button" className="prototype-button is-primary" disabled={createReason !== null} aria-describedby="create-reason" onClick={create}>Create position</button>
+        {createReason && <p id="create-reason">{createReason}</p>}
+        <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside MetaMask.</p>
       </div>
       <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
     </>

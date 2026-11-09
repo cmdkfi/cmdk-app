@@ -4,7 +4,7 @@
 // Any request to another host, or an unknown method, is recorded and fails the test.
 import { readFileSync } from 'node:fs'
 import { test as base, expect, type BrowserContext } from '@playwright/test'
-import { decodeFunctionData, encodeAbiParameters, encodeFunctionResult, hexToString, keccak256, parseAbi, toHex, type Hex } from 'viem'
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionResult, hexToString, keccak256, parseAbi, recoverMessageAddress, toHex, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { guidedValues } from '../scripts/guided-values.mjs'
 
@@ -14,7 +14,7 @@ export const OTHER = ('0x' + 'cd'.repeat(20)) as Hex
 export const BASE = ('0x' + '15'.repeat(20)) as Hex // the vault's position address
 export const FACTORY = 'factory.fixture.testnet'
 const MORPHO = ('0x' + '55'.repeat(20)) as Hex, EXECUTOR = ('0x' + '44'.repeat(20)) as Hex, IRM = ('0x' + '77'.repeat(20)) as Hex
-const ORACLE = ('0x' + '66'.repeat(20)) as Hex, BACKUP_ORACLE = ('0x' + '68'.repeat(20)) as Hex
+const ORACLE = ('0x' + '66'.repeat(20)) as Hex, BACKUP_ORACLE = ('0x' + '68'.repeat(20)) as Hex, FEED = ('0x' + '69'.repeat(20)) as Hex
 const WETH = '0x4200000000000000000000000000000000000006' as Hex, USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as Hex
 const GAS_ORACLE = '0x420000000000000000000000000000000000000F' as Hex, ZERO = '0x0000000000000000000000000000000000000000' as Hex
 const LLTV = 860000000000000000n
@@ -51,10 +51,13 @@ const ABI = parseAbi([
   'function deposit() payable',
   // agent/src/chain.rs l.824-834
   'function getL1Fee(bytes) view returns (uint256)',
+  // executor/src/Interfaces.sol l.56-61
+  'function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)',
 ])
 
 type VaultFixture = {
   owner: Hex
+  ownerNonce: number
   collateral: bigint
   borrowShares: bigint
   idle: { eth: bigint; weth: bigint; usdc: bigint }
@@ -66,7 +69,7 @@ type VaultFixture = {
 }
 
 export function vault(overrides: Partial<VaultFixture> = {}): VaultFixture {
-  return { owner: OWNER, collateral: 10n ** 17n, borrowShares: 0n, idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 0n }, authorized: true, loanAllowance: (1n << 256n) - 1n, collateralAllowance: (1n << 256n) - 1n, corridorSet: true, approved: MEASUREMENT, ...overrides }
+  return { owner: OWNER, ownerNonce: 3, collateral: 10n ** 17n, borrowShares: 0n, idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 0n }, authorized: true, loanAllowance: (1n << 256n) - 1n, collateralAllowance: (1n << 256n) - 1n, corridorSet: true, approved: MEASUREMENT, ...overrides }
 }
 
 const appValues = JSON.parse(readFileSync(new URL('../config.app.json', import.meta.url), 'utf8'))
@@ -86,6 +89,20 @@ export class LiveFixture {
   supply = 10_000n * 10n ** 6n; borrowed = 2_000n * 10n ** 6n
   l1Fee = 1_000n
   relayerPrimaryDown = false
+  // S4 (Phase 3) knobs
+  nearNow = NOW
+  feedStale = false
+  /** create-vault: 'ok', or 'lose-job' (the vault is created but GET /job answers 404). */
+  createMode: 'ok' | 'lose-job' = 'ok'
+  /** Per owner-call, consumed in order: 'lose-job' runs the call but forgets the job. */
+  ownerCallModes: ('ok' | 'lose-job')[] = []
+  /** ETH the relayer float puts at a new vault's position address (relayer check_funds needs `gasNeed`). */
+  floatWei = 5n * 10n ** 15n
+  gasNeed = 10n ** 15n
+  /** Reject one prompt of each listed kind. */
+  rejectOnce = new Set<'setup' | 'open' | 'withdraw' | 'wrap' | 'transfer'>()
+  jobs = new Map<string, Record<string, unknown>>()
+  receipts = new Set<string>()
   // records
   walletCalls: string[] = []; signs: string[] = []; txs: { to: string; data: string; value: string }[] = []
   posts: { path: string; body: unknown }[] = []; addChain: unknown[] = []
@@ -106,8 +123,9 @@ export class LiveFixture {
 
   private state(n: number) {
     const v = this.vaults.get(n)
+    const nonce = v?.ownerNonce ?? 3
     const m = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, previous_executors: [], slice_max: '1000000000', corridor_set: v?.corridorSet ?? false })
-    return { owner: v?.owner ?? OTHER, owner_nonce: 3, signer: 'signer.fixture.testnet', path: 'cmdk-base', base_address: BASE, morpho: MORPHO, cooldown_secs: 120, last_agent_action: 0, markets: [m(LIVE), m(BACKUP)], approved: v?.approved ?? null, agent: { public_key: 'ed25519:' + '2'.repeat(44), expires_at: NOW + 86400 } }
+    return { owner: v?.owner ?? OTHER, owner_nonce: nonce, signer: 'signer.fixture.testnet', path: 'cmdk-base', base_address: BASE, morpho: MORPHO, cooldown_secs: 120, last_agent_action: 0, markets: [m(LIVE), m(BACKUP)], approved: v?.approved ?? null, agent: { public_key: 'ed25519:' + '2'.repeat(44), expires_at: NOW + 86400 } }
   }
 
   /** The newest fixture vault: the one whose Base state the app reads (one position address in this fixture). */
@@ -139,13 +157,17 @@ export class LiveFixture {
         return { result: null, emit: [['chainChanged', p.chainId]] }
       }
       case 'personal_sign': {
-        if (this.rejectSign) { this.rejectSign = false; return { error: { code: 4001, message: 'User rejected the request.' } } }
-        this.signs.push(hexToString(params[0] as Hex))
+        const text = hexToString(params[0] as Hex)
+        const method = (() => { try { return JSON.parse(text).method as string } catch { return '' } })()
+        if (this.rejectSign || this.rejectOnce.has(method as 'setup')) { this.rejectSign = false; this.rejectOnce.delete(method as 'setup'); return { error: { code: 4001, message: 'User rejected the request.' } } }
+        this.signs.push(text)
         return { result: 'async-sign' }
       }
       case 'eth_sendTransaction': {
         const tx = params[0] as { to: Hex; data?: Hex; value?: Hex }
         const value = BigInt(tx.value ?? '0x0')
+        const kind = tx.data?.startsWith('0xd0e30db0') ? 'wrap' : tx.data && tx.data.length > 10 ? 'transfer' : 'topUp'
+        if (kind !== 'topUp' && this.rejectOnce.has(kind)) { this.rejectOnce.delete(kind); return { error: { code: 4001, message: 'User rejected the request.' } } }
         this.txs.push({ to: tx.to, data: tx.data ?? '0x', value: value.toString() })
         if (tx.to.toLowerCase() === WETH.toLowerCase() && tx.data?.startsWith('0xd0e30db0')) { this.wallet.eth -= value; this.wallet.weth += value }
         else if (tx.data && tx.data.length > 10) {
@@ -157,9 +179,19 @@ export class LiveFixture {
             const v = this.active()
             if (v && to.toLowerCase() === BASE.toLowerCase()) v.idle[key] += amount
           }
-        } else this.wallet.eth -= value
-        return { result: keccak256(toHex(`fixture-tx-${++this.txCount}`)) }
+        } else {
+          this.wallet.eth -= value
+          const v = this.active()
+          if (v && tx.to.toLowerCase() === BASE.toLowerCase()) v.idle.eth += value
+        }
+        const hash = keccak256(toHex(`fixture-tx-${++this.txCount}`))
+        this.receipts.add(hash)
+        return { result: hash }
       }
+      case 'eth_estimateGas': case 'eth_blockNumber': case 'eth_getBlockByNumber': case 'eth_getTransactionCount': case 'eth_maxPriorityFeePerGas':
+      case 'eth_gasPrice': case 'eth_feeHistory': case 'eth_call': case 'eth_getBalance': case 'eth_getTransactionReceipt':
+        // MetaMask answers reads through its own RPC; the fixture answers them like the Base RPC.
+        return { result: this.rpc(method, params) }
       default:
         this.unexpected.push(`wallet method ${method}`)
         return { error: { code: 4200, message: `Unsupported wallet method ${method}` } }
@@ -175,7 +207,8 @@ export class LiveFixture {
     const target = to.toLowerCase(), isLive = (id: unknown) => String(id).toLowerCase() === LIVE.toLowerCase()
     switch (d.functionName) {
       case 'idToMarketParams': return result(isLive(args[0]) ? LIVE_PARAMS : BACKUP_PARAMS)
-      case 'config': { const p = isLive(args[0]) ? LIVE_PARAMS : BACKUP_PARAMS; return result({ params: { loanToken: p[0], collateralToken: p[1], oracle: p[2], irm: p[3], lltv: p[4] }, pool: ZERO, feeds: [ZERO, ZERO], maxAges: [0, 0] }) }
+      case 'config': { const p = isLive(args[0]) ? LIVE_PARAMS : BACKUP_PARAMS; return result({ params: { loanToken: p[0], collateralToken: p[1], oracle: p[2], irm: p[3], lltv: p[4] }, pool: ZERO, feeds: [FEED, ZERO], maxAges: [1200, 0] }) }
+      case 'latestRoundData': return result([1n, 3200n * 10n ** 8n, 0n, BigInt(this.feedStale ? NOW - 5000 : NOW - 10), 1n])
       case 'market': return result([this.supply, this.supply, this.borrowed, this.borrowed, BigInt(NOW), 0n])
       case 'price': return this.price === null ? '0x' : result(this.price)
       case 'borrowRateView': return this.rate === null ? '0x' : result(this.rate)
@@ -206,12 +239,19 @@ export class LiveFixture {
       case 'eth_maxPriorityFeePerGas': return '0x3b9aca00'
       case 'eth_gasPrice': return '0x77359400'
       case 'eth_getLogs': return []
+      case 'eth_estimateGas': return '0x186a0'
+      case 'eth_feeHistory': return { oldestBlock: '0x63', baseFeePerGas: ['0x3b9aca00', '0x3b9aca00'], gasUsedRatio: [0.5], reward: [['0x3b9aca00']] }
+      case 'eth_getTransactionReceipt': {
+        const hash = String(params[0])
+        if (!this.receipts.has(hash)) return null
+        return { transactionHash: hash, transactionIndex: '0x0', blockHash: '0x' + '77'.repeat(32), blockNumber: '0x60', from: OWNER, to: BASE, cumulativeGasUsed: '0x5208', gasUsed: '0x5208', effectiveGasPrice: '0x1', contractAddress: null, logs: [], logsBloom: '0x' + '00'.repeat(256), status: '0x1', type: '0x2' }
+      }
       case 'eth_call': { const c = params[0] as { to: string; data: Hex }; return this.call(c.to, c.data) }
       default: throw Error(`Unexpected Base RPC ${method}`)
     }
   }
 
-  near(body: { id: unknown; params: Record<string, string> }): { status?: number; json?: unknown; headers?: Record<string, string> } {
+  near(body: { id: unknown; method?: string; params: Record<string, string> }): { status?: number; json?: unknown; headers?: Record<string, string> } {
     const p = body.params
     const ok = (result: unknown) => ({ json: { jsonrpc: '2.0', id: body.id, result } })
     const value = (v: unknown) => ok({ result: [...Buffer.from(JSON.stringify(v))], block_height: 1, block_hash: 'fixture' })
@@ -223,18 +263,56 @@ export class LiveFixture {
       if (this.unreadVaults.has(n)) return { json: { jsonrpc: '2.0', id: body.id, error: { name: 'HANDLER_ERROR', cause: { name: 'UNKNOWN_ACCOUNT' } } } }
       return value(this.state(n))
     }
+    if (body.method === 'block') return ok({ header: { height: 1, hash: 'fixture', timestamp_nanosec: String(BigInt(this.nearNow) * 1_000_000_000n) } })
     if (p.request_type === 'view_account') return ok({ code_hash: '11111111111111111111111111111111', global_contract_hash: 'fixturecodehash', amount: '1' })
     if (p.request_type === 'view_access_key_list') return ok({ keys: [{ public_key: 'ed25519:' + '2'.repeat(44), access_key: { nonce: 1, permission: { FunctionCall: { receiver_id: p.account_id, method_names: ['reduce', 'migrate', 'exit'], allowance: '1' } } } }] })
     throw Error(`Unexpected NEAR query ${JSON.stringify(p)}`)
   }
 
-  relayer(method: string, path: string, body: unknown): { status: number; json: unknown } {
+  /** relayer.py create_vault: the factory makes v<count+1>, the float goes to its position address (RELAYER.md l.73, l.195-206). */
+  private createVault(id: string) {
+    const n = ++this.factoryCount
+    this.vaults.set(n, vault({ collateral: 0n, authorized: false, loanAllowance: 0n, collateralAllowance: 0n, corridorSet: false, approved: null, idle: { eth: this.floatWei, weth: 0n, usdc: 0n } }))
+    if (this.createMode === 'ok') this.jobs.set(id, { ok: true, job: id, kind: 'create_vault', stage: 'done', vault: `v${n}.${FACTORY}`, base_address: BASE, near_tx: 'C'.repeat(44) })
+  }
+
+  /** relayer.py owner_call: verify message and signature, check gas (check_funds), run the method, advance owner_nonce. */
+  private async ownerCall(id: string, body: { vault: string; message: string; signature: Hex }) {
+    const n = Number(/^v(\d+)\./.exec(body.vault)?.[1] ?? 0), v = this.vaults.get(n)
+    const m = JSON.parse(body.message) as { vault: string; method: string; args: Record<string, string>; nonce: number; expiry: number }
+    const signer = await recoverMessageAddress({ message: body.message, signature: body.signature })
+    if (!v || signer.toLowerCase() !== v.owner.toLowerCase() || m.vault !== body.vault) throw Error('owner-call with a bad vault or signature')
+    if (m.nonce !== v.ownerNonce + 1) throw Error(`owner-call nonce ${m.nonce}, expected ${v.ownerNonce + 1}`)
+    if (v.idle.eth < this.gasNeed) {
+      this.jobs.set(id, { ok: false, job: id, kind: 'owner_call', stage: 'failed', vault: body.vault, error: `the vault Base address holds ${v.idle.eth} wei, below the ${this.gasNeed} wei the transactions may cost`, http_status: 400 })
+      return
+    }
+    v.ownerNonce = m.nonce
+    if (m.method === 'setup') { v.authorized = true; v.loanAllowance = (1n << 256n) - 1n; v.collateralAllowance = (1n << 256n) - 1n; v.corridorSet = true; v.approved = MEASUREMENT }
+    if (m.method === 'open') {
+      const collateralIn = BigInt(m.args.collateral_in), target = BigInt(m.args.target_ltv)
+      v.idle.weth -= collateralIn; v.collateral += collateralIn
+      const borrowed = v.collateral * (this.price ?? 0n) / 10n ** 36n * target / 10n ** 18n - 2n
+      v.borrowShares += borrowed; v.idle.usdc += borrowed
+    }
+    if (m.method === 'withdraw') { const amount = BigInt(m.args.amount); v.idle.usdc -= amount; this.wallet.usdc += amount }
+    const hash = keccak256(toHex(`fixture-owner-call-${id}`))
+    this.receipts.add(hash)
+    v.idle.eth -= 10n ** 14n
+    if ((this.ownerCallModes.shift() ?? 'ok') === 'ok') this.jobs.set(id, { ok: true, job: id, kind: 'owner_call', stage: 'done', vault: body.vault, near_tx: 'N'.repeat(44), receipts: [{ hash, status: 1 }] })
+  }
+
+  relayer(method: string, path: string, body: unknown): { status: number; json: unknown; after?: () => void | Promise<void> } {
     if (method === 'GET' && path === '/health') return { status: 200, json: { ok: true, chain_id: 84532, near_network: 'testnet', factory: FACTORY, factory_exists: true, eth_float_wei: '5000000000000000' } }
     if (method === 'GET' && path === '/agent/vaults') return { status: 200, json: { boot: 'boot-fixture', operator: 'cmdk', vaults: [] } }
-    if (method === 'GET' && path.startsWith('/job/')) return { status: 404, json: { ok: false, error: 'no such job' } }
+    if (method === 'GET' && path.startsWith('/job/')) {
+      const job = this.jobs.get(path.slice(5))
+      return job ? { status: 200, json: job } : { status: 404, json: { ok: false, error: 'no such job' } }
+    }
     if (method === 'POST' && (path === '/create-vault' || path === '/owner-call')) {
       this.posts.push({ path, body })
-      return { status: 202, json: { ok: true, job: keccak256(toHex(`job-${this.posts.length}`)).slice(2, 18) } }
+      const id = keccak256(toHex(`job-${this.posts.length}`)).slice(2, 18)
+      return { status: 202, json: { ok: true, job: id }, after: path === '/create-vault' ? () => this.createVault(id) : () => this.ownerCall(id, body as { vault: string; message: string; signature: Hex }) }
     }
     throw Error(`Unexpected relayer ${method} ${path}`)
   }
@@ -286,6 +364,7 @@ export class LiveFixture {
           if (url.host === 'relayer.fixture.test' && this.relayerPrimaryDown) return route.abort('failed')
           if (request.method() === 'POST' && url.host !== 'relayer.fixture.test') throw Error('POST sent to the relayer fallback')
           const answer = this.relayer(request.method(), url.pathname, request.method() === 'POST' ? request.postDataJSON() : undefined)
+          await answer.after?.()
           return route.fulfill({ status: answer.status, json: answer.json })
         }
         throw Error(`External request blocked: ${request.method()} ${url.href}`)
