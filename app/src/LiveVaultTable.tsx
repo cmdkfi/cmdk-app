@@ -1,3 +1,4 @@
+import {positionTableRead,type PositionTableRead} from './position-table-state.ts'
 import {marketTitle} from './vault-layout.ts'
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
@@ -11,15 +12,17 @@ const percent = (value: bigint | null) => value === null ? '—' : `${(Number(va
 
 export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (id: string) => void }) {
   const [revision, setRevision] = useState(0)
-  const [result, setResult] = useState<{ source: Vault[]; rows: VaultTableRow[]; errors: string[]; time: number } | null>(null)
+  const source=JSON.stringify(vaults.map(vault=>[vault.accountId,vault.owner.toLowerCase(),vault.baseAddress]))
+  const [result, setResult] = useState<PositionTableRead<VaultTableRow&{sourceVault?:string}>|null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let active = true
     setLoading(true)
     loadConfig().then(async config => {
-      const reads = await Promise.allSettled(vaults.map(vault => readLivePosition(config, vault.accountId, vault.owner)))
+      const reads:PromiseSettledResult<Awaited<ReturnType<typeof readLivePosition>>>[]=[]
+      for(let start=0;start<vaults.length;start+=2){if(!active)return;reads.push(...await Promise.allSettled(vaults.slice(start,start+2).map(vault=>readLivePosition(config,vault.accountId,vault.owner))))}
       if (!active) return
-      const rows: VaultTableRow[] = []
+      const rows:(VaultTableRow&{sourceVault:string})[]=[]
       const errors: string[] = []
       reads.forEach((read, index) => {
         const vault = vaults[index]
@@ -27,7 +30,7 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
         errors.push(...(read.value.errors ?? []))
         if (!read.value.markets.length && !read.value.errors?.length) errors.push(`Vault ${vault.number}: no configured markets.`)
         read.value.markets.forEach(market => rows.push({
-          marketLabel:market.label ?? `${market.id.slice(0,10)}…`, name: marketTitle(market), loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
+          sourceVault:vault.accountId, marketLabel:market.label ?? `${market.id.slice(0,10)}…`, name: marketTitle(market), loanSymbol: market.loanSymbol, loanId: market.loanToken, vaultAddress: read.value.baseAddress, detail: `${market.collateralSymbol} / ${market.loanSymbol} · ${market.id.slice(0, 10)}… · ${vault.accountId}`,
           asset: market.collateralSymbol, assetId: market.collateralToken.toLowerCase(),
           collateral: `${amount(market.collateral, market.collateralDecimals)} ${market.collateralSymbol}`,
           value: market.priceUnavailable ? 'Oracle unavailable' : `${amount(market.collateralValue, market.loanDecimals)} ${market.loanSymbol} at oracle`,
@@ -36,22 +39,23 @@ export function LiveVaultTable({ vaults, onOpen }: { vaults: Vault[]; onOpen: (i
           onOpen: () => onOpen(vault.accountId),
         }))
       })
-      setResult({ source: vaults, rows, errors, time: Date.now() })
-    }).catch(error => { if (active) setResult({ source: vaults, rows: [], errors: [error instanceof Error ? error.message : 'Position loading failed.'], time: Date.now() }) })
+      setResult(previous=>positionTableRead(previous,source,rows,errors,Date.now()))
+    }).catch(error => { if (active) setResult(previous=>positionTableRead(previous,source,[],[error instanceof Error?error.message:'Position loading failed.'],Date.now())) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [vaults, revision])
+  }, [source, revision])
   useEffect(() => {
     const timer = window.setInterval(() => { if (!document.hidden) setRevision(value => value + 1) }, 30000)
     return () => window.clearInterval(timer)
   }, [])
-  const current = result?.source === vaults ? result : null
+  const current = result?.source === source ? result : null
   return <div>
     <p className="demo-summary">Read from NEAR and Base Sepolia. Debt and LTV include interest calculated at the read block. Autopilot reflects registration, rules and a recent agent observation, not a guarantee of execution or a successful market read.</p>
     <PrototypeButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh positions</PrototypeButton>
     <p className="position-read-status" role="status">{loading ? 'Reading vault positions…' : ' '}</p>
     {current?.errors.map(error => <p role="alert" key={error}>{error}</p>)}
-    {current && current.rows.length > 0 && <VaultTable vaults={current.rows} />}
-    {current && <p className="demo-summary">Last read {new Date(current.time).toLocaleTimeString()} · Updates every 30 seconds while visible.</p>}
+    {current?.staleSnapshot&&<p role="status">Position reads are incomplete.{current.time?' Showing the last complete snapshot; rows open read-only verification.':' Available rows are partial; rows open read-only verification.'}</p>}
+    {current && current.rows.length > 0 && <VaultTable vaults={current.staleSnapshot?current.rows.map(row=>({...row,protection:'Unavailable',onOpen:()=>{const vault=vaults.find(item=>row.sourceVault===item.accountId);if(vault)window.location.hash=`verify?vault=${encodeURIComponent(vault.accountId)}`}})):current.rows} />}
+    {current?.time && <p className="demo-summary">Last complete read {new Date(current.time).toLocaleTimeString()} · Updates every 30 seconds while visible.</p>}
   </div>
 }

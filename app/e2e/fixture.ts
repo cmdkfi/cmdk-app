@@ -1,11 +1,14 @@
 import {createHash} from 'node:crypto'
 import {test as base,expect,type BrowserContext} from '@playwright/test'
-import {decodeFunctionData,encodeFunctionResult,encodeFunctionData,parseAbi,keccak256,hexToString,toHex,type Hex} from 'viem'
+import {decodeFunctionData,encodeAbiParameters,encodeFunctionResult,encodeFunctionData,parseAbi,keccak256,hexToString,toHex,type Hex} from 'viem'
 import {privateKeyToAccount} from 'viem/accounts'
-import {OTHER,OWNER,BASE,EXECUTOR,MORPHO,LIVE,BACKUP,VAULT,KEY,NOW,config,AGENT_BOOT,AGENT_KEY,AGENT_NEAR,measurement} from './data.ts'
+import {OTHER,OWNER,BASE,EXECUTOR,MORPHO,LIVE,BACKUP,VAULT,KEY,NOW,WETH,USDC,config,AGENT_BOOT,AGENT_KEY,AGENT_NEAR,measurement} from './data.ts'
 const owner=privateKeyToAccount(('0x'+'11'.repeat(32)) as Hex),baseAccount=privateKeyToAccount(('0x'+'22'.repeat(32)) as Hex)
 const HASH='0x'+'77'.repeat(32),ORIGINAL_NEAR='1'.repeat(44)
 const ABI=parseAbi(['function corridors(address,bytes32) view returns(uint64,uint64,uint64,uint64,bool,bool,bool)','function setCorridor(bytes32,(uint64 target,uint64 act,uint64 floor,uint64 sellBudget,bool migrateAllowed,bool exitAllowed,bool set),uint256)','function allowance(address,address) view returns(uint256)','function isAuthorized(address,address) view returns(bool)','function balanceOf(address) view returns(uint256)','function getEthBalance(address) view returns(uint256)'])
+const READ_PARAMS=[USDC,WETH,OTHER,'0x0000000000000000000000000000000000000000',860000000000000000n] as const
+const READ_ID=keccak256(encodeAbiParameters([{type:'address'},{type:'address'},{type:'address'},{type:'address'},{type:'uint256'}],READ_PARAMS))
+const READ_ABI=parseAbi(['function position(bytes32,address) view returns(uint256,uint128,uint128)','function market(bytes32) view returns(uint128,uint128,uint128,uint128,uint128,uint128)','function idToMarketParams(bytes32) view returns(address,address,address,address,uint256)','function symbol() view returns(string)','function decimals() view returns(uint8)','function price() view returns(uint256)','function closedForAgent(address,bytes32) view returns(bool)','function soldInWindow(address,address) view returns(uint256)','function movesInWindow(address) view returns(uint256)','function sessionStart(address,bytes32) view returns(uint256)','function lastAgentCall(address) view returns(uint256)','function COOLDOWN() view returns(uint256)','function marketCount() view returns(uint256)','function marketIds(uint256) view returns(bytes32)'])
 const MULTICALL=parseAbi(['function aggregate3((address target,bool allowFailure,bytes callData)[] calls) payable returns ((bool success,bytes returnData)[] returnData)'])
 const pct=(n:number)=>BigInt(n)*10n**16n
 const encode=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64')
@@ -21,7 +24,7 @@ export class ProtocolFixture {
  originalRecord:Record<string,unknown>={};originalSigned:Signed[]=[]
  nearResults=new Map<string,{message:string;signature:Hex;signed:Signed[]}>()
  jobs=new Map<string,Record<string,unknown>>()
- factoryCount=0;wrongPublicVault=false;publicVaultUnavailable=false;failEvidenceIndex=false;failTranscripts=false;failNearState=false;
+ fullPosition=false;failFactory=false;factoryRateLimit=false;factoryReads=0;unreadVault='';transferredVault='';factoryCount=0;wrongPublicVault=false;publicVaultUnavailable=false;failEvidenceIndex=false;failTranscripts=false;failNearState=false;
  evidenceBoot=AGENT_BOOT;evidenceCount=2;evidenceStamp=Math.floor(Date.now()/1000)-60;corruptEvidence='';corruptTranscript=false;wrongTranscriptVault=false;secondaryError=false;rotateEvidence=false;agentWrongArgs=false;agentReceiptStatus='0x1';agentSigned?:Signed
  directReceipt=false;lastCancelNear='';lastCancel?:Signed
  async signed(nonce:number,to:Hex,data:Hex='0x'):Promise<Signed>{const raw=await baseAccount.signTransaction({chainId:84532,type:'eip1559',nonce,to,data,value:0n,gas:300000n,maxFeePerGas:1000000000n,maxPriorityFeePerGas:1n});return{raw,hash:keccak256(raw),from:BASE,nonce}}
@@ -53,11 +56,11 @@ export class ProtocolFixture {
     this.broadcasts.push(String(params[0]));return this.lastCancel!.hash
    }
    case 'eth_call':{
-    const call=params[0] as {data:Hex}
+    const call=params[0] as {data:Hex;to?:string}
     if(call.data.startsWith('0x82ad56cb')){const batch=decodeFunctionData({abi:MULTICALL,data:call.data});return encodeFunctionResult({abi:MULTICALL,functionName:'aggregate3',result:batch.args[0].map(item=>({success:true,returnData:this.rpc('eth_call',[{to:item.target,data:item.callData},params[1]]) as Hex}))})}
-    const decoded=decodeFunctionData({abi:ABI,data:call.data})
-    const result=decoded.functionName==='corridors'?this.corridors.get(decoded.args[1])!:decoded.functionName==='isAuthorized'?true:decoded.functionName==='allowance'?(1n<<256n)-1n:['balanceOf','getEthBalance'].includes(decoded.functionName)?10n**18n:undefined
-    return encodeFunctionResult({abi:ABI,functionName:decoded.functionName,result:result as never})
+    const decoded=decodeFunctionData({abi:this.fullPosition?[...ABI,...READ_ABI]:ABI,data:call.data})
+    const result=decoded.functionName==='corridors'?(this.corridors.get(decoded.args[1])??this.corridors.get(LIVE))!:decoded.functionName==='isAuthorized'?true:decoded.functionName==='allowance'?(1n<<256n)-1n:['balanceOf','getEthBalance'].includes(decoded.functionName)?10n**18n:decoded.functionName==='position'?[0n,0n,10n**18n]:decoded.functionName==='market'?[1000000000n,1000000000n,0n,0n,BigInt(NOW),0n]:decoded.functionName==='idToMarketParams'?READ_PARAMS:decoded.functionName==='price'?3200n*10n**24n:decoded.functionName==='marketIds'?READ_ID:decoded.functionName==='marketCount'?1n:decoded.functionName==='COOLDOWN'?120n:['soldInWindow','movesInWindow','sessionStart','lastAgentCall'].includes(decoded.functionName)?0n:decoded.functionName==='closedForAgent'?false:decoded.functionName==='symbol'?call.to?.toLowerCase()===USDC.toLowerCase()?'USDC':'WETH':decoded.functionName==='decimals'?call.to?.toLowerCase()===USDC.toLowerCase()?6:18:undefined
+    return encodeFunctionResult({abi:this.fullPosition?[...ABI,...READ_ABI]:ABI,functionName:decoded.functionName,result:result as never})
    }
    default:throw Error(`Unexpected RPC ${method}`)
   }
@@ -109,16 +112,18 @@ export class ProtocolFixture {
    const request=route.request(),url=new URL(request.url())
    try{
     if(url.hostname==='localhost'&&url.port==='5177'){
-     if(url.pathname==='/config.json')return route.fulfill({json:config})
+     if(url.pathname==='/config.json')return route.fulfill({json:this.fullPosition?{...config,createVault:{...config.createVault,markets:[{...config.createVault.markets[0],id:READ_ID}]}}:config})
      return route.continue()
     }
     // SDK analytics are deliberately swallowed locally, never forwarded.
     if(url.hostname==='cca-lite.coinbase.com')return route.fulfill({status:204,body:''})
     if(url.hostname==='near.fixture.test'){
      const req=request.postDataJSON();let result:unknown
+     if(req.params?.method_name==='get_config'){this.factoryReads++;if(this.factoryRateLimit)return route.fulfill({status:429,headers:{'Retry-After':'3','Access-Control-Expose-Headers':'Retry-After'},body:'rate limited'});if(this.failFactory)return route.abort('failed')}
+     if(req.params?.method_name==='get_state'&&req.params.account_id===this.unreadVault)return route.fulfill({json:{error:{message:'unavailable account'}}})
      if(this.failNearState&&req.params?.method_name==='get_state')return route.fulfill({status:503,body:'NEAR temporarily unavailable'})
      if(req.method==='query'){
-      const state=req.params.method_name==='get_config'?{count:this.factoryCount}:{owner:OWNER,owner_nonce:this.ownerNonce,base_address:BASE,approved:measurement,agent:{public_key:AGENT_KEY,expires_at:NOW+86400},markets:[LIVE,BACKUP].map(id=>({id,executor:EXECUTOR,corridor_set:true}))}
+      const state=req.params.method_name==='get_config'?{count:this.factoryCount}:{owner:req.params.account_id===this.transferredVault?OTHER:OWNER,owner_nonce:this.ownerNonce,base_address:BASE,...(this.fullPosition?{morpho:MORPHO}:{}),approved:measurement,agent:{public_key:AGENT_KEY,expires_at:NOW+86400},markets:(this.fullPosition?[READ_ID]:[LIVE,BACKUP]).map(id=>({id,executor:EXECUTOR,corridor_set:true}))}
       result={block_hash:HASH,result:[...Buffer.from(JSON.stringify(state))]}
      }else if(req.method==='tx'){
       if(req.params.tx_hash===AGENT_NEAR){return route.fulfill({json:{result:{final_execution_status:'FINAL',receipts_outcome:[{outcome:{status:{SuccessValue:''}}}],transaction:{hash:AGENT_NEAR,receiver_id:VAULT,signer_id:VAULT,public_key:AGENT_KEY,actions:[{FunctionCall:{method_name:'reduce',args:encode({market:LIVE,amount:this.agentWrongArgs?'101':'100',tx:{}})}}]},status:{SuccessValue:encode([this.agentSigned])}}}})}
@@ -129,6 +134,7 @@ export class ProtocolFixture {
      return route.fulfill({json:{jsonrpc:'2.0',id:req.id,result}})
     }
     if(['relayer.fixture.test','fallback.fixture.test'].includes(url.hostname)){
+     if(url.pathname==='/agent/vaults')return route.fulfill({json:{vaults:[]}})
      if(url.pathname==='/agent/'&&this.failEvidenceIndex)return route.fulfill({status:503,body:'Evidence temporarily unavailable'})
      if(url.pathname==='/agent/transcripts'&&this.failTranscripts)return route.fulfill({status:503,body:'Transcripts temporarily unavailable'})
      if(url.pathname==='/agent/')return route.fulfill({json:{boot:this.evidenceBoot,files:this.evidenceFiles().map(({text,...row})=>row)}})

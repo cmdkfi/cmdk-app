@@ -51,3 +51,12 @@ test('uses validated relayer factory for reading without enabling creation', asy
   assert.equal(loaded.createVault, null)
   await assert.rejects(loadConfig(async url => ({ ok: true, json: async () => url === '/config.json' ? structuredClone(base) : { chain_id: 1, near_network: 'testnet', factory_exists: true, factory: 'published.testnet' } })), /supported testnet factory/)
 })
+
+test('discovery retries a transient read once, and stops the remaining scan on an RPC-wide rate limit',async()=>{
+ let calls=0
+ const recovered=await discoverVaults(config,'0xabc',async()=>{calls++;if(calls===1)throw TypeError('Failed to fetch');return response({count:0})})
+ assert.equal(calls,2);assert.equal(recovered.failed,0)
+ let records=0
+ const limited=await discoverVaults(config,'0xabc',async(_url,init)=>{const p=JSON.parse(init.body).params;if(p.method_name==='get_config')return response({count:10});records++;return new Response('',{status:429,headers:{'Retry-After':'60'}})})
+ assert.equal(records,2);assert.equal(limited.failed,10);assert.equal(limited.unreadAccounts.length,10);assert.ok(limited.retryAt>Date.now())
+})

@@ -23,3 +23,4 @@
 .position-read-status {min-height:1.5em;}
 
 .activity-tools>label{min-width:0;max-width:100%}.activity-tools select{width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:16px;min-height:44px}
+.vault-discovery section[aria-label="Previously found vaults"] ul{padding:0;list-style:none}.vault-discovery section[aria-label="Previously found vaults"] li{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;padding:8px 0;border-bottom:1px solid var(--line)}.vault-discovery section[aria-label="Previously found vaults"] code{font-size:12px;overflow-wrap:anywhere}.vault-discovery section[aria-label="Previously found vaults"] a{display:inline-flex;align-items:center;min-height:44px;padding:8px 0;touch-action:manipulation}.vault-discovery section[aria-label="Previously found vaults"] a:focus-visible{outline:2px solid var(--ink);outline-offset:3px}

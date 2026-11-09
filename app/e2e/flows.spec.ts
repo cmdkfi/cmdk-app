@@ -30,7 +30,7 @@ test('wallet: network switch and account change update the actual wallet compone
 })
 
 test('wallet: contract account cannot reach vault creation through discovery',async({context,page,protocol})=>{
- protocol.contractWallet=true;await protocol.install(context);await page.goto('/#connect');await page.getByRole('button',{name:'Connect wallet',exact:true}).first().click();await connect(page)
+ protocol.contractWallet=true;await protocol.install(context);await page.goto('/#connect');await page.getByRole('button',{name:'Connect wallet',exact:true}).first().click();await page.locator('.wallet-option').filter({hasText:'MetaMask'}).click()
  await expect(page.getByText('This account type is not supported yet. Connect another wallet.')).toBeVisible()
  await expect(page.getByRole('link',{name:/Create vault/})).toHaveCount(0)
  expect(protocol.posts).toEqual([])
