@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { test, expect, BASE, type LiveFixture } from './live-fixture.ts'
+import { test, expect, BASE, OTHER, OWNER, vault, type LiveFixture } from './live-fixture.ts'
 
 const WETH = '0x4200000000000000000000000000000000000006'
 const prompts = (fx: LiveFixture) => fx.walletCalls.filter(m => m === 'personal_sign' || m === 'eth_sendTransaction')
@@ -146,5 +146,81 @@ test('Q1: if the market now lends more than 2 points less than S1 showed, open p
   await open.getByRole('button', { name: 'Open at the lower LTV' }).click()
   await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
   expect(JSON.parse(fx.signs[1]).args.target_ltv).toBe((99n * 10n ** 6n * 10n ** 18n / (320n * 10n ** 6n)).toString())
+})
+
+
+test('account switch mid-onboarding: the run stops, the other account sees none of it and nothing is prompted; back on the owner, S4 is shown again and Continue resumes', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.rejectOnce.add('setup')
+  await fx.install(context)
+  await createPosition(page)
+  await expect(step(page, 'Approve agent and rules')).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
+  const before = prompts(fx).length
+  const key = `cmdk.live.onboarding.v1.factory.fixture.testnet:${OWNER.toLowerCase()}`
+  expect(await page.evaluate(k => localStorage.getItem(k) !== null, key)).toBe(true)
+  // MetaMask switches to another account: it owns no vault and has no record, so S4 is left and nothing is asked
+  await fx.switchAccount(page, OTHER)
+  await expect(page).toHaveURL(/#start$/, { timeout: 20_000 })
+  await page.waitForTimeout(1_000)
+  expect(prompts(fx).length, 'no prompt for the other account').toBe(before)
+  expect(fx.posts.filter(p => p.path === '/owner-call')).toEqual([])
+  expect(await page.evaluate(k => localStorage.getItem(k) !== null, key), "the owner's record is kept under the owner's key").toBe(true)
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.includes('.onboarding.v1.')))).toEqual([key])
+  // back to the owner: the landing table runs again for the new account and lands on S4, which waits for Continue
+  await fx.switchAccount(page, OWNER)
+  await expect(page).toHaveURL(/#progress$/, { timeout: 20_000 })
+  await expect(page.getByRole('listitem', { name: 'Approve agent and rules' })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(step(page, 'Approve agent and rules').getByRole('status')).toHaveText('Waiting')
+  await page.waitForTimeout(1_000)
+  expect(prompts(fx).length, 'no prompt until Continue').toBe(before)
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
+})
+
+test('S3 after a switch away and back shows the owned vault and returns to S4; no second create request', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.rejectOnce.add('setup')
+  await fx.install(context)
+  await createPosition(page)
+  await expect(step(page, 'Approve agent and rules')).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
+  await fx.switchAccount(page, OTHER)
+  await expect(page).toHaveURL(/#start$/, { timeout: 20_000 })
+  await fx.switchAccount(page, OWNER)
+  await expect(page).toHaveURL(/#progress$/, { timeout: 20_000 })
+  // the user walks to S3 anyway
+  await page.evaluate(() => { window.location.hash = '#connect' })
+  const facts = page.locator('.facts > div')
+  await expect(facts.filter({ hasText: 'Existing position' }).locator('dd')).toHaveText('v10.factory.fixture.testnet', { timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Create position' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Continue where you left off' }).click()
+  await expect(page).toHaveURL(/#progress$/)
+  await expect(step(page, 'Create your position').getByRole('status')).toHaveText('Done')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(fx.posts.filter(p => p.path === '/create-vault')).toHaveLength(1)
+})
+
+test('creation is guarded by a fresh ownership read: with a stale "none" and a vault that exists, it is adopted and nothing is created', async ({ page, context, fx }) => {
+  fresh(fx)
+  await fx.install(context)
+  await page.goto('/#start')
+  await page.getByLabel('Amount to deposit').fill('0.1')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('checkbox').check()
+  await page.getByRole('button', { name: 'Continue to wallet' }).click()
+  await page.getByRole('button', { name: 'Connect MetaMask' }).click()
+  await expect(page.getByText('None for this wallet')).toBeVisible()
+  // meanwhile the wallet's vault appears (another tab, or a create whose answer was lost); this page's check is stale
+  fx.factoryCount = 10
+  fx.vaults.set(10, vault({ collateral: 0n, authorized: false, loanAllowance: 0n, collateralAllowance: 0n, corridorSet: false, approved: null }))
+  await page.getByRole('button', { name: 'Create position' }).click()
+  await expect(page).toHaveURL(/#progress$/)
+  await expect(step(page, 'Create your position')).toContainText('Your vault was found on NEAR; it is used as is.', { timeout: 20_000 })
+  await expect(step(page, 'Create your position').getByRole('status')).toHaveText('Done')
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(fx.posts.filter(p => p.path === '/create-vault')).toEqual([])
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
 })
 

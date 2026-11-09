@@ -1,6 +1,6 @@
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import { useMarketQuote, useAppConfig } from '../components/data.ts'
-import { checkDeposit, DEFAULT_DEPOSIT } from '../flow/amount.ts'
+import { checkDeposit, defaultDeposit } from '../flow/amount.ts'
 import { formatFractionPercent, formatUnits, formatWadPercent } from '../flow/format.ts'
 import { DiscoveryBanner, go, Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
@@ -37,7 +37,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
   const { protocol } = useAdapters()
   const app = useAppConfig()
   const quote = useMarketQuote()
-  const [text, setText] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
+  const [text, setText] = useSessionValue(mode, 'amount', defaultDeposit(mode))
   const guided = app.data?.guided
   const check = guided ? checkDeposit(text, guided.minDepositWei) : { kind: 'empty' as const }
   const q = quote.data

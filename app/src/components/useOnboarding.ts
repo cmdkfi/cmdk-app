@@ -1,5 +1,7 @@
 // S4 onboarding (PRD S4, D11, FR-5/5a/6/7/8, R1, R2, R4): the step drivers on the shared runner (runner.ts). The only
 // place S4 calls adapters.
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import type { Address } from 'viem'
 import { ProtocolError } from '../adapters/types.ts'
 import type { LoadedConfig } from '../flow/config.ts'
@@ -21,8 +23,8 @@ const setVault = (env: Env, vault: NonNullable<OnboardingRecord['vault']>) => en
  * Before any repeat of the create POST (lost job, uncertain response, Retry): re-run discovery and adopt a vault that
  * appeared meanwhile (PRD S4 step 1, FR-6). 'none' only when the scan completed and found no vault from the cutoff.
  */
-async function rediscover(env: Env): Promise<'adopted' | 'none' | 'unknown'> {
-  env.patch('create', { status: 'checking', pause: undefined, note: 'Checking whether the vault was created…' })
+async function rediscover(env: Env, note = 'Checking whether the vault was created…'): Promise<'adopted' | 'none' | 'unknown'> {
+  env.patch('create', { status: 'checking', pause: undefined, note })
   const found = await env.protocol.discoverPosition(env.app, env.owner).catch(() => undefined)
   if (found === undefined) {
     env.patch('create', { status: 'paused', note: undefined, pause: { line: 'Your vaults could not be read. Nothing is created until they can be.', retry: 'check' } })
@@ -59,15 +61,14 @@ async function createStep(env: Env): Promise<boolean> {
   }
   const action = env.take('create')
   if (!env.armed()) { env.patch('create', { status: 'waiting' }); return false }
-  // Before any repeat of the POST, re-run discovery and adopt a vault that appeared meanwhile (PRD S4 step 1, FR-6).
-  if (step.attempted) {
-    const found = await rediscover(env)
-    if (found === 'adopted') return true
-    if (found === 'unknown') return false
-    if (action !== 'post') {
-      env.patch('create', { status: 'paused', note: undefined, pause: { line: 'No vault exists yet for this wallet. You can ask the relayer again.', retry: 'post' } })
-      return false
-    }
+  // Creation is guarded by a fresh ownership read, never by a cached one (PRD S4 step 1, FR-4): discovery runs again
+  // immediately before every POST, and a vault the wallet already owns is adopted instead of creating another.
+  const found = await rediscover(env, step.attempted ? 'Checking whether the vault was created…' : 'Checking whether this wallet already owns a vault…')
+  if (found === 'adopted') return true
+  if (found === 'unknown') return false
+  if (step.attempted && action !== 'post') {
+    env.patch('create', { status: 'paused', note: undefined, pause: { line: 'No vault exists yet for this wallet. You can ask the relayer again.', retry: 'post' } })
+    return false
   }
   const readiness = await env.protocol.relayerReadiness(env.app).catch(error => ({ kind: 'failed' as const, message: message(error) }))
   if (readiness.kind !== 'ready') { env.patch('create', { status: 'paused', pause: { line: 'Creation is temporarily unavailable.', text: readiness.message, retry: 'post' } }); return false }
@@ -207,7 +208,8 @@ export type Onboarding = {
 
 export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: Address | undefined, chainOk: boolean, onFinished: () => void): Onboarding {
   const factory = app?.config.near.factory
-  return useStepChain<StepId, OnboardingRecord>({
+  const queryClient = useQueryClient()
+  const chain = useStepChain<StepId, OnboardingRecord>({
     mode, app, owner, chainOk,
     key: `${factory ?? ''}:${owner?.toLowerCase() ?? ''}`,
     load: () => (owner && factory ? loadRecord(mode, factory, owner) : null),
@@ -223,4 +225,11 @@ export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: 
     invalidate: [['discovery']],
     onFinished,
   })
+  // A vault created or adopted by this run makes the owner's cached vault check stale: refresh it at once, so S0 and S3
+  // see the vault (Phase 7: a stale "none" let S3 offer a second creation after an account switch).
+  const vaultId = chain.record?.vault?.accountId
+  useEffect(() => {
+    if (vaultId) void queryClient.invalidateQueries({ queryKey: ['discovery'] })
+  }, [vaultId, queryClient])
+  return chain
 }

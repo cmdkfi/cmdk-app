@@ -2,7 +2,7 @@ import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { useAppConfig, useDiscovery, useMarketQuote } from '../components/data.ts'
 import { useNow } from '../components/use-now.ts'
 import { useOnboarding } from '../components/useOnboarding.ts'
-import { checkDeposit, DEFAULT_DEPOSIT } from '../flow/amount.ts'
+import { checkDeposit, defaultDeposit } from '../flow/amount.ts'
 import type { ProgressStep } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { newRecord, resumeStep, STEPS, type StepId } from '../flow/onboarding.ts'
@@ -39,7 +39,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
   const owner = state.status === 'connected' ? state.address : undefined
   const chainOk = state.status === 'connected' && state.chainId === BASE_SEPOLIA
   const ob = useOnboarding(mode, app, owner, chainOk, () => go(href('position')))
-  const [text] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
+  const [text] = useSessionValue(mode, 'amount', defaultDeposit(mode))
   const explorer = app?.guided.network.blockExplorerUrls[0]?.replace(/\/$/, '')
   const nearblocks = app?.guided.help.nearblocks.replace(/\/$/, '')
   const vaultLink = (id: string) => (nearblocks ? <a href={`${nearblocks}/address/${id}`} target="_blank" rel="noreferrer">{id}</a> : id)

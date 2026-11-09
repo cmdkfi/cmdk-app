@@ -62,3 +62,9 @@
 - **Rule:** a status line must be true for every state the protocol allows, not only for the states the fixture models. Run a read-only live pass over real vaults in different states (complete, not set up) before closing a status feature.
 - **Also:** after the NEAR switch, the measured time matched the per-leg explanation from Phase 5b (3 s per NEAR call): one refresh 3.5–4.5 s → 0.44–0.70 s with the same six requests.
 
+## 2026-11-09 — Phase 7: creation is guarded by a fresh ownership read, never by a cached one
+- **What happened:** the account-switch browser test was flaky; its failure screenshot showed the owner back on S1, and a probe confirmed the real defect behind it: the session's discovery cache still said "None for this wallet" after the run had created v10, so S3 offered Create position again, which would have overwritten the paused record and asked the relayer for a second vault. The create step re-ran discovery only before a *repeat* POST.
+- **Rule:** creation is guarded by a fresh ownership read, never by a cached one. Any action that creates something unique per owner re-reads ownership immediately before it, every time, and adopts what exists.
+- **Rule:** a cache of "what the user owns" is refreshed the moment the app itself changes ownership (vault created or adopted), and an account switch is treated as a new connect.
+- **Also:** a flaky browser test is a finding until its screenshot is explained; here the timing flake hid a product defect.
+

@@ -1,3 +1,4 @@
+import { SANDBOX } from '../flow/build.ts'
 import { useEffect, useRef, useState } from 'react'
 import type { AdapterKind, WalletState } from '../adapters/types.ts'
 import { shortAddress } from '../flow/format.ts'
@@ -38,7 +39,7 @@ function SlotMenu({ label, items }: { label: string; items: MenuItem[] }) {
  * Header wallet slot (PRD S0), the only navigation control. Five states:
  * not connected, connecting / checking vaults, connected, wrong network, sandbox active.
  */
-export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, onSwitch, onDisconnect, onLeaveSandbox }: {
+export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, onSwitch, onDisconnect, onLeave }: {
   kind: AdapterKind
   state: WalletState
   checkingVaults: boolean
@@ -47,7 +48,8 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
   onConnect: () => void
   onSwitch: () => void
   onDisconnect: () => void
-  onLeaveSandbox: () => void
+  /** Leave the simulated mode (a sandbox build only, Phase 6b). */
+  onLeave: () => void
 }) {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
@@ -56,7 +58,7 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
     return () => window.clearTimeout(timer)
   }, [copied])
 
-  if (kind === 'sandbox') return <SlotMenu label="Sandbox wallet · simulated" items={[{ label: 'Leave sandbox', onSelect: onLeaveSandbox }]} />
+  if (SANDBOX && kind === 'sandbox') return <SlotMenu label="Sandbox wallet · simulated" items={[{ label: 'Leave sandbox', onSelect: onLeave }]} />
   if (state.status === 'disconnected') return <button type="button" className="prototype-button is-primary wallet-slot wallet-slot--connect" onClick={onConnect}>Connect wallet</button>
   if (state.status === 'connecting' || checkingVaults) {
     return <span className="wallet-slot wallet-slot--busy" role="status"><span className="wallet-slot__pulse" aria-hidden="true" />{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</span>

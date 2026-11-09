@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { useAccountKind, useAppConfig, useDiscovery, useMarketQuote, useRelayerReadiness, useWalletFunding } from '../components/data.ts'
 import { newRecord, resumeStep } from '../flow/onboarding.ts'
-import { saveRecord } from '../flow/onboarding-record.ts'
-import { checkDeposit, DEFAULT_DEPOSIT } from '../flow/amount.ts'
+import { loadRecord, saveRecord } from '../flow/onboarding-record.ts'
+import { checkDeposit, defaultDeposit } from '../flow/amount.ts'
 import { fundingNeed } from '../flow/funding.ts'
 import type { AddChainParams, Guided } from '../flow/config.ts'
 import { connectionError, formatUnits, shortAddress } from '../flow/format.ts'
@@ -58,7 +58,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [panelClosed, setPanelClosed] = useState(false)
-  const [text] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
+  const [text] = useSessionValue(mode, 'amount', defaultDeposit(mode))
   const check = guided ? checkDeposit(text, guided.minDepositWei) : { kind: 'empty' as const }
   const amount = check.kind === 'ok' ? check.wei : null
   const onBase = state.status === 'connected' && state.chainId === BASE_SEPOLIA
@@ -119,7 +119,11 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     else if (status !== null && status !== 'setup' && status !== 'ready' && status !== 'deposited') createReason = 'This wallet already has a position.'
     else if (status !== null && !summary) createReason = 'Checking your vault…'
     else if (creationNeeded && relayer.data?.kind !== 'ready') createReason = relayer.isError || relayer.data ? 'Creation is temporarily unavailable.' : 'Checking the relayer…'
+    // An onboarding record that already names a vault is never overwritten: S3 returns to S4 where it stopped.
+    const paused = app.data ? loadRecord(mode, app.data.config.near.factory, address) : null
+    const resume = !!paused?.vault
     const create = () => {
+      if (resume) { window.location.hash = href('progress'); return }
       if (createReason !== null || amount === null || !app.data) return
       const estimate = quote.data ? protocol.estimateDeposit(app.data, quote.data, amount) : null
       const shownLtv = estimate ? (estimate.limited ? estimate.resultingLtv : BigInt(guided.corridor.target) * 10n ** 16n) : null
@@ -152,8 +156,8 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
       </dl>
       {need && !need.enough && !panelClosed && <GetEth address={address} missing={need.missing} guided={guided} checkedAt={funding.dataUpdatedAt} onClose={() => setPanelClosed(true)} />}
       <div className="create-action">
-        <button type="button" className="prototype-button is-primary" disabled={createReason !== null} aria-describedby="create-reason" onClick={create}>{status === 'ready' ? 'Deposit' : 'Create position'}</button>
-        {createReason && <p id="create-reason">{createReason}</p>}
+        <button type="button" className="prototype-button is-primary" disabled={!resume && createReason !== null} aria-describedby="create-reason" onClick={create}>{resume ? 'Continue where you left off' : status === 'ready' ? 'Deposit' : 'Create position'}</button>
+        {resume ? <p id="create-reason">Your position is being set up on vault {paused!.vault!.accountId}; continue on the progress screen.</p> : createReason && <p id="create-reason">{createReason}</p>}
         <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside MetaMask.</p>
       </div>
       <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />

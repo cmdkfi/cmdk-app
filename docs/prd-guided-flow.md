@@ -180,7 +180,7 @@ One screen, vertical step list, exactly one step active at a time. Each step sho
 
 | # | Step | MetaMask prompts (automatic) | Evidence of completion |
 |---|---|---|---|
-| 1 | Create your position | none | relayer job `done`; position address shown (vault id in the Why line); link to NearBlocks account. Before any repeat of the create POST (uncertain response or 404 job), discovery is re-run first and a vault that appeared meanwhile is adopted instead of creating another; this is the only way two vaults at or above the D4 cutoff could exist, and this step closes it. |
+| 1 | Create your position | none | relayer job `done`; position address shown (vault id in the Why line); link to NearBlocks account. Creation is guarded by a fresh ownership read, never by a cached one (Phase 7): discovery is re-run immediately before **every** create POST (the first one and any repeat after an uncertain response or 404 job), and a vault the wallet already owns is adopted instead of creating another; this is the only way two vaults at or above the D4 cutoff could exist, and this step closes it. |
 | 2 | Approve agent and rules | 1 signature (`setup`). A resumed setup always sends `approve: true` and derives only `authorize` from Base (fact 3) | job `done`, 5 Base receipts status 1 with 2 confirmations, then setup complete per fact 3: `morpho_authorized`, both allowances > 0, both corridors `set`, measurement approved |
 | 3 | Agent registration | none | `/agent/vaults` row `registration=registered`, `agent_status=active`, `expires_at` in future, NEAR access key present. Non-blocking: steps 4–6 proceed while this shows "Registering (usually a few minutes)". |
 | 4 | Send WETH to your position address | sub-state 4a **Wrap ETH → WETH** (`WETH.deposit` for the missing amount, 1 tx) automatically when wallet WETH < amount; then 4b `WETH.transfer(base_address, amount)` (1 tx) | 4a receipt status 1 and wallet WETH ≥ amount; 4b receipt status 1 and `GET /vault/<id>` WETH balance at the position address ≥ amount |
@@ -241,7 +241,7 @@ Opens automatically when the wallet's USDC is below the shortfall during Close p
 
 **FR-3 Wallet.** MetaMask only; Base Sepolia enforced; externally owned keys only: plain EOAs and EIP-7702 delegated EOAs (both verify under the vault's `ecrecover`), never contract wallets; connection state is not stored beyond wagmi's own persistence.
 
-**FR-4 One position.** The app shows exactly one vault per connected wallet: the newest numbered from `firstVaultNumber` (D4). Discovery uses batch 2 and `Retry-After` handling; vaults below the cutoff and read failures on them are ignored. A failed scan is shown as "Could not read your vaults" with Retry; it never shows "no position" or offers creation.
+**FR-4 One position.** The app shows exactly one vault per connected wallet: the newest numbered from `firstVaultNumber` (D4). Discovery uses batch 2 and `Retry-After` handling; vaults below the cutoff and read failures on them are ignored. A failed scan is shown as "Could not read your vaults" with Retry; it never shows "no position" or offers creation. Creation is guarded by a fresh ownership read, never by a cached one: the create step re-runs discovery immediately before every `/create-vault` POST and adopts an owned vault (S4 step 1). The cached answer is refreshed as soon as a run creates or adopts a vault, the landing table runs again when MetaMask switches to another account, and S3 never overwrites an onboarding record that names a vault (it returns to S4). (Phase 7, 9 Nov.)
 
 **FR-5a Chaining.** MetaMask prompts are requested automatically in order (D11); at most one prompt is open at a time; a rejection pauses the chain on that step; a page reload resumes at the first unconfirmed step and re-requests its prompt only after the user clicks Continue (no surprise prompts on load).
 
@@ -287,7 +287,7 @@ Shown in S4's right rail and from S5. Compact checklist, each row with status `C
 | Relayer holds no authority | static text with link to `scripts/RELAYER.md` | — |
 | What is not checked here | TDX quote signature, PCCS collateral, RTMR replay — "needs Docker and `dstack-mr`; see `agent/MEASUREMENT.md`" | link |
 
-Implementation: `agent-evidence.ts` (`measurementMatches`, `evidenceIndex`, `readBootFile`), `near-security.ts` (`readNearSecurity`). **Scope is these rows only** (confirmed by the product owner, 9 Nov): no transcript index, no transcript reading, no `verifyAgentExecution`, no boot-file browsing. Those functions stay in the unchanged module but are not wired into the app.
+Implementation: `protocol/evidence/verify.ts` (the five checks, each run independently so one failed fetch only marks its own row Unavailable), exposed through `ProtocolAdapter.readVerification`; manifest and doc links come from `config.app.json` `help.manifest`, `help.measurementDoc`, `help.relayerDoc`. **Scope is these rows only** (product owner, 9 Nov): no transcript index, no transcript reading, no execution verification, no boot-file browsing. Rows with nothing to compare yet (no vault, no approval, no agent key) read "Not checked"; the relayer row and the "not checked here" row are statements and never read "Checked". The panel shows in the S4 right rail from step 1 (re-checked every 30 s) and opens from S5 "Verify the agent" with a Check again button.
 
 ---
 

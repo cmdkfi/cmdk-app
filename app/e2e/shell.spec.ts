@@ -20,7 +20,7 @@ test('shell: S1 renders with header, wallet slot and footer; only the app and th
   expect(fx.walletCalls.filter(method => !['eth_accounts', 'eth_chainId'].includes(method)), 'wallet prompts on load').toEqual([])
 })
 
-test('routes: browser Back moves between S1, S2 and S3; guarded and sandbox routes redirect', async ({ page, context, fx }) => {
+test('routes: browser Back moves between S1, S2 and S3; guarded routes redirect; sandbox hashes go to #start', async ({ page, context, fx }) => {
   await fx.install(context)
   await page.goto('/#start')
   await page.getByLabel('Amount to deposit').fill('0.1')
@@ -35,9 +35,10 @@ test('routes: browser Back moves between S1, S2 and S3; guarded and sandbox rout
   await page.goForward(); await expect(page).toHaveURL(/#settings$/)
   await expect(page.getByRole('checkbox')).toBeChecked()
   for (const hash of ['#position', '#progress', '#close', '#unknown']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#start$/) }
-  for (const hash of ['#sandbox/close', '#sandbox/closed']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#sandbox\/position$/) }
-  await expect(page.getByRole('button', { name: 'Sandbox wallet · simulated' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveAttribute('href', '#sandbox/start')
+  // no sandbox until Phase 6b: every #sandbox/… hash goes to #start in the live app
+  for (const hash of ['#sandbox/start', '#sandbox/close', '#sandbox/position']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#start$/) }
+  await expect(page.getByText(/[sS]andbox/)).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveAttribute('href', '#start')
 })
 
 test('wallet slot: connect, wrong network, switch, menu and disconnect', async ({ page, context, fx }) => {

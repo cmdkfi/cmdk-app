@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, ty
 import type { AdapterKind, Adapters, WalletState } from './types.ts'
 import { createLiveAdapters } from './live/index.ts'
 import { createSandboxAdapters } from './sandbox/index.ts'
+import { SANDBOX } from '../flow/build.ts'
 
 const AdapterContext = createContext<Adapters | null>(null)
 
@@ -10,7 +11,8 @@ const AdapterContext = createContext<Adapters | null>(null)
  * the sandbox is active, and vice versa. Mount with key={kind} so a switch disposes the old set.
  */
 export function AdapterProvider({ kind, children }: { kind: AdapterKind; children: ReactNode }) {
-  const adapters = useMemo(() => (kind === 'live' ? createLiveAdapters() : createSandboxAdapters()), [kind])
+  // Outside a sandbox build the sandbox branch folds away and the stub module is not bundled.
+  const adapters = useMemo(() => (SANDBOX && kind === 'sandbox' ? createSandboxAdapters() : createLiveAdapters()), [kind])
   useEffect(() => () => adapters.wallet.dispose(), [adapters])
   return <AdapterContext.Provider value={adapters}>{children}</AdapterContext.Provider>
 }

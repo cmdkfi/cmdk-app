@@ -4,7 +4,7 @@
 // Any request to another host, or an unknown method, is recorded and fails the test.
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { test as base, expect, type BrowserContext } from '@playwright/test'
+import { test as base, expect, type BrowserContext, type Page } from '@playwright/test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, hexToString, keccak256, parseAbi, recoverMessageAddress, toHex, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { guidedValues } from '../scripts/guided-values.mjs'
@@ -149,6 +149,17 @@ export class LiveFixture {
   logWindows: [bigint, bigint][] = []
   // S6 (Phase 5)
   closes = 0
+  // Phase 7
+  /** The account MetaMask exposes; switchAccount() changes it and emits accountsChanged like MetaMask. */
+  account: Hex = OWNER
+  /** Seconds added to every block timestamp (Morpho's lastUpdate stays at NOW, so interest accrues). */
+  timeAhead = 0n
+  /** Added to timeAhead once, right after the next USDC transfer from the wallet (an R10 pause between steps). */
+  jumpAfterUsdcTransfer = 0n
+  async switchAccount(page: Page, address: Hex) {
+    this.account = address
+    await page.evaluate(a => (window as unknown as { fixtureEmit: (n: string, v: unknown) => void }).fixtureEmit('accountsChanged', [a]), address)
+  }
   // §6 verification (Phase 6)
   /** The agent.measurement the raw-GitHub manifest publishes (help.manifest). */
   publishedMeasurement: Record<string, string> = { ...MEASUREMENT }
@@ -201,11 +212,11 @@ export class LiveFixture {
   wallet_(method: string, params: unknown[]): { result?: unknown; error?: { code: number; message: string }; emit?: [string, unknown][] } {
     this.walletCalls.push(method)
     switch (method) {
-      case 'eth_accounts': return { result: this.connected ? [OWNER] : [] }
+      case 'eth_accounts': return { result: this.connected ? [this.account] : [] }
       case 'eth_requestAccounts':
         if (this.rejectConnect) { this.rejectConnect = false; return { error: { code: 4001, message: 'User rejected the request.' } } }
         this.connected = true
-        return { result: [OWNER] }
+        return { result: [this.account] }
       case 'eth_chainId': return { result: this.chain }
       case 'net_version': return { result: String(parseInt(this.chain, 16)) }
       case 'wallet_requestPermissions': return { error: { code: 4200, message: 'Unsupported in the fixture.' } }
@@ -243,6 +254,7 @@ export class LiveFixture {
             this.wallet[key] -= amount
             const v = this.active()
             if (v && to.toLowerCase() === BASE.toLowerCase()) v.idle[key] += amount
+            if (key === 'usdc' && this.jumpAfterUsdcTransfer) { this.timeAhead += this.jumpAfterUsdcTransfer; this.jumpAfterUsdcTransfer = 0n }
           }
         } else {
           this.wallet.eth -= value
@@ -305,7 +317,7 @@ export class LiveFixture {
       case 'eth_blockNumber': return toHex(this.head)
       case 'eth_getBlockByNumber': {
         const n = params[0] === 'latest' || params[0] === undefined ? this.head : BigInt(params[0] as string)
-        return { ...this.block(), number: toHex(n), hash: keccak256(toHex(`block-${n}`)), timestamp: toHex(BigInt(NOW) - (this.head - n) * 2n) }
+        return { ...this.block(), number: toHex(n), hash: keccak256(toHex(`block-${n}`)), timestamp: toHex(BigInt(NOW) + this.timeAhead - (this.head - n) * 2n) }
       }
       case 'eth_getLogs': {
         const f = params[0] as { address: string | string[]; topics: (Hex | null)[]; fromBlock: Hex; toBlock: Hex }

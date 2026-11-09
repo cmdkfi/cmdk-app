@@ -1,3 +1,4 @@
+import type { StorageMode } from './session.ts'
 // Decimal amounts typed by the user (PRD S1, D7). Conversion is viem's parseUnits; our validation runs first because
 // parseUnits rounds over-precise input and the product rejects it instead (vector V8).
 import { parseUnits } from 'viem'
@@ -14,7 +15,7 @@ export function parseDecimal(text: string, decimals: number): bigint | null {
  * S1 amount prefill (PRD S1, product owner 9 Nov): 0.01 ETH keeps test positions within the market's liquidity and lets
  * one faucet claim cover the close. The sandbox sets its own (0.5 ETH) when it lands in Phase 6b.
  */
-export const DEFAULT_DEPOSIT: Record<'live' | 'sandbox', string> = { live: '0.01', sandbox: '' }
+export const defaultDeposit = (mode: StorageMode): string => (mode === 'live' ? '0.01' : '')
 
 export type AmountCheck =
   | { kind: 'empty' }

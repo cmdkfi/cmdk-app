@@ -6,7 +6,7 @@ import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDi
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
 import { useNow } from '../components/use-now.ts'
-import { DEFAULT_DEPOSIT } from '../flow/amount.ts'
+import { defaultDeposit } from '../flow/amount.ts'
 import { closeShortfall, newCloseRecord, startOverAllowed, visibleCloseSteps, type CloseStepId } from '../flow/close.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
@@ -227,7 +227,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const [review, setReview] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed' && !closing)
-  const [, setAmount] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
+  const [, setAmount] = useSessionValue(mode, 'amount', defaultDeposit(mode))
 
   if (!app || !vaultId) return <section className="screen" aria-labelledby="screen-title"><h1 id="screen-title">Your position</h1><p className="screen__note" role="status">Reading your vault…</p></section>
   if (!view) {
@@ -276,7 +276,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const startOver = () => {
     if (!owner) return
     clearCloseRecord(mode, app.config.near.factory, owner, vaultId)
-    setAmount(DEFAULT_DEPOSIT[mode])
+    setAmount(defaultDeposit(mode))
     window.location.hash = href('start')
   }
   // Start over is decided on a live read only (never the persisted or a failed-read snapshot).

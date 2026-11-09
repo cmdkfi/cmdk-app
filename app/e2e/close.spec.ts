@@ -168,3 +168,23 @@ test('Start over: S1 with 0.01 ETH, S3 shows the vault ready with Deposit, S4 re
   expect(fx.posts.filter(p => p.path === '/create-vault')).toEqual([])
   expect(signed(fx).map(m => m.method)).toEqual(['close', 'withdraw', 'withdraw', 'open', 'withdraw'])
 })
+
+test('R10: interest accrued while the close waited inserts a second transfer before the close signature instead of failing', async ({ page, context, fx }) => {
+  test.setTimeout(90_000)
+  active(fx, 0n, 500_000_000n)
+  fx.rejectOnce.add('close')
+  await fx.install(context); await openPosition(page)
+  await startClosing(page)
+  await expect(step(page, 'Close position')).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
+  await expect(step(page, 'Send USDC to your position address').getByRole('status')).toHaveText('Done')
+  // 30 days pass before the user retries: Morpho interest makes the 161.600154 USDC sent short of need(debt now)
+  fx.timeAhead = 30n * 86_400n
+  await step(page, 'Close position').getByRole('button', { name: 'Try again' }).click()
+  await expect(step(page, 'Send USDC to your position address (second transfer)')).toBeVisible({ timeout: 20_000 })
+  await expectClosed(page)
+  const usdcTransfers = fx.txs.filter(t => t.to === USDC).map(t => BigInt('0x' + t.data.slice(-64)))
+  // second = need(debt accrued to +30 d + 600 s) − 161.600154: 162.265631 − 161.600154 = 0.665477 USDC
+  expect(usdcTransfers).toEqual([NEED_AHEAD, 665_477n])
+  expect(signed(fx).map(m => m.method)).toEqual(['close', 'withdraw', 'withdraw'])
+  expect(fx.closes).toBe(1)
+})

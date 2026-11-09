@@ -17,21 +17,13 @@ test('unknown live hashes go to #start; close/closed are not live routes', () =>
   assert.equal(parseHash('#position?x=1').canonical, '#position')
 })
 
-test('sandbox mirrors the five routes and redirects close/closed to position', () => {
-  for (const route of ['start', 'settings', 'connect', 'progress', 'position']) {
-    assert.deepEqual(parseHash(`#sandbox/${route}`).place, { mode: 'sandbox', route })
+test('default build (no sandbox until Phase 6b): every #sandbox/… hash is an unknown route and goes to #start', () => {
+  for (const hash of ['#sandbox', '#sandbox/', '#sandbox/start', '#sandbox/position', '#sandbox/close']) {
+    assert.deepEqual(parseHash(hash), { place: { mode: 'live', route: 'start' }, canonical: '#start', entry: false })
   }
-  assert.equal(parseHash('#sandbox/close').canonical, '#sandbox/position')
-  assert.equal(parseHash('#sandbox/closed').canonical, '#sandbox/position')
-  assert.equal(parseHash('#sandbox').canonical, '#sandbox/start')
-  assert.equal(parseHash('#sandbox/other').canonical, '#sandbox/start')
-})
-
-test('sandbox never resolves into a live route', () => {
-  for (const hash of ['#sandbox', '#sandbox/', '#sandbox/x', '#sandbox/close', '#sandbox/position']) assert.equal(parseHash(hash).place.mode, 'sandbox')
+  assert.equal(hashFor({ mode: 'sandbox', route: 'progress' }), '#progress') // no sandbox hash is ever produced
 })
 
 test('hashFor round-trips', () => {
   assert.equal(hashFor({ mode: 'live', route: 'settings' }), '#settings')
-  assert.equal(hashFor({ mode: 'sandbox', route: 'progress' }), '#sandbox/progress')
 })

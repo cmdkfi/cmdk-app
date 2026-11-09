@@ -3,6 +3,7 @@ import { AdapterProvider, useAdapters, useWalletState } from '../adapters/Adapte
 import type { WalletState } from '../adapters/types.ts'
 import { afterConnect, guard, landing, type EntryInput, type Resolution, type WalletEntry } from '../flow/entry.ts'
 import { hashFor, parseHash, type Mode, type Route } from '../flow/routes.ts'
+import { SANDBOX } from '../flow/build.ts'
 import { Choose } from '../screens/Choose.tsx'
 import { Connect } from '../screens/Connect.tsx'
 import { Position } from '../screens/Position.tsx'
@@ -67,13 +68,19 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   // from S1–S3 (PRD S0, S3). Otherwise only the route guards run, so Start over can reach S1.
   const [pending, setPending] = useState<Pending>(entry || route === 'start' ? 'entry' : null)
   const previous = useRef(state.status)
+  const previousOwner = useRef(owner)
   useEffect(() => {
     if (previous.current !== 'connected' && state.status === 'connected' && BEFORE_WALLET.includes(route)) setPending(current => current ?? 'connect')
     previous.current = state.status
   }, [state.status, route])
+  // Another account in MetaMask is a new owner: the landing table runs again for it, as after a connect (Phase 7).
+  useEffect(() => {
+    if (previousOwner.current && owner && previousOwner.current.toLowerCase() !== owner.toLowerCase()) setPending('connect')
+    previousOwner.current = owner
+  }, [owner])
 
   let resolution: Resolution
-  if (mode === 'sandbox') resolution = { kind: 'route', route }
+  if (SANDBOX && mode === 'sandbox') resolution = { kind: 'route', route }
   else if (pending === 'entry') resolution = landing(input)
   else if (pending === 'connect') resolution = afterConnect(route, input) ?? guard(route, input)
   else resolution = guard(route, input)
@@ -111,7 +118,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
           onConnect={run(() => wallet.connect())}
           onSwitch={run(async () => { if (app.data) await wallet.switchToBaseSepolia(app.data.guided.network) })}
           onDisconnect={run(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
-          onLeaveSandbox={() => { window.location.hash = '#start' }}
+          onLeave={() => { window.location.hash = '#start' }}
         />
         <span className="shell-chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
       </div>

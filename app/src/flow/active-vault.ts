@@ -31,7 +31,7 @@ export type DiscoveredVault = { status: VaultStatus | null; summary?: PositionSu
  * D4 with the remembered vault (PRD §9 5): the vault last found for this owner is passed as a hint and verified by the
  * adapter with one get_state; the scan runs when it no longer belongs to the owner. The answer is remembered again.
  */
-export async function discoverActiveVault(protocol: Pick<ProtocolAdapter, 'discoverPosition'>, app: LoadedConfig, owner: Address, mode: StorageMode = 'sandbox'): Promise<DiscoveredVault> {
+export async function discoverActiveVault(protocol: Pick<ProtocolAdapter, 'discoverPosition'>, app: LoadedConfig, owner: Address, mode: StorageMode): Promise<DiscoveredVault> {
   const factory = app.config.near.factory
   const summary = await protocol.discoverPosition(app, owner, loadVaultHint(mode, factory, owner))
   saveVaultHint(mode, factory, owner, summary?.vault.accountId ?? null)
