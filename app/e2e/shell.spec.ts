@@ -1,13 +1,9 @@
-import type {BrowserContext} from '@playwright/test'
-import {test,expect} from './fixture.ts'
+import {test,expect,recordHosts} from './guided-fixture.ts'
 
-const APP='http://localhost:5177/'
-// Every request the browser makes; the shell may only load its own bundle and assets.
-function recordRequests(context:BrowserContext){const urls:string[]=[];context.on('request',request=>urls.push(request.url()));return urls}
-const offOrigin=(urls:string[])=>urls.filter(url=>!url.startsWith(APP))
+const APP='localhost:5177',BASE_RPC='base.fixture.test'
 
-test('shell: S1 renders with header, wallet slot and footer and makes zero network calls',async({page,context,protocol})=>{
- const urls=recordRequests(context);await protocol.install(context)
+test('shell: S1 renders with header, wallet slot and footer; only the app and the Base RPC are contacted',async({page,context,protocol})=>{
+ const hosts=recordHosts(context);await protocol.install(context)
  await page.goto('/')
  await expect(page).toHaveURL(/#start$/)
  await expect(page.getByRole('link',{name:'cmdk home'})).toHaveText('⌘K')
@@ -15,33 +11,35 @@ test('shell: S1 renders with header, wallet slot and footer and makes zero netwo
  await expect(page.getByText('Testnet · Base Sepolia · no real funds',{exact:true})).toBeVisible()
  await expect(page.getByRole('heading',{level:1})).toHaveText('Borrow USDC against ETH. Keep risk on autopilot.')
  await expect(page.getByRole('contentinfo')).toContainText('Agent protection is risk management, not insurance.')
- await expect(page.getByRole('heading',{name:'Open cmdk on a desktop browser'})).toBeHidden()
- expect(offOrigin(urls),'requests that left the app origin').toEqual([])
+ await expect(page.getByText('Borrow rate')).toBeVisible()
+ // Without a wallet: no NEAR, no relayer, no GitHub; the market read is the only external call.
+ expect([...hosts].sort()).toEqual([BASE_RPC,APP].sort())
  expect(protocol.posts).toEqual([]);expect(protocol.signs).toEqual([]);expect(protocol.broadcasts).toEqual([])
  expect(protocol.walletCalls.filter(method=>!['eth_accounts','eth_chainId'].includes(method)),'wallet prompts on load').toEqual([])
 })
 
 test('routes: browser Back moves between S1, S2 and S3; guarded and sandbox routes redirect',async({page,context,protocol})=>{
- const urls=recordRequests(context);await protocol.install(context)
+ await protocol.install(context)
  await page.goto('/#start')
- await page.getByRole('link',{name:'Continue',exact:true}).click()
+ await page.getByLabel('Amount to deposit').fill('0.1')
+ await page.getByRole('button',{name:'Continue',exact:true}).click()
  await expect(page).toHaveURL(/#settings$/);await expect(page.getByRole('heading',{level:1})).toHaveText('Your protection, in one picture')
- await page.getByRole('link',{name:'Continue to wallet'}).click()
+ await page.getByRole('checkbox').check()
+ await page.getByRole('button',{name:'Continue to wallet'}).click()
  await expect(page).toHaveURL(/#connect$/);await expect(page.getByRole('heading',{level:1})).toHaveText('Connect MetaMask')
  await page.goBack();await expect(page).toHaveURL(/#settings$/)
  await page.goBack();await expect(page).toHaveURL(/#start$/)
+ await expect(page.getByLabel('Amount to deposit')).toHaveValue('0.1')
  await page.goForward();await expect(page).toHaveURL(/#settings$/)
- // No wallet, no position, no onboarding record: S4 and S5 redirect to S1.
+ await expect(page.getByRole('checkbox')).toBeChecked()
  for(const hash of ['#position','#progress','#close','#unknown']){await page.goto('/'+hash);await expect(page).toHaveURL(/#start$/)}
- // Sandbox mirrors the routes; close/closed are states of #sandbox/position.
  for(const hash of ['#sandbox/close','#sandbox/closed']){await page.goto('/'+hash);await expect(page).toHaveURL(/#sandbox\/position$/)}
  await expect(page.getByRole('button',{name:'Sandbox wallet · simulated'})).toBeVisible()
  await expect(page.getByRole('link',{name:'cmdk home'})).toHaveAttribute('href','#sandbox/start')
- expect(offOrigin(urls),'requests that left the app origin').toEqual([])
 })
 
-test('wallet slot: connect, wrong network, switch, menu and disconnect without network calls',async({page,context,protocol})=>{
- const urls=recordRequests(context);await protocol.install(context,{chain:'0x1'})
+test('wallet slot: connect, wrong network, switch, menu and disconnect',async({page,context,protocol})=>{
+ await protocol.install(context,{chain:'0x1'})
  await page.goto('/')
  await page.getByRole('button',{name:'Connect wallet',exact:true}).click()
  const wrong=page.getByRole('button',{name:'0x19E7…ff2A · Switch to Base Sepolia'})
@@ -57,17 +55,18 @@ test('wallet slot: connect, wrong network, switch, menu and disconnect without n
  await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeVisible();await expect(page).toHaveURL(/#start$/)
  expect(protocol.walletCalls).toContain('eth_requestAccounts');expect(protocol.walletCalls).toContain('wallet_switchEthereumChain')
  expect(protocol.signs).toEqual([]);expect(protocol.posts).toEqual([])
- expect(offOrigin(urls),'requests that left the app origin').toEqual([])
 })
 
-test('desktop gate: below 960px the app is replaced by the notice',async({page,context,protocol})=>{
- const urls=recordRequests(context);await protocol.install(context)
+test('desktop gate: below 960px the shell is not mounted, so no wallet call or read happens',async({page,context,protocol})=>{
+ const hosts=recordHosts(context);await protocol.install(context)
  await page.setViewportSize({width:900,height:900})
  await page.goto('/')
  await expect(page.getByRole('heading',{name:'Open cmdk on a desktop browser'})).toBeVisible()
- await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeHidden()
+ await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toHaveCount(0)
+ await page.waitForTimeout(500)
+ expect(protocol.walletCalls,'no silent reconnect below 960px').toEqual([])
+ expect([...hosts]).toEqual([APP])
  await page.setViewportSize({width:1280,height:900})
- await expect(page.getByRole('heading',{name:'Open cmdk on a desktop browser'})).toBeHidden()
+ await expect(page.getByRole('heading',{name:'Open cmdk on a desktop browser'})).toHaveCount(0)
  await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeVisible()
- expect(offOrigin(urls),'requests that left the app origin').toEqual([])
 })

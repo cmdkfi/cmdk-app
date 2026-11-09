@@ -5,6 +5,7 @@ import './styles/base.css'
 import './styles/prototype-controls.css'
 import './styles/ltv-track.css'
 import './styles/shell.css'
+import './styles/screens.css'
 
 document.documentElement.dataset.theme = 'dark'
 createRoot(document.getElementById('root')!).render(

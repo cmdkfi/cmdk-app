@@ -36,10 +36,6 @@
 .shell-footer{display:flex;justify-content:space-between;gap:16px;padding:24px 40px;color:var(--muted);font-size:12px}
 .shell-footer a{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 
-.desktop-gate{display:none}
-@media(max-width:959.98px){
-  .app-shell{display:none}
-  .desktop-gate{display:grid;align-content:center;justify-items:start;gap:16px;min-height:100dvh;padding:32px;max-width:560px;margin:0 auto}
-  .desktop-gate h1{font-size:28px;font-weight:600;letter-spacing:-.02em}
-  .desktop-gate p{color:var(--muted)}
-}
+.desktop-gate{display:grid;align-content:center;justify-items:start;gap:16px;min-height:100dvh;padding:32px;max-width:560px;margin:0 auto}
+.desktop-gate h1{font-size:28px;font-weight:600;letter-spacing:-.02em}
+.desktop-gate p{color:var(--muted)}

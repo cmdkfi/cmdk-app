@@ -1,10 +1,8 @@
 import { baseSepolia } from 'wagmi/chains'
 import {
-  connect, disconnect, getAccount, getBalance, getBytecode, readContract, reconnect,
-  sendTransaction, signMessage, switchChain, waitForTransactionReceipt, watchAccount,
+  connect, disconnect, getAccount, reconnect, sendTransaction, signMessage, switchChain,
+  waitForTransactionReceipt, watchAccount,
 } from 'wagmi/actions'
-import { erc20 } from '../../protocol/live-actions.ts'
-import { accountKind } from '../../protocol/wallet-utils.ts'
 import type { WalletAdapter, WalletState } from '../types.ts'
 import { createWagmiConfig } from './wagmi-config.ts'
 
@@ -40,8 +38,14 @@ export function createLiveWallet(): WalletAdapter {
     config.connectors.find(item => METAMASK_RDNS.includes(item.id)) ??
     config.connectors.find(item => item.id === 'metaMask')
 
+  const injectedMetaMask = () => {
+    const provider = (window as Window & { ethereum?: { isMetaMask?: boolean } }).ethereum
+    return provider?.isMetaMask === true
+  }
+
   return {
     kind: 'live',
+    hasMetaMask: () => injectedMetaMask() || config.connectors.some(item => METAMASK_RDNS.includes(item.id)),
     getState: () => state,
     subscribe(listener) {
       listeners.add(listener)
@@ -53,21 +57,20 @@ export function createLiveWallet(): WalletAdapter {
       await connect(config, { connector })
     },
     async disconnect() { await disconnect(config) },
-    async switchToBaseSepolia() { await switchChain(config, { chainId: baseSepolia.id }) },
+    async switchToBaseSepolia(network) {
+      await switchChain(config, {
+        chainId: baseSepolia.id,
+        addEthereumChainParameter: {
+          chainName: network.chainName,
+          nativeCurrency: network.nativeCurrency,
+          rpcUrls: network.rpcUrls,
+          blockExplorerUrls: network.blockExplorerUrls,
+        },
+      })
+    },
     signMessage: message => signMessage(config, { message }),
     sendTransaction: tx => sendTransaction(config, { chainId: baseSepolia.id, to: tx.to, data: tx.data, value: tx.value }),
     waitForTransaction: (hash, confirmations) => waitForTransactionReceipt(config, { chainId: baseSepolia.id, hash, confirmations }),
-    async readBalances(address, tokens) {
-      const [eth, weth, usdc] = await Promise.all([
-        getBalance(config, { chainId: baseSepolia.id, address }).then(balance => balance.value),
-        readContract(config, { chainId: baseSepolia.id, address: tokens.weth, abi: erc20, functionName: 'balanceOf', args: [address] }),
-        readContract(config, { chainId: baseSepolia.id, address: tokens.usdc, abi: erc20, functionName: 'balanceOf', args: [address] }),
-      ])
-      return { eth, weth, usdc }
-    },
-    async readAccountKind(address) {
-      return accountKind(await getBytecode(config, { chainId: baseSepolia.id, address }))
-    },
     dispose() {
       unwatch()
       listeners.clear()

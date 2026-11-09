@@ -1,31 +1,25 @@
-import type { Route } from '../flow/routes.ts'
+import type { PositionVariant, ProgressStep } from '../flow/entry.ts'
 import { Placeholder } from './Placeholder.tsx'
 
-export type ScreenProps = { href: (route: Route) => string }
+const STEP_LABEL: Record<ProgressStep, string> = {
+  create: 'Create your position',
+  setup: 'Approve agent and rules',
+  deposit: 'Send WETH to your position address',
+  open: 'Open position at 50% LTV',
+  withdraw: 'Send USDC to your wallet',
+}
 
-export function Choose({ href }: ScreenProps) {
-  return <Placeholder label="S1 · Choose" title="Borrow USDC against ETH. Keep risk on autopilot." phase="Phase 2">
-    <a className="prototype-button is-primary" href={href('settings')}>Continue</a>
+export function Progress({ step }: { step?: ProgressStep }) {
+  return <Placeholder label="S4 · Progress" title="Opening your position" phase="Phase 3">
+    {step === 'deposit' && <p className="screen__lead">Your vault is ready. Deposit to open a position.</p>}
+    {step && <p className="screen__note">Resumes at: {STEP_LABEL[step]}</p>}
   </Placeholder>
 }
 
-export function Settings({ href }: ScreenProps) {
-  return <Placeholder label="S2 · Settings" title="Your protection, in one picture" phase="Phase 2">
-    <a className="prototype-button" href={href('start')}>Back</a>
-    <a className="prototype-button is-primary" href={href('connect')}>Continue to wallet</a>
+const VARIANT_LABEL: Record<PositionVariant, string> = { active: 'Active position', closed: 'Position closed', liquidated: 'Position liquidated' }
+
+export function Position({ variant }: { variant?: PositionVariant }) {
+  return <Placeholder label="S5 · Position" title="Your position" phase="Phase 4">
+    {variant && <p className="screen__note">{VARIANT_LABEL[variant]}</p>}
   </Placeholder>
-}
-
-export function Connect({ href }: ScreenProps) {
-  return <Placeholder label="S3 · Connect" title="Connect MetaMask" phase="Phase 2">
-    <a className="prototype-button" href={href('settings')}>Back</a>
-  </Placeholder>
-}
-
-export function Progress() {
-  return <Placeholder label="S4 · Progress" title="Opening your position" phase="Phase 3" />
-}
-
-export function Position() {
-  return <Placeholder label="S5 · Position" title="Your position" phase="Phase 4" />
 }

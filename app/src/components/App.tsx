@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AdapterProvider, useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { WalletState } from '../adapters/types.ts'
-import { guard, landing, type EntryInput, type WalletEntry } from '../flow/entry.ts'
+import { afterConnect, guard, landing, type EntryInput, type Resolution, type WalletEntry } from '../flow/entry.ts'
 import { hashFor, parseHash, type Mode, type Route } from '../flow/routes.ts'
-import { Choose, Connect, Position, Progress, Settings } from '../screens/index.tsx'
+import { Choose } from '../screens/Choose.tsx'
+import { Connect } from '../screens/Connect.tsx'
+import { Position, Progress } from '../screens/index.tsx'
+import { Settings } from '../screens/Settings.tsx'
+import { useAppConfig, useDiscovery } from './data.ts'
 import { DesktopGate } from './DesktopGate.tsx'
 import { WalletSlot } from './WalletSlot.tsx'
 
 const BASE_SEPOLIA = 84532
+const DESKTOP = '(min-width: 960px)'
+const BEFORE_WALLET: Route[] = ['start', 'settings', 'connect']
 
 function useHash() {
   const [hash, setHash] = useState(() => window.location.hash)
@@ -24,34 +30,66 @@ function useHash() {
   return [hash, replace] as const
 }
 
+/** FR-16 / D9: below 960 px the shell (adapters, silent reconnect, reads) is not mounted at all. */
+function useDesktop() {
+  return useSyncExternalStore(
+    listener => { const query = window.matchMedia(DESKTOP); query.addEventListener('change', listener); return () => query.removeEventListener('change', listener) },
+    () => window.matchMedia(DESKTOP).matches,
+  )
+}
+
 function walletEntry(state: WalletState): WalletEntry {
   if (state.status === 'connected') return state.chainId === BASE_SEPOLIA ? 'connected' : 'wrong-network'
   return state.status
 }
 
+type Pending = 'entry' | 'connect' | null
+
 function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entry: boolean; replace: (hash: string) => void }) {
   const { wallet } = useAdapters()
   const state = useWalletState()
+  const app = useAppConfig()
+  const owner = state.status === 'connected' ? state.address : undefined
+  const discovery = useDiscovery(owner)
   const href = useCallback((to: Route) => hashFor({ mode, route: to }), [mode])
-  // Phase 1 wiring: wallet state only. Vault discovery (D4) and onboarding records arrive in Phases 2–3.
-  const input: EntryInput = { wallet: walletEntry(state), discovery: { kind: 'not-checked' }, onboardingRecord: false }
-  // The landing table applies once when the shell mounts on "/" or "#start" (PRD S0);
-  // afterwards only the route guards run, so Start over can still reach S1.
-  const landed = useRef(!(entry || route === 'start'))
-  const resolution = mode === 'sandbox' ? { kind: 'route' as const, route } : !landed.current ? landing(input) : guard(route, input)
+  // Onboarding records arrive in Phase 3, close records in Phase 5.
+  const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord: false, closeRecord: false }
 
+  // The landing table runs once on "/" or "#start", and again when discovery resolves after a connect
+  // from S1–S3 (PRD S0, S3). Otherwise only the route guards run, so Start over can reach S1.
+  const [pending, setPending] = useState<Pending>(entry || route === 'start' ? 'entry' : null)
+  const previous = useRef(state.status)
   useEffect(() => {
-    if (resolution.kind !== 'route') return
-    landed.current = true
-    if (resolution.route !== route || entry) replace(href(resolution.route))
-  }, [resolution.kind, resolution.kind === 'route' ? resolution.route : null, route, entry, href, replace])
+    if (previous.current !== 'connected' && state.status === 'connected' && BEFORE_WALLET.includes(route)) setPending(current => current ?? 'connect')
+    previous.current = state.status
+  }, [state.status, route])
 
-  const leaveToStart = useCallback(() => { window.location.hash = '#start' }, [])
-  const report = useCallback((action: () => Promise<void>) => () => { void action().catch(() => undefined) }, [])
+  let resolution: Resolution
+  if (mode === 'sandbox') resolution = { kind: 'route', route }
+  else if (pending === 'entry') resolution = landing(input)
+  else if (pending === 'connect') resolution = afterConnect(route, input) ?? guard(route, input)
+  else resolution = guard(route, input)
 
-  const screen = resolution.kind === 'wait'
-    ? <section className="screen" role="status"><p className="screen__note">Connecting…</p></section>
-    : { start: <Choose href={href} />, settings: <Settings href={href} />, connect: <Connect href={href} />, progress: <Progress />, position: <Position /> }[resolution.route]
+  const target = resolution.kind === 'route' ? resolution.route : null
+  const settled = pending === 'entry' ? resolution.kind === 'route' : pending === 'connect' ? afterConnect(route, input) !== null : false
+  useEffect(() => {
+    if (settled) setPending(null)
+    if (target && (target !== route || entry)) replace(href(target))
+  }, [settled, target, route, entry, href, replace])
+
+  const run = useCallback((action: () => Promise<void>) => () => { void action().catch(() => undefined) }, [])
+  const explorer = app.data?.guided.network.blockExplorerUrls[0]
+  const banner = resolution.kind === 'route' && resolution.banner === 'discovery-failed' ? { retry: discovery.retry } : null
+
+  let screen
+  if (resolution.kind === 'wait') screen = <section className="screen" role="status"><p className="screen__note">{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</p></section>
+  else switch (resolution.route) {
+    case 'start': screen = <Choose mode={mode} href={href} banner={banner} />; break
+    case 'settings': screen = <Settings mode={mode} href={href} banner={banner} />; break
+    case 'connect': screen = <Connect mode={mode} href={href} banner={banner} discovery={discovery} />; break
+    case 'progress': screen = <Progress step={resolution.step} />; break
+    case 'position': screen = <Position variant={resolution.variant} />; break
+  }
 
   return <div className="app-shell">
     <header className="shell-header">
@@ -60,11 +98,12 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
         <WalletSlot
           kind={mode}
           state={state}
-          checkingVaults={false}
-          onConnect={report(() => wallet.connect())}
-          onSwitch={report(() => wallet.switchToBaseSepolia())}
-          onDisconnect={report(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
-          onLeaveSandbox={leaveToStart}
+          checkingVaults={state.status === 'connected' && discovery.entry.kind === 'checking'}
+          explorer={explorer}
+          onConnect={run(() => wallet.connect())}
+          onSwitch={run(async () => { if (app.data) await wallet.switchToBaseSepolia(app.data.guided.network) })}
+          onDisconnect={run(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
+          onLeaveSandbox={() => { window.location.hash = '#start' }}
         />
         <span className="shell-chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
       </div>
@@ -78,13 +117,14 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
 }
 
 export function App() {
+  const desktop = useDesktop()
   const [hash, replace] = useHash()
   const { place, canonical, entry } = parseHash(hash)
   useEffect(() => {
-    if (!entry && canonical !== hash) replace(canonical)
-  }, [entry, canonical, hash, replace])
+    if (desktop && !entry && canonical !== hash) replace(canonical)
+  }, [desktop, entry, canonical, hash, replace])
+  if (!desktop) return <div className="vault-app"><DesktopGate /></div>
   return <div className="vault-app">
-    <DesktopGate />
     <AdapterProvider kind={place.mode} key={place.mode}>
       <Shell mode={place.mode} route={place.route} entry={entry} replace={replace} />
     </AdapterProvider>

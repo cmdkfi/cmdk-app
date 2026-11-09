@@ -11,14 +11,13 @@ export function createSandboxWallet(): WalletAdapter {
     kind: 'sandbox',
     getState: () => DISCONNECTED,
     subscribe: () => () => undefined,
+    hasMetaMask: () => false,
     connect: notImplemented,
     disconnect: notImplemented,
     switchToBaseSepolia: notImplemented,
     signMessage: notImplemented,
     sendTransaction: notImplemented,
     waitForTransaction: notImplemented,
-    readBalances: notImplemented,
-    readAccountKind: notImplemented,
     dispose: () => undefined,
   }
 }
@@ -42,6 +41,10 @@ export function createSandboxProtocol(): ProtocolAdapter {
     readNearSecurity: notImplemented,
     readEvidenceJson: notImplemented,
     readBootFile: notImplemented,
+    readMarketQuote: notImplemented,
+    readWalletFunding: notImplemented,
+    readAccountKind: notImplemented,
+    readSetupFacts: notImplemented,
   }
 }
 

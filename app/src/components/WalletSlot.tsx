@@ -3,7 +3,6 @@ import type { AdapterKind, WalletState } from '../adapters/types.ts'
 import { shortAddress } from '../protocol/wallet-utils.ts'
 
 const BASE_SEPOLIA = 84532
-const EXPLORER = 'https://sepolia.basescan.org/address/'
 
 type MenuItem = { label: string; href?: string; danger?: boolean; onSelect?: () => void }
 
@@ -39,10 +38,12 @@ function SlotMenu({ label, items }: { label: string; items: MenuItem[] }) {
  * Header wallet slot (PRD S0), the only navigation control. Five states:
  * not connected, connecting / checking vaults, connected, wrong network, sandbox active.
  */
-export function WalletSlot({ kind, state, checkingVaults, onConnect, onSwitch, onDisconnect, onLeaveSandbox }: {
+export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, onSwitch, onDisconnect, onLeaveSandbox }: {
   kind: AdapterKind
   state: WalletState
   checkingVaults: boolean
+  /** Explorer base URL from config.json; the BaseScan item is omitted until config is loaded. */
+  explorer?: string
   onConnect: () => void
   onSwitch: () => void
   onDisconnect: () => void
@@ -64,7 +65,7 @@ export function WalletSlot({ kind, state, checkingVaults, onConnect, onSwitch, o
   if (state.chainId !== BASE_SEPOLIA) return <button type="button" className="wallet-slot wallet-slot--warning" onClick={onSwitch}>{short} · Switch to Base Sepolia</button>
   return <SlotMenu label={`${short} · Base Sepolia`} items={[
     { label: copied ? 'Copied' : 'Copy address', onSelect: () => { void navigator.clipboard?.writeText(state.address).then(() => setCopied(true), () => undefined) } },
-    { label: 'View on BaseScan', href: `${EXPLORER}${state.address}` },
+    ...(explorer ? [{ label: 'View on BaseScan', href: `${explorer.replace(/\/$/, '')}/address/${state.address}` }] : []),
     { label: 'Disconnect', danger: true, onSelect: onDisconnect },
   ]} />
 }

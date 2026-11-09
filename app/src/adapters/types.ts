@@ -11,6 +11,10 @@ import type { PendingTransaction } from '../protocol/transaction-recovery.ts'
 import type { assertFreshOwnerIntent, readOwnerRecovery, unsubmittedOwnerExpired, verifyOwnerJob } from '../protocol/owner-recovery.ts'
 import type { readNearSecurity } from '../protocol/near-security.ts'
 import type { EvidenceFile, EvidenceIndex, readBootFile } from '../protocol/agent-evidence.ts'
+import type { MarketQuote } from '../protocol/market-quote.ts'
+import type { WalletFunding } from '../protocol/wallet-funding.ts'
+import type { SetupFacts } from '../protocol/setup-facts.ts'
+import type { AddChainParams } from '../flow/guided-config.ts'
 
 export type AdapterKind = 'live' | 'sandbox'
 
@@ -19,21 +23,20 @@ export type WalletState =
   | { status: 'connecting' }
   | { status: 'connected'; address: Address; chainId: number }
 
-export type WalletBalances = { eth: bigint; weth: bigint; usdc: bigint }
-
 export interface WalletAdapter {
   readonly kind: AdapterKind
   /** Stable snapshot for useSyncExternalStore. */
   getState(): WalletState
   subscribe(listener: () => void): () => void
+  /** MetaMask is present: an EIP-6963 provider announced as io.metamask, or window.ethereum.isMetaMask. */
+  hasMetaMask(): boolean
   connect(): Promise<void>
   disconnect(): Promise<void>
-  switchToBaseSepolia(): Promise<void>
+  /** Switches to Base Sepolia; MetaMask's 4902 answer adds the network with exactly these values. */
+  switchToBaseSepolia(network: AddChainParams): Promise<void>
   signMessage(message: string): Promise<Hex>
   sendTransaction(tx: { to: Address; data?: Hex; value?: bigint }): Promise<Hex>
   waitForTransaction(hash: Hex, confirmations: number): Promise<TransactionReceipt>
-  readBalances(address: Address, tokens: { weth: Address; usdc: Address }): Promise<WalletBalances>
-  readAccountKind(address: Address): Promise<'plain' | 'delegated' | 'contract'>
   dispose(): void
 }
 
@@ -59,6 +62,10 @@ export interface ProtocolAdapter {
   readNearSecurity(config: AppConfig, vault: Vault, agentKey?: string): ReturnType<typeof readNearSecurity>
   readEvidenceJson(url: string, signal: AbortSignal): Promise<unknown>
   readBootFile(base: string, index: EvidenceIndex, row: EvidenceFile, vault: Vault, signal: AbortSignal): ReturnType<typeof readBootFile>
+  readMarketQuote(config: AppConfig, market: { id: Hex; executor: Address }, morpho: Address): Promise<MarketQuote>
+  readWalletFunding(config: AppConfig, owner: Address, tokens: { weth: Address; gasPriceOracle: Address }, gasLimit: bigint, amount: bigint): Promise<WalletFunding>
+  readAccountKind(config: AppConfig, address: Address): Promise<'plain' | 'delegated' | 'contract'>
+  readSetupFacts(config: AppConfig, vaultId: string, owner: string, position: LivePosition): Promise<SetupFacts>
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

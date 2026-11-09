@@ -6,6 +6,6 @@ export function Placeholder({ label, title, phase, children }: { label: string; 
     <span className="screen__label">{label}</span>
     <h1 id="screen-title">{title}</h1>
     <p className="screen__note">This screen is built in {phase}.</p>
-    {children && <div className="screen__actions">{children}</div>}
+    {children}
   </section>
 }
