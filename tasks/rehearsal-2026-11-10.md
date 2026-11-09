@@ -259,3 +259,26 @@ these go back to the agent as the fix list):
 1. ____
 2. ____
 3. ____
+
+## Recorded results — product owner, 9–10 Nov 2026 (live on testnet.cmdk.fi, preview deploy from feat/guided-flow at a36e63f)
+
+Wallet 0x11B7…0A52 (fresh MetaMask account). Vault **v10**, position address `0xf09ceca0825211b1863f14708ac71f336d42a9fa`. Times are UTC.
+
+| Step | Result | Time | Notes |
+|---|---|---|---|
+| S1–S3 | pass | — | 0.01 ETH default; Create position enabled once funded |
+| S4 step 1 create | pass | ~21:46 | relayer created v10 |
+| S4 step 2 setup | pass | 21:47:33–35 | two CorridorSet receipts (live, backup) |
+| S4 step 4 wrap + transfer | pass | 21:48:16 | 0.01 WETH to the position address |
+| S4 step 5 open | pass | 21:48:39 | 10.61 USDC borrowed at 49.9% LTV |
+| S4 step 6 withdraw | pass | 21:49:03 | USDC in the wallet (10.616729); visible in MetaMask only after importing the token |
+| Agent registration | pass, slow | noticed ~21:55, registered on chain 22:01:42, agent list caught up ~22:05 | agent side: slow official NEAR RPC + 10-minute funding cron (both being changed by the protocol team) |
+| S5 | pass with copy defects | — | showed "Revoked · revoked" while the agent list lagged behind the chain; verification rows all Checked after registration |
+| S6 step 1 USDC transfer | pass | 22:14:41 | 10.722897 USDC |
+| S6 step 2 close, first attempt | relayer 503 (relayer redeploy at that moment) | ~22:14:50 | app showed "Checking…" without a reason; waited for the 10-minute expiry, then offered "Sign a new message" |
+| S6 step 2 close, second attempt | pass | job 87fe4d6b9182472b, done in 18 s, 22:25:43 | receipt status 1; debt 0, collateral 0 |
+| S6 step 3 return WETH | pass | 22:26:09 | |
+| S6 step 4 return leftover USDC | pass | 22:26:45 | 0.106167 USDC |
+| S7 closed + Start over | pass | — | gas float 0.004994 ETH (0.005 − ~0.000006 for the whole open and close) |
+
+Surprises → fixes (tasks/todo.md Phase 7b): agent status trusted the agent's list over the chain; "Checking…" gave no reason or ETA; POST timeout too short for a slow relayer; internal Morpho transfer legs shown as separate rows; static verification rows tagged "Not checked"; duplicated disclaimer; amounts with six decimals; "no active corridor" copy after close; no "Show USDC in MetaMask"; registration_tx absent in the agent's list after it adopted the on-chain key.

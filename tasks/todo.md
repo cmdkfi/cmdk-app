@@ -115,7 +115,7 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [x] Shown in the S4 right rail from step 1 (re-checked every 30 s; replaces the placeholder and the separate registration poll) and opened from S5's "Verify the agent" (checked on open and on "Check again").
 - [x] Unit tests: row status derivation for match, mismatch, unavailable, not checked, and the no-vault / pending / failed states. Browser: all rows Checked against the fixture; an altered manifest is Mismatch on row 1 only; a failing evidence fetch is Unavailable on row 2 only; the registration row reads Registering while the agent row is pending (S4 rail).
 
-## Phase 6b — Sandbox mode (after the live flow is stable, before or after merge as decided then)
+## Phase 6b — Sandbox mode (original item list; see the updated section below for order and the production flag)
 - [ ] Sandbox `WalletAdapter`: in-memory account, balances, instant signatures/transactions with fake hashes, scripted rejection toggle.
 - [ ] Sandbox `ProtocolAdapter`: state machine create → setup → open → scripted price drop → agent `Reduced` → close; stage timers 1–3 s; simulated interest and feeds; activity list and verification rows marked "Simulated".
 - [ ] UI: Try in sandbox entry on S3, no-MetaMask state and wallet-slot menu; explainer sheet with Activate (prefills 0.5 ETH, lands on `#sandbox/start`); persistent banner; wallet slot "Sandbox wallet"; disabled hash links tagged simulated; Leave sandbox confirmation (Leave / Stay) in banner and wallet menu; `#sandbox/…` routes mirroring every live route; `sessionStorage` only.
@@ -138,6 +138,36 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [ ] Preview deploy: run `deploy testnet` via `workflow_dispatch` from `feat/guided-flow`; smoke test on testnet.cmdk.fi (CORS, config.json, fonts, one full read of an existing vault).
 - [x] `README.md` rewritten for the guided flow (routes and reads, open/close prompts, honesty rules, commands, RPC choice with the measurement, the vault cutoff); `docs/audit-status.md` maps every cockpit finding to survives / changed / dropped with the reason, and lists what is pending (live rehearsal, sandbox).
 - [ ] The product owner approves; merge `feat/guided-flow` → `main` (deploys automatically).
+
+## Phase 7b — Rehearsal fixes (live rehearsal 9–10 Nov; product owner's findings)
+Order: fixes first, deploy, then the phases below.
+- [ ] 1. Agent status: trust the chain first (vault key with future expiry + limited-key check = registered); the agent's list adds liveness or "the agent's list has not caught up yet"; its "revoked" means Revoked only when the chain shows no key or another key. Unit test with the live rows seen on 9 Nov ({registration:"registering", agent_status:"revoked"} while the chain already had the key).
+- [ ] 2. Activity grouping: fold token transfers that share a transaction hash with an Executor event into that event's row (one row per transaction).
+- [ ] 3. Verification: static rows tagged "Statement", not "Not checked"; "Last tried at" for rows with nothing to compare; when the agent's list has no registration_tx, say so and point to the vault's Access keys on NearBlocks.
+- [ ] 4. S5: one disclaimer (footer only); close sub-line rounded to two decimals; "Sell budget left today" reads "no position" when collateral is zero; two decimals on every USDC amount in recent actions; refresh recent actions together with the position so both block numbers agree.
+- [ ] 5. "Checking…" says why and until when ("relayer answered 503; waiting for the message to expire at HH:MM:SS unless the vault shows it ran") with a countdown; relayer POST timeout 60 s (posts are never retried).
+- [ ] 6. "Show USDC in MetaMask" (`wallet_watchAsset`, ERC20 from config) after the withdraw step and on S5 next to the wallet; browser test that the wallet receives the request with the config address.
+- [ ] 7. Registration copy: "usually within a few minutes" (cron now every minute); rehearsal file updated with the recorded values; commit, push, product owner deploys.
+
+## Phase 8 — Wallet: any injected wallet, header slot only when connected (PRD S0, S3, FR-3 as revised 10 Nov)
+- [ ] Remove the header Connect button; the wallet slot renders only when connected (menu: Copy address, BaseScan, Disconnect). S1/S2 work without a wallet; S3 is the only place to connect.
+- [ ] Connect wallet on S3: wagmi `injected()` with EIP-6963 discovery; list every announced provider with its name and icon, plus legacy `window.ethereum` when not announced; no connect-modal library (decision recorded in PRD S3). "Install a wallet" link when none is detected.
+- [ ] Keep the account check (plain / EIP-7702 EOA allowed; contract wallets blocked with the ecrecover reason), the network switch/add, and silent reconnect for returning users through wagmi's reconnect.
+- [ ] Fixture: announce two EIP-6963 wallets (MetaMask and a second one) and a legacy provider; browser tests for the list, connecting with the second wallet, the contract-wallet block, and the header slot absent before connecting.
+- [ ] README and PRD wording: "MetaMask" → "an injected wallet" wherever it is not about the MetaMask-specific network values.
+
+## Phase 9 — Visual pass to the mockups (PRD §7 as revised 10 Nov)
+- [ ] Port `docs/mockups/cmdk.css` as the app's stylesheet (tokens, type scale, spacing, 960/1120 columns, tiles, rows, steps, checks, LTV track, help panels, sheets); keep the CmdkReference font.
+- [ ] Rebuild each screen's markup to the artboard structure: S0 header, S1 catalogue + amount card, S2 corridor + three lists, S3 facts + help panel variant, S4 steps + verification rail, S5 hero/corridor/agent/market/actions, S6 close steps + USDC panel, S7 closed, sandbox banner/sheet (for Phase 6b).
+- [ ] Screenshot comparison per screen in the browser suite (desktop viewport, fixture data) with a tolerance; update the baselines only on purpose.
+- [ ] Product owner reviews the deployed preview screen by screen against the canvas before Phase 6b starts.
+
+## Phase 6b (updated 10 Nov) — Sandbox for production
+- [ ] Build the simulated adapters behind the existing seams (`VITE_SANDBOX`), then enable the flag in the production build once the sandbox passes its tests; remove the bundle check's "no sandbox string" rule in the same commit and replace it with "sandbox never persists to localStorage and never contacts a network host" tests.
+- [ ] Scope and rules exactly as PRD §8a (entry sheet, banner, `#sandbox/…` routes, scripted price drop and agent reduce, close, Start over, Leave sandbox).
+
+## Phase 10 — Merge
+- [ ] Final docs pass (README counts, PRD status line, audit status "pending" list), product owner's approval, merge PR #80 into main; main deploys automatically.
 
 ## Mockups
 - [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
