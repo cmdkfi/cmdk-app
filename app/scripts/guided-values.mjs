@@ -65,6 +65,10 @@ export function guidedValues(appValues, deployment) {
       metamaskInstall: https(help.metamaskInstall, 'help.metamaskInstall'),
       connectingToBase: https(help.connectingToBase, 'help.connectingToBase'),
       nearblocks: https(help.nearblocks, 'help.nearblocks'),
+      // PRD §6: the published manifest the panel compares against, and the two protocol documents it links
+      manifest: https(help.manifest, 'help.manifest'),
+      measurementDoc: https(help.measurementDoc, 'help.measurementDoc'),
+      relayerDoc: https(help.relayerDoc, 'help.relayerDoc'),
       ethFaucets: links(help.ethFaucets, 'help.ethFaucets'),
       usdcFaucets: links(help.usdcFaucets, 'help.usdcFaucets'),
     },

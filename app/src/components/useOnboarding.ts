@@ -1,9 +1,7 @@
 // S4 onboarding (PRD S4, D11, FR-5/5a/6/7/8, R1, R2, R4): the step drivers on the shared runner (runner.ts). The only
 // place S4 calls adapters.
-import { useEffect, useState } from 'react'
 import type { Address } from 'viem'
-import { useAdapters } from '../adapters/AdapterProvider.tsx'
-import { ProtocolError, type AgentRegistration } from '../adapters/types.ts'
+import { ProtocolError } from '../adapters/types.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import { formatUnits, formatWadPercent } from '../flow/format.ts'
 import { activeStep, belowShown, type OnboardingRecord, type RetryKind, type StepId } from '../flow/onboarding.ts'
@@ -199,7 +197,6 @@ const DRIVERS: Record<StepId, (env: Env) => Promise<boolean>> = {
 export type Onboarding = {
   record: OnboardingRecord | null
   running: boolean
-  registration: AgentRegistration['state'] | null
   /** Arm the chain and run (Create position already armed it; after a reload this is "Continue"). */
   start(): void
   /** A paused step's action. */
@@ -209,9 +206,8 @@ export type Onboarding = {
 }
 
 export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: Address | undefined, chainOk: boolean, onFinished: () => void): Onboarding {
-  const { protocol } = useAdapters()
   const factory = app?.config.near.factory
-  const chain = useStepChain<StepId, OnboardingRecord>({
+  return useStepChain<StepId, OnboardingRecord>({
     mode, app, owner, chainOk,
     key: `${factory ?? ''}:${owner?.toLowerCase() ?? ''}`,
     load: () => (owner && factory ? loadRecord(mode, factory, owner) : null),
@@ -227,18 +223,4 @@ export function useOnboarding(mode: Mode, app: LoadedConfig | undefined, owner: 
     invalidate: [['discovery']],
     onFinished,
   })
-
-  // Agent registration (step 3): non-blocking, every 30 s while S4 is shown.
-  const [registration, setRegistration] = useState<AgentRegistration['state'] | null>(null)
-  const vaultId = chain.record?.vault?.accountId
-  useEffect(() => {
-    if (!app || !vaultId) return
-    let stop = false
-    const check = async () => { const r = await protocol.readAgentRegistration(app, vaultId).catch(() => ({ state: 'unavailable' as const })); if (!stop) setRegistration(r.state) }
-    void check()
-    const timer = window.setInterval(check, 30_000)
-    return () => { stop = true; window.clearInterval(timer) }
-  }, [app, vaultId, protocol])
-
-  return { ...chain, registration }
 }

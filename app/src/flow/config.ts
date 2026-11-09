@@ -13,11 +13,13 @@ export type PolicyMarket = { id: Hex; loan_token: Hex; collateral_token: Hex; ex
 export type AppConfig = {
   guided: { corridor: Corridor; minDepositEth: string; messageExpirySecs: number; walletTxGasLimit: number; usdcDust: string; firstVaultNumber: number }
   network: AddChainParams
-  help: { metamaskInstall: string; connectingToBase: string; nearblocks: string; ethFaucets: HelpLink[]; usdcFaucets: HelpLink[] }
+  help: { metamaskInstall: string; connectingToBase: string; nearblocks: string; manifest: string; measurementDoc: string; relayerDoc: string; ethFaucets: HelpLink[]; usdcFaucets: HelpLink[] }
   base: { morpho: Hex; weth: Hex; usdc: Hex; gasPriceOracle: Hex; executorDeployBlock: number; feeds: { address: Hex; description: string }[] }
   baseChainId: number
   nearNetwork: string
   nearRpcUrl: string
+  /** Asked for NEAR reads only when the primary fails retryably (protocol/near/rpc.ts). */
+  nearRpcUrlFallback: string
   baseRpcUrl: string
   relayerUrl: string
   relayerUrlFallback: string
@@ -59,7 +61,7 @@ export function parseConfig(value: unknown): LoadedConfig {
   if (!value || typeof value !== 'object') fail('not an object')
   const c = value as AppConfig
   if (c.baseChainId !== 84532 || c.nearNetwork !== 'testnet') fail('not the supported testnet')
-  for (const [key, url] of [['nearRpcUrl', c.nearRpcUrl], ['baseRpcUrl', c.baseRpcUrl], ['relayerUrl', c.relayerUrl]] as const) if (typeof url !== 'string' || !HTTPS.test(url)) fail(`${key} must be https`)
+  for (const [key, url] of [['nearRpcUrl', c.nearRpcUrl], ['nearRpcUrlFallback', c.nearRpcUrlFallback], ['baseRpcUrl', c.baseRpcUrl], ['relayerUrl', c.relayerUrl]] as const) if (typeof url !== 'string' || !HTTPS.test(url)) fail(`${key} must be https`)
   if (typeof c.relayerUrlFallback !== 'string' || (c.relayerUrlFallback !== '' && !HTTPS.test(c.relayerUrlFallback))) fail('relayerUrlFallback must be https or empty')
   if (!c.near || typeof c.near.factory !== 'string' || !/^[a-z0-9._-]+$/.test(c.near.factory)) fail('no published NEAR factory')
   const m = c.agent?.measurement
@@ -72,7 +74,7 @@ export function parseConfig(value: unknown): LoadedConfig {
   if (!c.base || ![c.base.morpho, c.base.weth, c.base.usdc, c.base.gasPriceOracle].every(a => ADDRESS.test(a ?? '')) || !Number.isInteger(c.base.executorDeployBlock)
     || !Array.isArray(c.base.feeds) || c.base.feeds.length === 0 || c.base.feeds.some(f => !ADDRESS.test(f?.address ?? '') || typeof f.description !== 'string' || !f.description)) fail('no Base addresses')
   if (!c.network || c.network.chainId !== '0x14a34' || !c.network.rpcUrls?.every(u => HTTPS.test(u)) || !c.network.blockExplorerUrls?.every(u => HTTPS.test(u))) fail('no Base Sepolia network entry')
-  if (!c.help || ![c.help.metamaskInstall, c.help.connectingToBase, c.help.nearblocks, ...(c.help.ethFaucets ?? []).map(l => l.url), ...(c.help.usdcFaucets ?? []).map(l => l.url)].every(u => HTTPS.test(u ?? ''))) fail('help links must be https')
+  if (!c.help || ![c.help.metamaskInstall, c.help.connectingToBase, c.help.nearblocks, c.help.manifest, c.help.measurementDoc, c.help.relayerDoc, ...(c.help.ethFaucets ?? []).map(l => l.url), ...(c.help.usdcFaucets ?? []).map(l => l.url)].every(u => HTTPS.test(u ?? ''))) fail('help links must be https')
   const minDepositWei = parseDecimal(g.minDepositEth, 18)
   if (minDepositWei === null) fail('invalid minimum deposit')
   return {

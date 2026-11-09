@@ -87,3 +87,11 @@ test('§9 3: the saved activity shows at once on return and only the blocks afte
   expect([...new Set(fx.logWindows.map(([from, to]) => `${from}-${to}`))]).toEqual([`${HEAD}-${HEAD + 20n}`])
   expect(fx.logWindows).toHaveLength(2)
 })
+
+test('NEAR fallback: with the primary down, discovery and S5 read through the fallback URL', async ({ page, context, fx }) => {
+  activeVault(fx)
+  fx.nearPrimaryDown = true
+  await fx.install(context); await openPosition(page)
+  expect(fx.requests.some(r => r.host === 'near-fallback.fixture.test')).toBe(true)
+  expect(fx.requests.filter(r => r.host === 'near.fixture.test')).toEqual([]) // aborted before the fixture answers
+})

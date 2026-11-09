@@ -1,5 +1,6 @@
 // Vault and factory views on NEAR (cmdkfi/app 47fd4fb).
 import { NearRpcError, viewFunction } from './rpc.ts'
+import type { NearRpc } from './rpc.ts'
 
 type Fetch = typeof fetch
 
@@ -35,7 +36,7 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/
 const ID = /^0x[0-9a-fA-F]{64}$/
 
 /** `get_state` view. Mirrors vault/src/lib.rs l.539-557 (field names and shapes). */
-export async function getState(rpcUrl: string, vault: string, fetcher: Fetch = fetch): Promise<VaultState> {
+export async function getState(rpcUrl: NearRpc, vault: string, fetcher: Fetch = fetch): Promise<VaultState> {
   const s = await viewFunction<Partial<VaultState>>(rpcUrl, vault, 'get_state', {}, fetcher)
   const markets = Array.isArray(s.markets) ? s.markets : null
   if (typeof s.owner !== 'string' || !ADDRESS.test(s.owner) || !Number.isSafeInteger(s.owner_nonce) || typeof s.base_address !== 'string' || !ADDRESS.test(s.base_address)
@@ -49,7 +50,7 @@ export async function getState(rpcUrl: string, vault: string, fetcher: Fetch = f
 export type FactoryConfig = { code_hash: string; signer: string; path: string; morpho: string; count: number }
 
 /** Factory `get_config`. Mirrors vault/factory/src/lib.rs l.52-60 (Config) and l.156. */
-export async function getFactoryConfig(rpcUrl: string, factory: string, fetcher: Fetch = fetch): Promise<FactoryConfig> {
+export async function getFactoryConfig(rpcUrl: NearRpc, factory: string, fetcher: Fetch = fetch): Promise<FactoryConfig> {
   const c = await viewFunction<Partial<FactoryConfig>>(rpcUrl, factory, 'get_config', {}, fetcher)
   if (!Number.isSafeInteger(c.count) || (c.count as number) < 0 || typeof c.code_hash !== 'string') throw new NearRpcError('The factory returned an invalid config.', false)
   return c as FactoryConfig
@@ -65,7 +66,7 @@ export type OwnedVault = { accountId: string; number: number; state: VaultState 
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-async function readState(rpcUrl: string, account: string, fetcher: Fetch): Promise<VaultState> {
+async function readState(rpcUrl: NearRpc, account: string, fetcher: Fetch): Promise<VaultState> {
   try {
     return await getState(rpcUrl, account, fetcher)
   } catch (error) {
@@ -81,7 +82,7 @@ async function readState(rpcUrl: string, account: string, fetcher: Fetch): Promi
  * time, and stops at the first vault the owner holds. Any account above it that cannot be read makes the answer
  * unknown and throws; nothing below the cutoff is read. Owner match is case-insensitive (get_state hex vs wallet).
  */
-export async function discover(rpcUrl: string, factory: string, owner: string, firstVaultNumber: number, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
+export async function discover(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
   const { count } = await getFactoryConfig(rpcUrl, factory, fetcher)
   const wanted = owner.toLowerCase()
   for (let top = count; top >= firstVaultNumber; top -= 2) {
@@ -102,7 +103,7 @@ export async function discover(rpcUrl: string, factory: string, owner: string, f
  * D4 with a remembered vault (PRD §9 5): when the owner's last known vault (from the cutoff) still names this owner,
  * one get_state answers; when it does not, or cannot be read, the factory scan runs as in `discover`.
  */
-export async function discoverWithHint(rpcUrl: string, factory: string, owner: string, firstVaultNumber: number, hint: string | null, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
+export async function discoverWithHint(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, hint: string | null, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
   const suffix = `.${factory}`
   const number = hint?.startsWith('v') && hint.endsWith(suffix) ? Number(hint.slice(1, -suffix.length)) : 0
   if (hint && Number.isSafeInteger(number) && number >= firstVaultNumber && hint === vaultId(factory, number)) {

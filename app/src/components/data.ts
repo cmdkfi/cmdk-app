@@ -141,3 +141,10 @@ export function useClosePlan(vaultId: string | undefined, owner: Address | undef
   return useQuery({ queryKey: ['close-plan', kind, vaultId ?? null, owner?.toLowerCase() ?? null], enabled: enabled && !!app && !!vaultId && !!owner, queryFn: () => protocol.readClosePlan(app!, vaultId!, owner!), retry: false })
 }
 
+
+/** PRD §6 verification facts for one vault: live reads, never persisted; S4 re-checks every 30 s, S5 on open and on request. */
+export function useVerification(vaultId: string | undefined, poll: boolean) {
+  const { protocol, kind } = useAdapters()
+  const app = useAppConfig().data
+  return useQuery({ queryKey: ['verification', kind, vaultId ?? null], enabled: !!app && !!vaultId, queryFn: () => protocol.readVerification(app!, vaultId!), refetchInterval: poll ? 30_000 : false, staleTime: 0, retry: false })
+}

@@ -106,11 +106,14 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [x] 5. Cache the owned vault id per owner (live only); verify with one `get_state`; scan only when the cached vault no longer names the owner (or cannot be read). Unit tests for the mismatch, unreadable, sub-cutoff and other-factory paths.
 - [x] 6. Share the NEAR `get_state` read between position and agent queries (one answer shared for 5 s in the live adapter; discovery's read seeds it); S5 only, the chains read live.
 - [x] Measure before/after on the live RPC (requests per refresh, time to first full S5) and record both in the Review note.
+- [x] NEAR RPC (product owner, after 5b): `nearRpcUrl` https://test.rpc.fastnear.com, `nearRpcUrlFallback` https://near-testnet.drpc.org (both https-validated); the fallback is asked for NEAR reads only after a retryable failure of the primary; PRD §9 item 7 and Appendix C record both URLs and the measurement.
 
 ## Phase 6 — Verification panel
-- [ ] Checklist rows per PRD §6 using `measurementMatches`, `evidenceIndex`, `readBootFile` (app-compose.json SHA-256), `/agent/vaults`, `readNearSecurity`; manifest fetched from raw GitHub with `sourceCommit` shown; `Unavailable` on fetch failure. Nothing else from `agent-evidence.ts` (no transcripts, no execution verification).
-- [ ] "What is not checked here" row and links to `agent/MEASUREMENT.md`, `scripts/RELAYER.md`.
-- [ ] Unit tests: row status derivation for match / mismatch / unavailable.
+- [x] `help.manifest` (raw GitHub deployments/testnet.json) in `config.app.json`, https-validated; also `help.measurementDoc` and `help.relayerDoc` for the panel's links (Appendix C: links are configuration).
+- [x] Rows exactly as the PRD §6 table, each Checked | Mismatch | Unavailable | Not checked with the time of its check and a "how to check yourself" line: published manifest (with `sourceCommit`), NearBlocks vault page and registration transaction, agent/MEASUREMENT.md, scripts/RELAYER.md. Checks from `evidence/verify.ts` as it exists (`measurementMatches`, `fetchPublishedManifest`, `sha256Hex`/`composeHashMatches` with the `/agent/` index entry, `agentRow`, `agentKeyLimited`, `codeMatchesFactory`); no transcripts, no execution verification.
+- [x] "Checked" only for a positive result in this session; each check is settled on its own, so a failed fetch is Unavailable on its row only; nothing to compare yet (no vault, no approval, no agent key) is Not checked; the relayer and "not checked here" rows are static statements.
+- [x] Shown in the S4 right rail from step 1 (re-checked every 30 s; replaces the placeholder and the separate registration poll) and opened from S5's "Verify the agent" (checked on open and on "Check again").
+- [x] Unit tests: row status derivation for match, mismatch, unavailable, not checked, and the no-vault / pending / failed states. Browser: all rows Checked against the fixture; an altered manifest is Mismatch on row 1 only; a failing evidence fetch is Unavailable on row 2 only; the registration row reads Registering while the agent row is pending (S4 rail).
 
 ## Phase 6b — Sandbox mode (after the live flow is stable, before or after merge as decided then)
 - [ ] Sandbox `WalletAdapter`: in-memory account, balances, instant signatures/transactions with fake hashes, scripted rejection toggle.
@@ -240,4 +243,23 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
 - *Fixture:* real Base heights (head 30,000,100; Multicall3 exists from block 1,059,647), Multicall3 aggregate3 and getEthBalance, address arrays in eth_getLogs, a request log per host, a Base delay knob.
 - *Dependencies:* `@tanstack/react-query-persist-client` and `@tanstack/query-sync-storage-persister` 5.105.2 (pinned to the installed react-query; lockfile +39 lines, additions only).
 - *Results:* typecheck, 127/127 unit tests, build, bundle boundary, 40/40 Playwright desktop; performance, position, close and onboarding specs 3× repeated (63/63).
+
+**Phase 5b follow-up — NEAR RPC (9 Nov 2026).** `nearRpcUrl` = https://test.rpc.fastnear.com, `nearRpcUrlFallback` = https://near-testnet.drpc.org. Every NEAR call the app makes is a read; the fallback is asked only after a retryable failure of the primary (no answer or timeout, HTTP 5xx, 429), never after a NEAR error answer. The relayer GET rule falls back only on no answer; NEAR adds 5xx and 429 because a rate-limited or failing NEAR node is common and the reads are idempotent. Unit test for each case; a browser check reads discovery and S5 through the fallback with the primary down.
+
+| live, vault v9, same script as 5b | rpc.testnet.near.org (5b after) | test.rpc.fastnear.com |
+|---|---|---|
+| one S5 refresh | 6 requests, 3.5–4.5 s | 6 requests, 0.44–0.70 s |
+| first full S5 after connect, first visit | 17 requests, 10.0 s | 17 requests, 1.8 s |
+| first full S5 after connect, return | 11 requests, 6.8 s | 11 requests, 1.05 s |
+
+Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.10–0.32 s, rpc.testnet.near.org 3.1–3.2 s.
+
+**Phase 6 (9 Nov 2026, cmdkfi/app still `47fd4fb`; `git diff HEAD -- docs tasks` empty at start).** The §6 panel is built on `evidence/verify.ts` as it exists.
+- *Adapter method:* `readVerification(app, vaultId)` → `VerificationFacts`, five checks each settled on its own with its time: published manifest (help.manifest; vault/src/attest.rs l.15-22), app-compose.json bytes and the `/agent/` index entry (agent/MEASUREMENT.md l.99; agent/src/serve.rs l.105-114, l.142), `/agent/vaults` row (agent/src/main.rs l.1029-1034), `view_access_key_list` (vault/src/lib.rs l.46, l.498-503), `view_account` against the factory `get_config().code_hash` (vault/factory/src/lib.rs l.152; scripts/reproduce-hash.sh l.122-125). The old `readAgentRegistration` (S4's registration line) is removed; the panel's registration row replaces it. No new ABI fragment.
+- *Pure rules:* `flow/verification.ts` `verificationRows`.
+- *Registration row before setup:* register_agent needs an approved measurement, so with no approval and no agent row the row says it waits for the setup step instead of "Registering (usually a few minutes)" (found on the live v9 read).
+- *Live read-only run* (readVerification + rows, fastnear): v1 — all five live rows Checked (compose hash 216124c1e33e…, registered until 13 Nov), 0.86 s; v9 (no setup) — rows 1–4 Not checked, code Checked, 0.22 s.
+- *Fixture:* raw-GitHub manifest route (published measurement knob), `/agent/` index and `/agent/evidence/app-compose.json` (outage knob); the fixture's approved compose_hash is the SHA-256 of the bytes it serves.
+- *PRD §6 "Implementation" line* still names the previous app's modules (`agent-evidence.ts`, `near-security.ts`); the panel uses `evidence/verify.ts`. Not edited.
+- *Results:* typecheck, 133/133 unit tests, build, bundle boundary, 45/45 Playwright desktop; verification, performance and onboarding specs 3× repeated (48/48).
 

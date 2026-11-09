@@ -46,11 +46,11 @@ export function createSandboxProtocol(): ProtocolAdapter {
     checkOwnerSignature: notImplemented,
     walletTx: () => { throw new Error(MESSAGE) },
     fundsShortfall: () => null,
-    readAgentRegistration: notImplemented,
     readPosition: notImplemented,
     readAgent: notImplemented,
     readActivity: notImplemented,
     readClosePlan: notImplemented,
+    readVerification: notImplemented,
   }
 }
 

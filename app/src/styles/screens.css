@@ -127,3 +127,16 @@
 .sheet h2{font-size:18px;margin:0 0 16px}
 .sheet p{font-size:13px;margin:12px 0}
 .oracle-line{font-variant-numeric:tabular-nums}
+/* §6 verification panel */
+.verify{display:grid;gap:10px}
+.verify__head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.verify__head h2{font-size:16px;margin:0}
+.verify__rows{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.verify__row{display:grid;gap:4px;padding:10px 12px;border-radius:10px;background:var(--raised);box-shadow:inset 3px 0 0 var(--muted)}
+.verify__row--checked{box-shadow:inset 3px 0 0 #73c7a2}
+.verify__row--mismatch{box-shadow:inset 3px 0 0 #ee858e}
+.verify__row--unavailable{box-shadow:inset 3px 0 0 #e4ba69}
+.verify__line{display:flex;justify-content:space-between;gap:12px;font-size:13px}
+.verify__status{font-size:12px;white-space:nowrap}
+.verify__result,.verify__how{font-size:12px;color:var(--muted);margin:0;overflow-wrap:anywhere}
+.verify--compact .verify__how{font-size:11px}

@@ -49,7 +49,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   await expect(fact(page, 'Agent', 'Last check')).toHaveText(/\(\d+ s ago\)$/)
   await expect(fact(page, 'Agent', 'Sell budget left today')).toHaveText('0.016 WETH of 0.021 WETH (20% per rolling 24 h)')
   await card(page, 'Agent').getByRole('button', { name: 'Verify the agent' }).click()
-  await expect(page.getByText('The verification panel arrives in Phase 6. Nothing is shown as checked until then.')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Agent verification' })).toBeVisible() // the §6 panel (Phase 6)
   // market card
   await expect(fact(page, 'Market', 'Market')).toHaveText('Morpho · USDC/WETH on Base Sepolia · live')
   await expect(fact(page, 'Market', 'Liquidation LTV')).toHaveText('86%')

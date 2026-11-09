@@ -14,6 +14,7 @@ import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
 import { agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
+import { VerificationPanel } from './VerificationPanel.tsx'
 
 const BASE_SEPOLIA = 84532
 /** The one close reason that keeps the button usable: clicking reads the plan again. */
@@ -72,9 +73,8 @@ function LtvTrack({ m }: { m: PositionMarket }) {
   </div>
 }
 
-function AgentCard({ vaultId, market, view, now }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number }) {
+function AgentCard({ vaultId, market, view, now, verifying, onVerify }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void }) {
   const agent = useAgent(vaultId)
-  const [verify, setVerify] = useState(false)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
   const row = agent.data?.row
   const budget = market ? budgetFor(view, market) : null
@@ -89,8 +89,7 @@ function AgentCard({ vaultId, market, view, now }: { vaultId: string; market: Po
         : <Unavailable>no active corridor</Unavailable>}</dd></div>
     </dl>
     {agent.isError && agent.data && <p className="screen__note" role="alert">The last agent read failed; showing the previous one.</p>}
-    <button type="button" className="link-button" aria-expanded={verify} onClick={() => setVerify(v => !v)}>Verify the agent</button>
-    {verify && <p className="screen__note">The verification panel arrives in Phase 6. Nothing is shown as checked until then.</p>}
+    <button type="button" className="link-button" aria-expanded={verifying} aria-controls="verify-panel" onClick={onVerify}>Verify the agent</button>
   </section>
 }
 
@@ -226,6 +225,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const close = useClose(mode, app, owner, chainOk, closeVault, () => undefined)
   const closing = !!close.record && !close.record.completed
   const [review, setReview] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed' && !closing)
   const [, setAmount] = useSessionValue(mode, 'amount', DEFAULT_DEPOSIT[mode])
 
@@ -297,9 +297,10 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     {showIdle && <p className="idle-line">At your position address, outside Morpho: {[idle.weth > 0n && weth(idle.weth), idle.usdc > app.guided.usdcDust && usdc(idle.usdc), idle.eth > 0n && `${formatUnits(idle.eth, 18, 6)} ETH for gas`].filter(Boolean).join(' · ')}</p>}
 
     <div className="cards-s5">
-      <AgentCard vaultId={vaultId} market={market} view={view} now={now} />
+      <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </div>
+    {verifying && <div id="verify-panel"><VerificationPanel vaultId={vaultId} poll={false} /></div>}
     {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} />}
     {owner && <RecentActions app={app} view={view} owner={owner} />}
 

@@ -1,7 +1,8 @@
 {
   "baseChainId": 84532,
   "nearNetwork": "testnet",
-  "nearRpcUrl": "https://rpc.testnet.near.org",
+  "nearRpcUrl": "https://test.rpc.fastnear.com",
+  "nearRpcUrlFallback": "https://near-testnet.drpc.org",
   "baseRpcUrl": "https://base-sepolia-rpc.publicnode.com",
   "relayerUrl": "https://relayer.cmdk.fi",
   "relayerUrlFallback": "https://cmdk-relayer.fffilimonov.workers.dev",
@@ -25,6 +26,9 @@
     "metamaskInstall": "https://metamask.io/download/",
     "connectingToBase": "https://docs.base.org/base-chain/quickstart/connecting-to-base",
     "nearblocks": "https://testnet.nearblocks.io",
+    "manifest": "https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json",
+    "measurementDoc": "https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md",
+    "relayerDoc": "https://github.com/cmdkfi/app/blob/main/scripts/RELAYER.md",
     "ethFaucets": [
       { "label": "Base docs: network faucets", "url": "https://docs.base.org/base-chain/tools/network-faucets", "note": "the list Base keeps current" },
       { "label": "Coinbase Developer Platform faucet", "url": "https://portal.cdp.coinbase.com/products/faucet", "note": "Base Sepolia ETH and USDC, Coinbase developer login" },

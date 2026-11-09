@@ -57,3 +57,8 @@
 - **Rule:** for a performance change, measure the proposed request shape against the live endpoint first; if it contradicts its own goal, stop and ask with the numbers.
 - **Rule:** measure per leg as well as in total. The refresh went from 39 requests to 6, but its time barely moved: the NEAR RPC takes about 3 s per call. Report where the time goes instead of claiming a speed-up from a request count.
 
+## 2026-11-09 — Phase 6: run a status panel against real data before calling its wording done
+- **What happened:** every fixture scenario passed, but the read-only live run on v9 (a vault that never ran setup) showed "Registering (usually a few minutes)" for an agent that cannot register until the vault approves its version. The wording promised something the protocol would not do. Changed to "Waits for the setup step…" with a unit test.
+- **Rule:** a status line must be true for every state the protocol allows, not only for the states the fixture models. Run a read-only live pass over real vaults in different states (complete, not set up) before closing a status feature.
+- **Also:** after the NEAR switch, the measured time matched the per-leg explanation from Phase 5b (3 s per NEAR call): one refresh 3.5–4.5 s → 0.44–0.70 s with the same six requests.
+

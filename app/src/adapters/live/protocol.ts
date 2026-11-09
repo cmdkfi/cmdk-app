@@ -6,15 +6,17 @@ import { parseConfig, type LoadedConfig } from '../../flow/config.ts'
 import { borrowApr, collateralValue, debtAt, depositEstimate, lendable, openTargetLtv, repayNeed } from '../../protocol/base/math.ts'
 import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readMarketStatic, readPositionSnapshot, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding, type MarketStatic } from '../../protocol/base/reads.ts'
 import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
-import { agentKeyLimited, agentRegistered, agentRow, measurementMatches } from '../../protocol/evidence/verify.ts'
-import { finalBlockTime, viewAccessKeyList } from '../../protocol/near/rpc.ts'
-import { discoverWithHint, getState, type VaultState } from '../../protocol/near/vault.ts'
+import { agentKeyLimited, agentRow, codeMatchesFactory, composeHashMatches, fetchPublishedManifest, measurementMatches, sha256Hex } from '../../protocol/evidence/verify.ts'
+import { finalBlockTime, viewAccessKeyList, viewAccount, type NearRpc } from '../../protocol/near/rpc.ts'
+import { discoverWithHint, getFactoryConfig, getState, type VaultState } from '../../protocol/near/vault.ts'
 import { closeArgs, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
-import { agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
+import { agentEvidence, agentIndex, agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
 import { sendEth, transferToken, wrapEth } from '../../protocol/wallet/tx.ts'
-import { ProtocolError, type DeploymentStatic, type ProtocolAdapter } from '../types.ts'
+import { ProtocolError, type DeploymentStatic, type Fetched, type ProtocolAdapter } from '../types.ts'
 
 const relayer = ({ config }: LoadedConfig) => ({ primary: config.relayerUrl, fallback: config.relayerUrlFallback })
+/** NEAR reads: the fallback is asked only after a retryable failure of the primary (protocol/near/rpc.ts). */
+const nearRpc = (config: LoadedConfig['config']) => ({ primary: config.nearRpcUrl, fallback: config.nearRpcUrlFallback })
 
 /** Relayer failures in the terms S4 acts on (RELAYER.md l.59-69). */
 function mapped(error: unknown): never {
@@ -29,6 +31,12 @@ function mapped(error: unknown): never {
 
 const staticsOf = (s: DeploymentStatic) => s.data as MarketStatic[]
 
+/** Settle one verification check on its own, stamped with the time it finished; a failure is kept as its message. */
+const settle = <T>(p: Promise<T>): Promise<Fetched<T>> => p.then(
+  value => ({ ok: true as const, at: Date.now(), value }),
+  error => ({ ok: false as const, at: Date.now(), error: error instanceof Error ? error.message : String(error) }),
+)
+
 /** How long one NEAR get_state answer is shared between the S5 position and agent reads (PRD §9 6). */
 const SHARED_STATE_MS = 5_000
 
@@ -36,7 +44,7 @@ export function createLiveProtocol(): ProtocolAdapter {
   // S5 only: the position and agent queries of one refresh share one get_state; failures are not kept. The onboarding
   // and close chains call getState directly and always read live.
   const shared = new Map<string, { at: number; state: Promise<VaultState> }>()
-  const sharedState = (rpcUrl: string, vaultId: string) => {
+  const sharedState = (rpcUrl: NearRpc, vaultId: string) => {
     const hit = shared.get(vaultId)
     if (hit && Date.now() - hit.at < SHARED_STATE_MS) return hit.state
     const state = getState(rpcUrl, vaultId)
@@ -72,7 +80,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       return accountKind(await readCode(baseClient(config.baseRpcUrl), address))
     },
     async discoverPosition({ config, guided }, owner, hint) {
-      const found = await discoverWithHint(config.nearRpcUrl, config.near.factory, owner, guided.firstVaultNumber, hint ?? null)
+      const found = await discoverWithHint(nearRpc(config), config.near.factory, owner, guided.firstVaultNumber, hint ?? null)
       if (!found) return null
       // the get_state discovery just read is the one S5's position and agent reads share next (PRD §9 6)
       shared.set(found.accountId, { at: Date.now(), state: Promise.resolve(found.state) })
@@ -90,7 +98,7 @@ export function createLiveProtocol(): ProtocolAdapter {
     },
 
     async readVault({ config, guided }, vaultId) {
-      const state = await getState(config.nearRpcUrl, vaultId)
+      const state = await getState(nearRpc(config), vaultId)
       const snapshot = await readVaultSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc })
       const measurementApproved = measurementMatches(state.approved, config.agent.measurement)
       return {
@@ -100,7 +108,7 @@ export function createLiveProtocol(): ProtocolAdapter {
         idle: snapshot.idle, markets: snapshot.markets.map(m => ({ id: m.id, collateral: m.collateral, borrowShares: m.borrowShares, debt: m.debt })), setup: snapshot.setup,
       }
     },
-    readNearTime: ({ config }) => finalBlockTime(config.nearRpcUrl),
+    readNearTime: ({ config }) => finalBlockTime(nearRpc(config)),
     async readWalletTokens({ config, guided }, owner) {
       const b = await readTokenBalances(baseClient(config.baseRpcUrl), owner, { weth: guided.base.weth, usdc: guided.base.usdc })
       return { eth: b.eth, weth: b.weth, usdc: b.usdc }
@@ -149,18 +157,9 @@ export function createLiveProtocol(): ProtocolAdapter {
       return sendEth(intent.to, intent.amount)
     },
     fundsShortfall: error => fundsShortfall(error),
-    async readAgentRegistration(app, vaultId) {
-      try {
-        const [state, rows, keys] = await Promise.all([getState(app.config.nearRpcUrl, vaultId), agentVaults(relayer(app)), viewAccessKeyList(app.config.nearRpcUrl, vaultId)])
-        const ok = agentRegistered(agentRow(rows, vaultId), Date.now() / 1000) && agentKeyLimited(keys, vaultId, state.agent?.public_key)
-        return { state: ok ? 'registered' : 'registering' }
-      } catch {
-        return { state: 'unavailable' }
-      }
-    },
 
     async readPosition({ config, guided }, statics, vaultId) {
-      const state = await sharedState(config.nearRpcUrl, vaultId)
+      const state = await sharedState(nearRpc(config), vaultId)
       const s = await readPositionSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc }, staticsOf(statics))
       return {
         blockNumber: s.blockNumber, blockTime: s.blockTime, morpho: state.morpho,
@@ -172,7 +171,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       }
     },
     async readAgent(app, vaultId) {
-      const [state, rows, keys] = await Promise.all([sharedState(app.config.nearRpcUrl, vaultId), agentVaults(relayer(app)), viewAccessKeyList(app.config.nearRpcUrl, vaultId)])
+      const [state, rows, keys] = await Promise.all([sharedState(nearRpc(app.config), vaultId), agentVaults(relayer(app)), viewAccessKeyList(nearRpc(app.config), vaultId)])
       const row = agentRow(rows, vaultId)
       return {
         row: row ? { registration: row.registration, agent_status: row.agent_status, expires_at: row.expires_at, last_tick_unix: row.last_tick_unix } : null,
@@ -196,7 +195,7 @@ export function createLiveProtocol(): ProtocolAdapter {
     },
     async readClosePlan({ config, guided }, vaultId, owner) {
       const client = baseClient(config.baseRpcUrl)
-      const state = await getState(config.nearRpcUrl, vaultId)
+      const state = await getState(nearRpc(config), vaultId)
       const [s, wallet] = await Promise.all([
         readVaultSnapshot(client, state, { weth: guided.base.weth, usdc: guided.base.usdc }),
         readTokenBalances(client, owner, { weth: guided.base.weth, usdc: guided.base.usdc }),
@@ -214,6 +213,30 @@ export function createLiveProtocol(): ProtocolAdapter {
         needNow: sum(m => repayNeed(m.debtNow)), needAhead: sum(m => repayNeed(m.debtAhead)),
         collateral: sum(m => m.collateral), idle: s.idle, walletUsdc: wallet.usdc,
       }
+    },
+
+    async readVerification(app, vaultId) {
+      const rpc = nearRpc(app.config), urls = relayer(app)
+      // Live reads only, each started once and shared by the rows that need it; nothing is cached for the panel.
+      const state = getState(rpc, vaultId)
+      const manifest = fetchPublishedManifest(app.guided.help.manifest)
+      const compose = agentEvidence(urls, 'app-compose.json')
+      const index = agentIndex(urls)
+      const [measurement, composeRow, registration, keys, code] = await Promise.all([
+        settle(Promise.all([state, manifest]).then(([s, m]) => ({ matches: s.approved ? measurementMatches(s.approved, m.measurement) : null, sourceCommit: m.sourceCommit, version: m.version }))),
+        settle(Promise.all([state, compose, index]).then(async ([s, bytes, idx]) => {
+          const sha256 = await sha256Hex(bytes)
+          const entry = idx.files.find(f => f.name === 'app-compose.json')
+          return { sha256, matchesApproved: s.approved ? await composeHashMatches(bytes, s.approved.compose_hash) : null, matchesIndex: entry ? entry.sha256.toLowerCase() === sha256 : null }
+        })),
+        settle(agentVaults(urls).then(rows => {
+          const row = agentRow(rows, vaultId)
+          return row ? { registration: row.registration ?? '', agentStatus: row.agent_status ?? null, expiresAt: typeof row.expires_at === 'number' ? row.expires_at : null, registrationTx: row.registration_tx ?? null } : null
+        })),
+        settle(Promise.all([state, viewAccessKeyList(rpc, vaultId)]).then(([s, list]) => ({ limited: s.agent ? agentKeyLimited(list, vaultId, s.agent.public_key) : null, count: list.length }))),
+        settle(Promise.all([viewAccount(rpc, vaultId), getFactoryConfig(rpc, app.config.near.factory)]).then(([account, factory]) => ({ matches: codeMatchesFactory(account, factory.code_hash) }))),
+      ])
+      return { vaultId, measurement, compose: composeRow, registration, keys, code }
     },
   }
 }

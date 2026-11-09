@@ -2,6 +2,7 @@
 // JSON-RPC, NEAR RPC and the relayer as JSON fakes. Its ABI fragments are its own copies from the same cmdkfi/app
 // sources (47fd4fb) as app/src/protocol/base/abi.ts, so an app ABI mistake cannot pass by agreeing with itself.
 // Any request to another host, or an unknown method, is recorded and fails the test.
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { test as base, expect, type BrowserContext } from '@playwright/test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, hexToString, keccak256, parseAbi, recoverMessageAddress, toHex, type Hex } from 'viem'
@@ -23,7 +24,9 @@ const pct = (n: number) => BigInt(n) * 10n ** 16n
 const idOf = (p: readonly [Hex, Hex, Hex, Hex, bigint]) => keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }], p))
 const LIVE_PARAMS = [USDC, WETH, ORACLE, IRM, LLTV] as const, BACKUP_PARAMS = [USDC, WETH, BACKUP_ORACLE, IRM, LLTV] as const
 export const LIVE = idOf(LIVE_PARAMS), BACKUP = idOf(BACKUP_PARAMS)
-export const MEASUREMENT = { mrtd: 'ab'.repeat(48), rtmr0: 'bc'.repeat(48), rtmr1: 'cd'.repeat(48), rtmr2: 'de'.repeat(48), compose_hash: 'ef'.repeat(32), os_image_hash: 'fa'.repeat(32) }
+// The agent's app-compose.json as /agent/evidence serves it; the approved compose_hash is its SHA-256 (agent/MEASUREMENT.md l.99).
+export const COMPOSE = Buffer.from(JSON.stringify({ name: 'cmdk-agent', docker_compose_file: 'services: {agent: {image: fixture}}' }))
+export const MEASUREMENT = { mrtd: 'ab'.repeat(48), rtmr0: 'bc'.repeat(48), rtmr1: 'cd'.repeat(48), rtmr2: 'de'.repeat(48), compose_hash: createHash('sha256').update(COMPOSE).digest('hex'), os_image_hash: 'fa'.repeat(32) }
 
 const ABI = parseAbi([
   // executor/src/Interfaces.sol l.15-30
@@ -125,6 +128,8 @@ export class LiveFixture {
   supply = 10_000n * 10n ** 6n; borrowed = 2_000n * 10n ** 6n
   l1Fee = 1_000n
   relayerPrimaryDown = false
+  /** The NEAR primary does not answer; reads go to the fallback (protocol/near/rpc.ts). */
+  nearPrimaryDown = false
   // S5 (Phase 4) knobs
   /** Base head; real Base Sepolia heights, because viem's Multicall3 only exists from block 1,059,647. */
   head = HEAD
@@ -144,6 +149,11 @@ export class LiveFixture {
   logWindows: [bigint, bigint][] = []
   // S6 (Phase 5)
   closes = 0
+  // §6 verification (Phase 6)
+  /** The agent.measurement the raw-GitHub manifest publishes (help.manifest). */
+  publishedMeasurement: Record<string, string> = { ...MEASUREMENT }
+  /** GET /agent/evidence/app-compose.json answers 503. */
+  evidenceDown = false
   // S4 (Phase 3) knobs
   nearNow = NOW
   feedStale = false
@@ -168,7 +178,7 @@ export class LiveFixture {
     const market = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, slice_max: '1000000000' })
     return {
       ...guidedValues(appValues, { base: { morpho: MORPHO, executorDeployBlock: Number(this.deployBlock), gasPriceOracle: GAS_ORACLE, tokens: { weth: WETH, usdc: USDC }, chainlink: { ethUsd: { address: FEED, description: 'ETH / USD', maxAgeSeconds: 1200 } } } }),
-      baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: 'https://near.fixture.test', baseRpcUrl: 'https://base.fixture.test',
+      baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: 'https://near.fixture.test', nearRpcUrlFallback: 'https://near-fallback.fixture.test', baseRpcUrl: 'https://base.fixture.test',
       relayerUrl: 'https://relayer.fixture.test', relayerUrlFallback: 'https://fallback.fixture.test', near: { factory: FACTORY },
       marketLabels: { [LIVE.toLowerCase()]: 'live', [BACKUP.toLowerCase()]: 'backup' },
       agent: { measurement: MEASUREMENT, version: '0.1.0', sourceCommit: 'fixture' },
@@ -417,9 +427,12 @@ export class LiveFixture {
     if ((this.ownerCallModes.shift() ?? 'ok') === 'ok') this.jobs.set(id, { ok: true, job: id, kind: 'owner_call', stage: 'done', vault: body.vault, near_tx: 'N'.repeat(44), receipts: [{ hash, status: 1 }] })
   }
 
-  relayer(method: string, path: string, body: unknown): { status: number; json: unknown; after?: () => void | Promise<void> } {
+  relayer(method: string, path: string, body: unknown): { status: number; json: unknown; raw?: Buffer; after?: () => void | Promise<void> } {
     if (method === 'GET' && path === '/health') return { status: 200, json: { ok: true, chain_id: 84532, near_network: 'testnet', factory: FACTORY, factory_exists: true, eth_float_wei: '5000000000000000' } }
     if (method === 'GET' && path === '/agent/vaults') return this.agentRows ? { status: 200, json: { boot: 'boot-fixture', operator: 'cmdk', vaults: this.agentRows } } : { status: 503, json: { ok: false } }
+    // agent/src/serve.rs l.105-114 (index: name, bytes, sha256, path) and l.142 (evidence file), through the relayer's /agent proxy
+    if (method === 'GET' && path === '/agent/') return { status: 200, json: { boot: 'boot-fixture', operator: 'cmdk', files: [{ name: 'app-compose.json', bytes: COMPOSE.length, sha256: createHash('sha256').update(COMPOSE).digest('hex'), path: '/evidence/app-compose.json' }], vaults: [] } }
+    if (method === 'GET' && path === '/agent/evidence/app-compose.json') return this.evidenceDown ? { status: 503, json: { ok: false, error: 'evidence unavailable' } } : { status: 200, json: null, raw: COMPOSE }
     if (method === 'GET' && path.startsWith('/job/')) {
       const job = this.jobs.get(path.slice(5))
       return job ? { status: 200, json: job } : { status: 404, json: { ok: false, error: 'no such job' } }
@@ -475,7 +488,8 @@ export class LiveFixture {
             : { jsonrpc: '2.0', id: r.id, result: this.rpc(r.method, r.params ?? []) })
           return route.fulfill({ json: Array.isArray(data) ? data.map(one) : one(data) })
         }
-        if (url.host === 'near.fixture.test' && request.method() === 'POST') {
+        if ((url.host === 'near.fixture.test' || url.host === 'near-fallback.fixture.test') && request.method() === 'POST') {
+          if (url.host === 'near.fixture.test' && this.nearPrimaryDown) return route.abort('failed')
           const body = request.postDataJSON()
           this.requests.push({ host: url.host, calls: [`${body.method}:${body.params?.request_type ?? ''}:${body.params?.method_name ?? ''}`] })
           const answer = this.near(body)
@@ -487,7 +501,13 @@ export class LiveFixture {
           this.requests.push({ host: url.host, calls: [`${request.method()} ${url.pathname}`] })
           const answer = this.relayer(request.method(), url.pathname, request.method() === 'POST' ? request.postDataJSON() : undefined)
           await answer.after?.()
+          if (answer.raw) return route.fulfill({ status: answer.status, body: answer.raw, contentType: 'application/json' })
           return route.fulfill({ status: answer.status, json: answer.json })
+        }
+        // the published manifest (help.manifest, PRD §6 row 1)
+        if (url.host === 'raw.githubusercontent.com' && url.pathname === '/cmdkfi/app/main/deployments/testnet.json') {
+          this.requests.push({ host: url.host, calls: [`GET ${url.pathname}`] })
+          return route.fulfill({ json: { network: 'testnet', agent: { measurement: this.publishedMeasurement, version: '0.1.0', sourceCommit: 'f1x7ure' } } })
         }
         throw Error(`External request blocked: ${request.method()} ${url.href}`)
       } catch (error) {

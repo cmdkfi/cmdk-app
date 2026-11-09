@@ -125,3 +125,29 @@ test('§9 5: a remembered vault still owned is one get_state; a mismatch, an unr
   assert.deepEqual(other.reads, [11, 10]) // a hint of another factory is ignored; only the scan reads
 })
 
+
+test('NEAR fallback: asked only after a retryable failure of the primary (no answer, 5xx, 429); a NEAR error is final', async () => {
+  const run = async primary => {
+    const urls = []
+    const rpc = { primary: rpcUrl(), fallback: rpcUrl() }
+    const fetcher = async (url, _init) => {
+      urls.push(url === rpc.primary ? 'primary' : 'fallback')
+      if (url === rpc.primary) return primary()
+      return ok({ result: bytes({ answered: 'fallback' }) })
+    }
+    const value = await viewFunction(rpc, 'x.testnet', 'm', {}, fetcher).catch(error => error)
+    return { urls, value }
+  }
+  const answered = await run(() => ok({ result: bytes({ answered: 'primary' }) }))
+  assert.deepEqual(answered, { urls: ['primary'], value: { answered: 'primary' } })
+  for (const failure of [() => { throw new TypeError('Failed to fetch') }, () => new Response('down', { status: 503 }), () => new Response('', { status: 429, headers: { 'Retry-After': '5' } })]) {
+    const r = await run(failure)
+    assert.deepEqual(r, { urls: ['primary', 'fallback'], value: { answered: 'fallback' } })
+  }
+  const nearError = await run(() => Response.json({ jsonrpc: '2.0', id: 'cmdk', error: { name: 'HANDLER_ERROR', cause: { name: 'UNKNOWN_ACCOUNT' } } }))
+  assert.deepEqual(nearError.urls, ['primary'])
+  assert.ok(nearError.value instanceof NearRpcError)
+  // a single URL (no fallback configured) fails as before
+  const single = await viewFunction(rpcUrl(), 'x.testnet', 'm', {}, async () => { throw new TypeError('Failed to fetch') }).catch(error => error)
+  assert.ok(single instanceof NearRpcError && single.message === 'NEAR RPC did not answer.')
+})

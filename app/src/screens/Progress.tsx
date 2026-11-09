@@ -7,6 +7,7 @@ import type { ProgressStep } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { newRecord, resumeStep, STEPS, type StepId } from '../flow/onboarding.ts'
 import { StepRow } from '../components/StepRow.tsx'
+import { VerificationPanel } from './VerificationPanel.tsx'
 import { go, useSessionValue, type ScreenProps } from './common.tsx'
 
 const BASE_SEPOLIA = 84532
@@ -70,7 +71,6 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
 
   const active = STEPS.find(id => r.steps[id].status !== 'done' && r.steps[id].status !== 'skipped')
   const canContinue = !ob.running && !!active && r.steps[active].status === 'waiting'
-  const registration = ob.registration
   return <section className="screen screen--wide progress" aria-labelledby="screen-title">
     <h1 id="screen-title">Opening your position</h1>
     <p className="screen__lead">
@@ -81,11 +81,10 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
       <ol className="steps">
         {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} />)}
       </ol>
-      <aside className="progress__rail prototype-surface" aria-label="Agent">
-        <h2>Agent registration</h2>
-        <p role="status">{!r.vault ? 'Starts after your vault exists.' : registration === 'registered' ? 'Registered and active on your vault.' : registration === 'unavailable' ? 'Unavailable: the agent list could not be read.' : 'Registering (usually a few minutes). The steps continue meanwhile.'}</p>
+      <aside className="progress__rail" aria-label="Agent">
         {r.vault && <p className="screen__note">Vault {vaultLink(r.vault.accountId)}<br />Position address <code>{r.vault.baseAddress}</code></p>}
-        <p className="screen__note">The full verification panel arrives in Phase 6.</p>
+        <VerificationPanel vaultId={r.vault?.accountId} poll compact />
+        <p className="screen__note">Agent registration usually takes a few minutes; the steps continue meanwhile.</p>
       </aside>
     </div>
     {canContinue && <div className="screen__actions"><button type="button" className="prototype-button is-primary" onClick={ob.start}>Continue</button></div>}

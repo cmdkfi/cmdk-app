@@ -403,6 +403,7 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
   4. The last position snapshot per vault is persisted (TanStack Query storage persister) and rendered immediately on return, labelled "read at block N, X min ago · refreshing", while live reads run (extends FR-9 across reloads).
   5. The owned vault id is cached per owner and verified with one `get_state`; the factory scan runs only when the cached vault no longer belongs to the owner.
   6. The NEAR `get_state` read is shared between the position and agent queries.
+  7. NEAR RPC (product owner, 9 Nov): primary `https://test.rpc.fastnear.com`, fallback `https://near-testnet.drpc.org` (`config.app.json` `nearRpcUrl` / `nearRpcUrlFallback`, both https). The fallback is asked only for NEAR reads (every NEAR call the app makes is a view), and only after a retryable failure of the primary (no answer or timeout, HTTP 5xx, 429); a NEAR error answer is final. Measured live on 9 Nov per call: rpc.testnet.near.org 3.1–3.2 s, test.rpc.fastnear.com 0.08–0.15 s, near-testnet.drpc.org 0.10–0.32 s; one S5 refresh went from 3.5–4.5 s to 0.44–0.70 s, the first full S5 after connect from 10.0 s to 1.8 s (return visit 6.8 s → 1.05 s).
   Honesty constraints for every cache: each cached value carries its block and age and is never presented as current; cache keys include adapter kind, owner and vault, so nothing crosses wallets or modes; cached data only paints the screen and never decides an action; the onboarding and close chains read live before every prompt.
 - **Resilience:** NEAR 429 cooldown honoured; relayer fallback URL for GET only; all polling stops when the tab is hidden.
 - **Privacy:** no analytics, no API keys in the bundle, no third-party fonts.
@@ -475,6 +476,7 @@ C = {"target":"500000000000000000","act":"700000000000000000","floor":"300000000
 | Alchemy faucet | `https://www.alchemy.com/faucets/base-sepolia` |
 | Circle USDC faucet | `https://faucet.circle.com` (select Base Sepolia) |
 | Connecting to Base docs | `https://docs.base.org/base-chain/quickstart/connecting-to-base` |
+| NEAR testnet RPC | primary `https://test.rpc.fastnear.com`, fallback `https://near-testnet.drpc.org` for reads after a retryable failure of the primary (§9 7). Per call on 9 Nov: 0.08–0.15 s and 0.10–0.32 s, against 3.1–3.2 s for `https://rpc.testnet.near.org` |
 
 Links are configuration (`config.app.json` → `help` block), not hard-coded in components, so they can be updated without a code change.
 

@@ -15,7 +15,7 @@ const market = id => ({ id, loan_token: deployment.base.tokens.usdc, collateral_
 function generated() {
   return {
     ...guidedValues(appValues, deployment),
-    baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: appValues.nearRpcUrl, baseRpcUrl: appValues.baseRpcUrl, relayerUrl: appValues.relayerUrl, relayerUrlFallback: appValues.relayerUrlFallback,
+    baseChainId: 84532, nearNetwork: 'testnet', nearRpcUrl: appValues.nearRpcUrl, nearRpcUrlFallback: appValues.nearRpcUrlFallback, baseRpcUrl: appValues.baseRpcUrl, relayerUrl: appValues.relayerUrl, relayerUrlFallback: appValues.relayerUrlFallback,
     near: { factory: 'factory.testnet' }, marketLabels: {}, agent: { measurement, version: '0.1.0', sourceCommit: 'abc' },
     createVault: { cooldownSecs: 120, depositNear: '2', markets: [market('0x' + 'aa'.repeat(32)), market('0x' + 'bb'.repeat(32))] },
   }
@@ -45,6 +45,8 @@ test('the generator validator rejects http, empty URLs, a wrong chain, a bad cor
   const bad = (mutate, pattern) => { const values = clone(appValues); mutate(values); assert.throws(() => guidedValues(values, deployment), pattern) }
   bad(v => { v.help.ethFaucets[0].url = 'http://faucet.example' }, /https/)
   bad(v => { v.help.connectingToBase = '' }, /empty/)
+  bad(v => { v.help.manifest = 'http://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json' }, /help.manifest must use https/)
+  bad(v => { delete v.help.relayerDoc }, /help.relayerDoc is empty/)
   bad(v => { v.network.chainId = '0x1' }, /Base Sepolia/)
   bad(v => { v.guided.corridor.act = 50 }, /corridor/)
   bad(v => { v.guided.messageExpirySecs = 7200 }, /expiry/)
@@ -72,6 +74,8 @@ test('V29: the wrong network or a missing deployment refuses the whole config', 
   assert.throws(() => parseConfig({ ...generated(), guided: null }), /guided/)
   assert.throws(() => parseConfig({ ...generated(), agent: { measurement: null } }), /measurement/)
   assert.throws(() => parseConfig({ ...generated(), relayerUrl: 'http://relayer' }), /https/)
+  assert.throws(() => parseConfig({ ...generated(), nearRpcUrlFallback: 'http://near' }), /nearRpcUrlFallback must be https/)
+  assert.throws(() => parseConfig({ ...generated(), nearRpcUrlFallback: undefined }), /nearRpcUrlFallback must be https/)
 })
 
 test('feed names come from the manifest base.chainlink; a manifest without them is refused', () => {

@@ -122,7 +122,26 @@ export type ReceiptView = { hash: Hex; status: 'success' | 'reverted' | 'pending
 export type WalletTokens = { eth: bigint; weth: bigint; usdc: bigint }
 export type WalletTx = { to: Address; data: Hex; value: bigint }
 export type WalletTxIntent = { kind: 'wrap'; amount: bigint } | { kind: 'transfer'; token: 'weth' | 'usdc'; to: Address; amount: bigint } | { kind: 'topUp'; to: Address; amount: bigint }
-export type AgentRegistration = { state: 'registered' | 'registering' | 'unavailable' }
+/** One check's outcome: the value read, or why it could not be read; `at` is when the check finished (PRD §6). */
+export type Fetched<T> = { ok: true; at: number; value: T } | { ok: false; at: number; error: string }
+
+/**
+ * The PRD §6 verification facts for one vault, each fetched independently (a failed fetch touches its own row only).
+ * Booleans come from evidence/verify.ts; null means the check has nothing to compare yet (no approval, no key).
+ */
+export type VerificationFacts = {
+  vaultId: string
+  /** Row 1: get_state().approved against the published manifest's agent.measurement. */
+  measurement: Fetched<{ matches: boolean | null; sourceCommit: string | null; version: string | null }>
+  /** Row 2: sha256(app-compose.json) against approved.compose_hash, and against the /agent/ index entry (null: no entry). */
+  compose: Fetched<{ matchesApproved: boolean | null; matchesIndex: boolean | null; sha256: string }>
+  /** Row 3: the /agent/vaults row for this vault (null: the agent lists no row for it yet). */
+  registration: Fetched<{ registration: string; agentStatus: string | null; expiresAt: number | null; registrationTx: string | null } | null>
+  /** Row 4: view_access_key_list against the vault's agent key (null: the vault records no agent key yet). */
+  keys: Fetched<{ limited: boolean | null; count: number }>
+  /** Row 5: the vault's code hash against the factory's. */
+  code: Fetched<{ matches: boolean }>
+}
 
 export type PositionMarket = {
   id: Hex
@@ -239,8 +258,6 @@ export interface ProtocolAdapter {
   walletTx(app: LoadedConfig, intent: WalletTxIntent): WalletTx
   /** The relayer's gas refusal amounts, or null (relayer.py l.814-819). Pure. */
   fundsShortfall(error: string | undefined): { have: bigint; need: bigint } | null
-  /** Agent registered and active on the vault, with exactly the restricted key (agent/src/main.rs l.1033; lib.rs l.46, l.498-503). */
-  readAgentRegistration(app: LoadedConfig, vaultId: string): Promise<AgentRegistration>
 
   // ---- Phase 4 (S5) --------------------------------------------------------------------------------------------
   /** Position, corridor, sell budget and idle balances at one block (Interfaces.sol; Executor.sol l.65, l.67, l.453, l.504-517; CorridorMath.sol l.67-75). */
@@ -253,6 +270,15 @@ export interface ProtocolAdapter {
   // ---- Phase 5 (S6) --------------------------------------------------------------------------------------------
   /** Debt now and `messageExpirySecs` ahead with the relayer's 1% headroom, idle balances, the owner's wallet USDC (relayer.py l.72, l.516-529; Morpho accrual). */
   readClosePlan(app: LoadedConfig, vaultId: string, owner: Address): Promise<ClosePlan>
+
+  // ---- Phase 6 (§6) --------------------------------------------------------------------------------------------
+  /**
+   * The five live checks of the verification panel, each settled on its own: published manifest (help.manifest,
+   * vault/src/attest.rs l.15-22), app-compose.json and the /agent/ index (agent/MEASUREMENT.md l.99; agent/src/serve.rs
+   * l.105-114, l.142), /agent/vaults (agent/src/main.rs l.1029-1034), view_access_key_list (vault/src/lib.rs l.46,
+   * l.498-503), view_account against the factory code hash (vault/factory/src/lib.rs l.152; scripts/reproduce-hash.sh l.122-125).
+   */
+  readVerification(app: LoadedConfig, vaultId: string): Promise<VerificationFacts>
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }
