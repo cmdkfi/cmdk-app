@@ -43,17 +43,17 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 - [x] Desktop gate: shell not mounted below 960 px (FR-16).
 
 ## Phase 2b — Protocol layer written from cmdkfi/app (PRD §8b; product owner, 9 Nov)
-- [ ] Re-check cmdkfi/app origin/main; note the commit in the Review note.
-- [ ] Write `app/src/protocol/` fresh per the §8b table: `near/rpc.ts`, `near/vault.ts`, `owner/message.ts`, `relayer/client.ts`, `base/reads.ts`, `base/math.ts`, `base/activity.ts`, `evidence/verify.ts`, `wallet/tx.ts`. Each export carries a comment naming the cmdkfi/app file it mirrors; ABIs copied from the protocol repo's Solidity or `agent/src/chain.rs` selectors.
-- [ ] Port test vectors from the old tests as data (setup message bytes and field order, open/withdraw/close args, accrual and LTV rounding incl. zero collateral, nonce replay, relayer GET-only fallback and 429, discovery filtering and partial-scan failure); cross-check message bytes against `scripts/p2_owner.py` and math against `scripts/VERIFY.md`.
-- [ ] Fold Phase 2's `market-quote`, `wallet-funding`, `setup-facts` into the new layout (`base/reads.ts`, `base/math.ts`); keep their behaviour and tests.
-- [ ] Point `adapters/live/protocol.ts` at the new layer; the `ProtocolAdapter` interface lists only functions the screens use.
-- [ ] Delete every module moved from `main` in Phase 1 and their tests (`near`, `near-rpc`, `near-security`, `relayer`, `positions`, `create-vault`, `vault-setup`, `initial-rules`, `live-actions`, `owner-recovery`, `transaction-recovery`, `agent-evidence`, `activity`, `wallet-utils`, `protection-clock`, `verification-age`, `use-now`, `discovery-state`, `vault-read-state`, `vault-funding`). Re-create the three tiny helpers the UI needs (`shortAddress`, `accountKind`, `useNow`) under `flow/` or `components/`.
-- [ ] Replace `e2e/fixture.ts` and `e2e/guided-fixture.ts` with a thin `e2e/live-fixture.ts` sized to §8b (fake MetaMask incl. `eth_sendTransaction`, `wallet_addEthereumChain`; NEAR/Base/relayer fakes). Existing S1–S3 browser scenarios pass on it.
-- [ ] Pin Vite to the exact installed version in `app/package.json`.
-- [ ] Import-boundary test: screens/components import nothing from `protocol/`; adapters are the only consumers.
-- [ ] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm test:bundle-boundary`, `pnpm test:browser` green; S1–S3 behave exactly as before against live Base Sepolia (one manual read).
-- [ ] Review note + lessons entry; commit on `feat/guided-flow` (no push).
+- [x] Re-check cmdkfi/app origin/main; note the commit in the Review note.
+- [x] Write `app/src/protocol/` fresh per the §8b table: `near/rpc.ts`, `near/vault.ts`, `owner/message.ts`, `relayer/client.ts`, `base/reads.ts`, `base/math.ts`, `base/activity.ts`, `evidence/verify.ts`, `wallet/tx.ts`. Each export carries a comment naming the cmdkfi/app file it mirrors; ABIs copied from the protocol repo's Solidity or `agent/src/chain.rs` selectors.
+- [x] Port test vectors from the old tests as data (setup message bytes and field order, open/withdraw/close args, accrual and LTV rounding incl. zero collateral, nonce replay, relayer GET-only fallback and 429, discovery filtering and partial-scan failure); cross-check message bytes against `scripts/p2_owner.py` and math against `scripts/VERIFY.md`.
+- [x] Fold Phase 2's `market-quote`, `wallet-funding`, `setup-facts` into the new layout (`base/reads.ts`, `base/math.ts`); keep their behaviour and tests.
+- [x] Point `adapters/live/protocol.ts` at the new layer; the `ProtocolAdapter` interface lists only functions the screens use.
+- [x] Delete every module moved from `main` in Phase 1 and their tests (`near`, `near-rpc`, `near-security`, `relayer`, `positions`, `create-vault`, `vault-setup`, `initial-rules`, `live-actions`, `owner-recovery`, `transaction-recovery`, `agent-evidence`, `activity`, `wallet-utils`, `protection-clock`, `verification-age`, `use-now`, `discovery-state`, `vault-read-state`, `vault-funding`). Re-create the three tiny helpers the UI needs (`shortAddress`, `accountKind`, `useNow`) under `flow/` or `components/`.
+- [x] Replace `e2e/fixture.ts` and `e2e/guided-fixture.ts` with a thin `e2e/live-fixture.ts` sized to §8b (fake MetaMask incl. `eth_sendTransaction`, `wallet_addEthereumChain`; NEAR/Base/relayer fakes). Existing S1–S3 browser scenarios pass on it.
+- [x] Pin Vite to the exact installed version in `app/package.json`.
+- [x] Import-boundary test: screens/components import nothing from `protocol/`; adapters are the only consumers.
+- [x] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm test:bundle-boundary`, `pnpm test:browser` green; S1–S3 behave exactly as before against live Base Sepolia (one manual read).
+- [x] Review note + lessons entry; commit on `feat/guided-flow` (no push).
 
 ## Phase 3 — Onboarding progress (S4)
 - [ ] Step machine with persistence keyed `factory:owner:vault`; resume on reload; one active step.
@@ -71,7 +71,7 @@ PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; 
 
 ## Phase 4 — Position screen (S5)
 - [ ] React Query polling of `readLivePosition` (30 s, paused when hidden); hero debt/collateral/LTV with segmented track; freshness line; stale snapshot kept read-only on error.
-- [ ] Agent card from `protectionStatus` + `/agent/vaults`; remaining sell budget; Verify link.
+- [ ] Agent card status from `/agent/vaults` fields only (`registration`, `agent_status`, `expires_at`, `last_tick_unix`) plus the vault's `agent` and corridors; **not** the previous app's 60-second tick rule (product owner, 9 Nov). Remaining sell budget; Verify link.
 - [ ] Market card: live vs backup from the market with debt; contract links.
 - [ ] Recent actions from Executor logs (`topics[1] = base_address`) + token transfers; You/Agent labels; block range shown; "Load earlier".
 - [ ] Idle balances line; liquidated state; closed state with Start over (D5).
@@ -132,4 +132,27 @@ Vault = the NEAR account (contract, no keys). Position address = its Base addres
 - *New code:* three read modules (`market-quote`, `wallet-funding`, `setup-facts`); existing protocol modules are unchanged. `fixture.ts` is unchanged; the extra RPC behaviour lives in `e2e/guided-fixture.ts`.
 - *Build warning (item 4):* `main` shows the same `node:worker_threads` warning from `ox`.
 - *Results:* typecheck, unit tests, build, bundle boundary and Playwright desktop; numbers in the phase report.
+
+**Phase 2b (9 Nov 2026, cmdkfi/app still `47fd4fb`).** The protocol client in `app/src/protocol/` is new, written from cmdkfi/app: `near/rpc.ts`, `near/vault.ts`, `owner/message.ts`, `relayer/client.ts`, `base/abi.ts`, `base/reads.ts`, `base/math.ts`, `base/activity.ts`, `evidence/verify.ts`, `wallet/tx.ts`. Every export cites the protocol file it mirrors.
+- *ABI sources:* every fragment is copied from Solidity (`Interfaces.sol`, `Executor.sol`, `TestToken.sol`) or from the agent's selector list (`chain.rs`). The one exception is `WETH.deposit()`, which comes from `scripts/rebalance_pool.py` l.349 (WETH9 predeploy). A test checks the selectors against the ones pinned in `chain.rs` and `evm.rs`.
+- *Math* mirrors `CorridorMath.sol` and `VERIFY.md` §2.1. The VERIFY.md worked example passes to the wei.
+- *Vectors:* 31 ported as data in `protocol/vectors.mjs`, plus the pinned selectors; each names the old test or source it came from. V29 and V33–V35 are inline in the `flow/` tests with their sources named. V2 (setup without a measurement) is covered by the config parser refusing a missing measurement. The vectors include:
+  - owner-message bytes generated by `p2_owner.py`'s own `json.dumps` formula
+  - the live `app-compose.json`, whose sha256 = the recorded compose hash
+  - a live `view_access_key_list` response for v1
+- *Folded in:* Phase 2's `market-quote`, `wallet-funding` and `setup-facts` now live in `base/reads.ts` and `base/math.ts`. `discover` scans v<count> down to `firstVaultNumber` and stops at the owner's newest vault, so nothing below the cutoff is read.
+- *Product decisions applied:*
+  - Setup complete = authorization present, both allowances > 0 (the relayer's rule), both corridors set, measurement approved.
+  - A setup message always sends `approve: true` and derives only `authorize` from Base. This was a product correction; the Phase 2 rule was wrong for used USDC allowances.
+  - S1 shows a simple APR.
+- *Boundary:* the `ProtocolAdapter` interface is trimmed to what S1–S3 use. `flow/` no longer imports `protocol/`; the live adapter is its only consumer, and the boundary test enforces this.
+- *Deleted:* all 20 modules moved from `main`, the 3 folded modules, `e2e/fixture.ts`, `guided-fixture.ts` and `data.ts`. `shortAddress`, `connectionError` and `accountKind` are re-created in `flow/`, `useNow` in `components/`. `e2e/live-fixture.ts` is written fresh with its own ABI copies; it added a browser test for the 4902 add-network path.
+- *Vite* is pinned to 8.3.5; the lockfile change is one line.
+- *Live read:* S1–S3 against Base Sepolia, NEAR testnet and the relayer, through a read-only provider exposing the published test wallet. Every figure was live. The live market can lend only 13 USDC right now, so S1 shows the R2 warning for a 0.1 ETH deposit.
+- *Not ported:*
+  - raw signed-transaction validation, cancellation, NEAR receipt or `tx` recovery, transcripts, execution proofs (FR-6, §6)
+  - `discovery-state`, `vault-read-state`, `position-table-state` (D4 cutoff; the query cache keeps the last snapshot)
+  - activity attribution by caller, replaced by event name
+  - `remainingSellBudget`, re-derived in Phase 4 from `CorridorMath.remainingBudget`
+  - `protectionStatus`: Phase 4 defines it from `/agent/vaults` fields only, not from the old 60-second tick rule
 

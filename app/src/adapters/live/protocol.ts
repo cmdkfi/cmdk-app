@@ -1,40 +1,51 @@
-import { discoverVaults, loadConfig } from '../../protocol/near.ts'
-import { readRelayerHealth } from '../../protocol/relayer.ts'
-import { readCreateJob, startCreateVault } from '../../protocol/create-vault.ts'
-import { readSetupJob, startSetupJob } from '../../protocol/vault-setup.ts'
-import { assertFreshOwnerIntent, readOwnerRecovery, unsubmittedOwnerExpired, verifyOwnerJob } from '../../protocol/owner-recovery.ts'
-import { readLivePosition } from '../../protocol/positions.ts'
-import { readActivity } from '../../protocol/activity.ts'
-import { readNearSecurity } from '../../protocol/near-security.ts'
-import { readBootFile, readEvidenceJson } from '../../protocol/agent-evidence.ts'
-import { readMarketQuote } from '../../protocol/market-quote.ts'
-import { readAccountKind, readWalletFunding } from '../../protocol/wallet-funding.ts'
-import { readSetupFacts } from '../../protocol/setup-facts.ts'
+// Live ProtocolAdapter: the only consumer of protocol/. It wires config values into the protocol functions and
+// maps their results to the adapter types; protocol logic itself stays in protocol/.
+import { accountKind } from '../../flow/account.ts'
+import { parseConfig } from '../../flow/config.ts'
+import { borrowApr, depositEstimate } from '../../protocol/base/math.ts'
+import { baseClient, readCode, readMarket, readVaultSnapshot, readWalletFunding } from '../../protocol/base/reads.ts'
+import { discover } from '../../protocol/near/vault.ts'
+import { measurementMatches } from '../../protocol/evidence/verify.ts'
+import { setupComplete, wad } from '../../protocol/owner/message.ts'
+import { assessHealth, health } from '../../protocol/relayer/client.ts'
 import type { ProtocolAdapter } from '../types.ts'
 
-// Thin pass-through to the unchanged protocol modules; no logic lives here.
 export function createLiveProtocol(): ProtocolAdapter {
   return {
     kind: 'live',
-    loadConfig: () => loadConfig(),
-    discoverVaults: (config, owner) => discoverVaults(config, owner),
-    readRelayerHealth: config => readRelayerHealth(config),
-    startCreateVault: (config, owner) => startCreateVault(config, owner),
-    readCreateJob: (config, job) => readCreateJob(config, job),
-    startSetupJob: (config, vault, message, signature) => startSetupJob(config, vault, message, signature),
-    readSetupJob: (config, job) => readSetupJob(config, job),
-    assertFreshOwnerIntent: (config, vault, message) => assertFreshOwnerIntent(config, vault, message),
-    readOwnerRecovery: (config, vault, record, nearHash) => readOwnerRecovery(config, vault, record, nearHash),
-    verifyOwnerJob: (config, vault, record, job) => verifyOwnerJob(config, vault, record, job),
-    unsubmittedOwnerExpired: (config, vault, record) => unsubmittedOwnerExpired(config, vault, record),
-    readLivePosition: (config, vaultId, owner) => readLivePosition(config, vaultId, owner),
-    readActivity: (config, vault, from, to) => readActivity(config, vault, from, to),
-    readNearSecurity: (config, vault, agentKey) => readNearSecurity(config, vault, agentKey),
-    readEvidenceJson: (url, signal) => readEvidenceJson(url, signal),
-    readBootFile: (base, index, row, vault, signal) => readBootFile(base, index, row, vault, signal),
-    readMarketQuote: (config, market, morpho) => readMarketQuote(config, market, morpho),
-    readWalletFunding: (config, owner, tokens, gasLimit, amount) => readWalletFunding(config, owner, tokens, gasLimit, amount),
-    readAccountKind: (config, address) => readAccountKind(config, address),
-    readSetupFacts: (config, vaultId, owner, position) => readSetupFacts(config, vaultId, owner, position),
+    async loadConfig() {
+      const response = await fetch('/config.json', { cache: 'no-store' })
+      if (!response.ok) throw new Error('The app configuration could not be loaded.')
+      return parseConfig(await response.json())
+    },
+    async readMarketQuote({ config, guided }) {
+      const m = await readMarket(baseClient(config.baseRpcUrl), { morpho: guided.base.morpho, executor: guided.liveMarket.executor, id: guided.liveMarket.id })
+      return {
+        blockNumber: m.blockNumber, lltv: m.params.lltv, loanDecimals: m.loanDecimals, collateralDecimals: m.collateralDecimals,
+        price: m.price, liquidity: m.liquidity, borrowApr: m.borrowRate === null ? null : borrowApr(m.borrowRate),
+      }
+    },
+    estimateDeposit: ({ guided }, quote, amountWei) => depositEstimate(amountWei, quote.price, quote.liquidity, BigInt(wad(guided.corridor.target))),
+    readWalletFunding({ config, guided }, owner, amountWei) {
+      return readWalletFunding(baseClient(config.baseRpcUrl), { owner, weth: guided.base.weth, gasPriceOracle: guided.base.gasPriceOracle, gasLimit: guided.walletTxGasLimit, amount: amountWei })
+    },
+    async readAccountKind({ config }, address) {
+      return accountKind(await readCode(baseClient(config.baseRpcUrl), address))
+    },
+    async discoverPosition({ config, guided }, owner) {
+      const found = await discover(config.nearRpcUrl, config.near.factory, owner, guided.firstVaultNumber)
+      if (!found) return null
+      const snapshot = await readVaultSnapshot(baseClient(config.baseRpcUrl), found.state, { weth: guided.base.weth, usdc: guided.base.usdc })
+      return {
+        vault: { accountId: found.accountId, number: found.number, baseAddress: found.state.base_address },
+        markets: snapshot.markets.map(m => ({ collateral: m.collateral, debt: m.debt })),
+        idle: snapshot.idle,
+        setupComplete: setupComplete(snapshot.setup, measurementMatches(found.state.approved, config.agent.measurement)),
+      }
+    },
+    async relayerReadiness({ config }) {
+      const h = await health({ primary: config.relayerUrl, fallback: config.relayerUrlFallback })
+      return assessHealth(h, { chainId: config.baseChainId, nearNetwork: config.nearNetwork, factory: config.near.factory })
+    },
   }
 }

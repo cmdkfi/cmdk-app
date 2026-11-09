@@ -25,3 +25,9 @@
 - **What happened:** the plan moved twenty modules from the old cockpit into the new app "unchanged" because they were tested and encoded protocol facts. The product owner rejected this: nothing in the old app is known to be right for the new product, and the modules carry decisions (recovery paths, telemetry, multi-vault semantics) that were cut.
 - **Rule:** when replacing a product, the old code is documentation. Write the new client from the protocol source of truth (cmdkfi/app), function by function with citations, and port only test vectors (bytes, numbers) as oracles. "Byte-identical to main" is not a quality claim.
 - **Rule:** a reused module's tests are the valuable part; keep the vectors, not the implementation.
+
+## 2026-11-09 — Phase 2b: check inherited predicates against the protocol's own check (product correction)
+- **What happened:** Phase 2's "setup complete" reused the old `needsSetupApproval`, which treated any allowance below max as missing. The protocol's relayer refuses only a zero allowance (`scripts/relayer.py` l.478-483), and Circle's USDC lowers the allowance on every pull, so a vault that had repaid or closed would have been sent back to setup. The product owner adopted the relayer's rule and simplified resumed setup to always approve and derive only `authorize` from Base.
+- **Rule:** a predicate that gates a user flow (complete / missing / allowed) must cite the protocol code that enforces the same condition, not a helper from the replaced app. If none exists, ask.
+- **Also:** pin a dependency with a one-line lockfile edit and `pnpm install --frozen-lockfile`. An offline `pnpm install` re-resolved peer dependencies (500-line lockfile diff) and left `node_modules` out of step with the lockfile; check `node_modules/.pnpm/lock.yaml` against `pnpm-lock.yaml` before running checks.
+

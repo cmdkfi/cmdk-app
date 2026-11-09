@@ -1,7 +1,7 @@
+import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import { useMarketQuote, useAppConfig } from '../components/data.ts'
 import { checkDeposit } from '../flow/amount.ts'
 import { formatFractionPercent, formatUnits, formatWadPercent } from '../flow/format.ts'
-import { borrowApy, estimateDeposit, percentToWad } from '../flow/quote.ts'
 import { DiscoveryBanner, go, Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
 type Tile = { glyph: string; name: string; detail?: string; enabled?: boolean }
@@ -34,14 +34,14 @@ function Catalogue() {
 }
 
 export function Choose({ mode, href, banner }: ScreenProps) {
+  const { protocol } = useAdapters()
   const app = useAppConfig()
   const quote = useMarketQuote()
   const [text, setText] = useSessionValue(mode, 'amount', '')
   const guided = app.data?.guided
   const check = guided ? checkDeposit(text, guided.minDepositWei) : { kind: 'empty' as const }
   const q = quote.data
-  const target = guided ? percentToWad(guided.corridor.target) : null
-  const estimate = q && target !== null && check.kind === 'ok' ? estimateDeposit(check.wei, q.price, q.liquidity, target) : null
+  const estimate = q && app.data && check.kind === 'ok' ? protocol.estimateDeposit(app.data, q, check.wei) : null
   const usdc = (value: bigint) => `${formatUnits(value, q!.loanDecimals, 2)} USDC`
 
   let amountHint: string | null = null
@@ -79,7 +79,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
         </div>}
         <div className="estimate__row">
           <dt>Borrow rate</dt>
-          <dd>{q && q.borrowRate !== null ? `${formatFractionPercent(borrowApy(q.borrowRate))} / year` : quote.isPending && app.data ? 'reading…' : <Unavailable>rate unavailable</Unavailable>}</dd>
+          <dd>{q && q.borrowApr !== null ? `${formatFractionPercent(q.borrowApr)} APR` : quote.isPending && app.data ? 'reading…' : <Unavailable>rate unavailable</Unavailable>}</dd>
         </div>
         <div className="estimate__row"><dt>Collateral yield</dt><dd>None <small>· Morpho collateral is idle</small></dd></div>
         <div className="estimate__row"><dt>Agent protection</dt><dd>On <small>· fixed limits</small></dd></div>

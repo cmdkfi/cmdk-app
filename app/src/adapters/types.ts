@@ -1,20 +1,8 @@
-// Adapter interfaces (PRD §8a). Screens and components talk only to these;
-// the live implementation wraps wagmi and protocol/*, the sandbox one is simulated.
+// Adapter interfaces (PRD §8a). Screens, components and flow talk only to these; the live implementation is the
+// only consumer of protocol/, the sandbox one is simulated (Phase 6b).
 import type { Address, Hex, TransactionReceipt } from 'viem'
-import type { AppConfig, Vault, discoverVaults } from '../protocol/near.ts'
-import type { RelayerHealth } from '../protocol/relayer.ts'
-import type { CreateJob } from '../protocol/create-vault.ts'
-import type { SetupJob } from '../protocol/vault-setup.ts'
-import type { LivePosition } from '../protocol/positions.ts'
-import type { ActivityEvent } from '../protocol/activity.ts'
-import type { PendingTransaction } from '../protocol/transaction-recovery.ts'
-import type { assertFreshOwnerIntent, readOwnerRecovery, unsubmittedOwnerExpired, verifyOwnerJob } from '../protocol/owner-recovery.ts'
-import type { readNearSecurity } from '../protocol/near-security.ts'
-import type { EvidenceFile, EvidenceIndex, readBootFile } from '../protocol/agent-evidence.ts'
-import type { MarketQuote } from '../protocol/market-quote.ts'
-import type { WalletFunding } from '../protocol/wallet-funding.ts'
-import type { SetupFacts } from '../protocol/setup-facts.ts'
-import type { AddChainParams } from '../flow/guided-config.ts'
+import type { AccountKind } from '../flow/account.ts'
+import type { AddChainParams, LoadedConfig } from '../flow/config.ts'
 
 export type AdapterKind = 'live' | 'sandbox'
 
@@ -40,32 +28,51 @@ export interface WalletAdapter {
   dispose(): void
 }
 
-/**
- * One-to-one mirror of the I/O functions in protocol/*, without the injectable fetcher.
- * Methods are added only when protocol code backs them.
- */
+/** S1/S2 market read at one block; any field that could not be read is null. */
+export type MarketQuote = {
+  blockNumber: bigint
+  lltv: bigint
+  loanDecimals: number
+  collateralDecimals: number
+  price: bigint | null
+  liquidity: bigint | null
+  /** Simple borrow APR as a fraction (0.05 = 5%), or null. */
+  borrowApr: number | null
+}
+
+export type DepositEstimate = {
+  value: bigint | null
+  target: bigint | null
+  borrow: bigint | null
+  limited: boolean
+  resultingLtv: bigint | null
+  liquidityKnown: boolean
+}
+
+export type WalletFunding = { blockNumber: bigint; eth: bigint; weth: bigint; wrapCost: bigint; transferCost: bigint }
+
+/** The vault D4 picks for an owner, reduced to what the entry resolver needs. */
+export type PositionSummary = {
+  vault: { accountId: string; number: number; baseAddress: Address }
+  markets: { collateral: bigint; debt: bigint }[]
+  idle: { eth: bigint; weth: bigint; usdc: bigint }
+  setupComplete: boolean
+}
+
+export type Readiness = { kind: 'ready' | 'pending' | 'failed'; message: string }
+
+/** Only what the screens use; methods are added when a screen needs them. */
 export interface ProtocolAdapter {
   readonly kind: AdapterKind
-  loadConfig(): Promise<AppConfig>
-  discoverVaults(config: AppConfig, owner: string): ReturnType<typeof discoverVaults>
-  readRelayerHealth(config: AppConfig): Promise<RelayerHealth>
-  startCreateVault(config: AppConfig, owner: string): Promise<string>
-  readCreateJob(config: AppConfig, job: string): Promise<CreateJob>
-  startSetupJob(config: AppConfig, vault: string, message: string, signature: string): Promise<string>
-  readSetupJob(config: AppConfig, job: string): Promise<SetupJob>
-  assertFreshOwnerIntent(config: AppConfig, vault: Vault, message: string): ReturnType<typeof assertFreshOwnerIntent>
-  readOwnerRecovery(config: AppConfig, vault: Vault, record: PendingTransaction, nearHash: string): ReturnType<typeof readOwnerRecovery>
-  verifyOwnerJob(config: AppConfig, vault: Vault, record: PendingTransaction, job: SetupJob): ReturnType<typeof verifyOwnerJob>
-  unsubmittedOwnerExpired(config: AppConfig, vault: Vault, record: PendingTransaction): ReturnType<typeof unsubmittedOwnerExpired>
-  readLivePosition(config: AppConfig, vaultId: string, expectedOwner: string): Promise<LivePosition>
-  readActivity(config: AppConfig, vault: Vault, from: bigint, to: bigint): Promise<ActivityEvent[]>
-  readNearSecurity(config: AppConfig, vault: Vault, agentKey?: string): ReturnType<typeof readNearSecurity>
-  readEvidenceJson(url: string, signal: AbortSignal): Promise<unknown>
-  readBootFile(base: string, index: EvidenceIndex, row: EvidenceFile, vault: Vault, signal: AbortSignal): ReturnType<typeof readBootFile>
-  readMarketQuote(config: AppConfig, market: { id: Hex; executor: Address }, morpho: Address): Promise<MarketQuote>
-  readWalletFunding(config: AppConfig, owner: Address, tokens: { weth: Address; gasPriceOracle: Address }, gasLimit: bigint, amount: bigint): Promise<WalletFunding>
-  readAccountKind(config: AppConfig, address: Address): Promise<'plain' | 'delegated' | 'contract'>
-  readSetupFacts(config: AppConfig, vaultId: string, owner: string, position: LivePosition): Promise<SetupFacts>
+  loadConfig(): Promise<LoadedConfig>
+  readMarketQuote(app: LoadedConfig): Promise<MarketQuote>
+  /** Pure: value, borrow at the configured target and the liquidity cap for a deposit amount (no I/O). */
+  estimateDeposit(app: LoadedConfig, quote: MarketQuote, amountWei: bigint): DepositEstimate
+  readWalletFunding(app: LoadedConfig, owner: Address, amountWei: bigint): Promise<WalletFunding>
+  readAccountKind(app: LoadedConfig, address: Address): Promise<AccountKind>
+  /** D4: the owner's newest vault numbered from firstVaultNumber, or null; throws when that cannot be known. */
+  discoverPosition(app: LoadedConfig, owner: Address): Promise<PositionSummary | null>
+  relayerReadiness(app: LoadedConfig): Promise<Readiness>
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

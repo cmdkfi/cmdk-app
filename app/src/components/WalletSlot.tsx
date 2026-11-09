@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AdapterKind, WalletState } from '../adapters/types.ts'
-import { shortAddress } from '../protocol/wallet-utils.ts'
+import { shortAddress } from '../flow/format.ts'
 
 const BASE_SEPOLIA = 84532
 

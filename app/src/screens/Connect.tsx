@@ -2,11 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { useAccountKind, useAppConfig, useDiscovery, useRelayerReadiness, useWalletFunding } from '../components/data.ts'
 import { checkDeposit } from '../flow/amount.ts'
-import { formatUnits } from '../flow/format.ts'
 import { fundingNeed } from '../flow/funding.ts'
-import type { AddChainParams, Guided } from '../flow/guided-config.ts'
-import { connectionError, shortAddress } from '../protocol/wallet-utils.ts'
-import { useNow } from '../protocol/use-now.ts'
+import type { AddChainParams, Guided } from '../flow/config.ts'
+import { connectionError, formatUnits, shortAddress } from '../flow/format.ts'
+import { useNow } from '../components/use-now.ts'
 import { DiscoveryBanner, Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
 const BASE_SEPOLIA = 84532
@@ -101,7 +100,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     if (d.kind === 'checking' || d.kind === 'not-checked') positionText = 'Checking your vaults…'
     else if (d.kind === 'failed') positionText = <Unavailable>could not be read</Unavailable>
     else if (d.status === null) positionText = 'None for this wallet'
-    else positionText = discovery.result?.vault?.accountId ?? 'Found'
+    else positionText = discovery.result?.summary?.vault.accountId ?? 'Found'
 
     const blocked = account.data === 'contract'
     let createReason = 'Creating a position starts in Phase 3 of this build. Nothing is requested from your wallet yet.'

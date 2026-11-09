@@ -4,7 +4,8 @@
 import type { Adapters, ProtocolAdapter, WalletAdapter, WalletState } from '../types.ts'
 
 const DISCONNECTED: WalletState = { status: 'disconnected' }
-const notImplemented = () => Promise.reject(new Error('Sandbox is not implemented yet (Phase 6b).'))
+const MESSAGE = 'Sandbox is not implemented yet (Phase 6b).'
+const notImplemented = () => Promise.reject(new Error(MESSAGE))
 
 export function createSandboxWallet(): WalletAdapter {
   return {
@@ -26,25 +27,12 @@ export function createSandboxProtocol(): ProtocolAdapter {
   return {
     kind: 'sandbox',
     loadConfig: notImplemented,
-    discoverVaults: notImplemented,
-    readRelayerHealth: notImplemented,
-    startCreateVault: notImplemented,
-    readCreateJob: notImplemented,
-    startSetupJob: notImplemented,
-    readSetupJob: notImplemented,
-    assertFreshOwnerIntent: notImplemented,
-    readOwnerRecovery: notImplemented,
-    verifyOwnerJob: notImplemented,
-    unsubmittedOwnerExpired: notImplemented,
-    readLivePosition: notImplemented,
-    readActivity: notImplemented,
-    readNearSecurity: notImplemented,
-    readEvidenceJson: notImplemented,
-    readBootFile: notImplemented,
     readMarketQuote: notImplemented,
+    estimateDeposit: () => { throw new Error(MESSAGE) },
     readWalletFunding: notImplemented,
     readAccountKind: notImplemented,
-    readSetupFacts: notImplemented,
+    discoverPosition: notImplemented,
+    relayerReadiness: notImplemented,
   }
 }
 
