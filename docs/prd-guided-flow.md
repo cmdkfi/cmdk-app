@@ -130,7 +130,9 @@ The app has one purpose, so it has no menu. The header holds three things: the b
 | Connected | closed position only (D5 conditions) | S5 closed variant with Start over |
 | Connected | liquidated (collateral 0, debt > 0) | S5 liquidated variant |
 
-**Route guards.** `#position` without a position redirects to `#start`. `#progress` without an onboarding record or a half-set-up vault redirects to `#start`. `#start` with an active position redirects to `#position` (the brand mark therefore goes to the position when one exists). Disconnecting returns to `#start` and clears nothing on chain; local onboarding records are kept per wallet and reused on reconnect. Sandbox routes live under `#sandbox/…` (section 8a) and never redirect into live routes.
+**Routes.** Five live hash routes: `#start` (S1), `#settings` (S2), `#connect` (S3), `#progress` (S4), `#position` (S5). S6 close-in-progress and S7 closed are states of `#position`, derived from the same position read; the close chain runs on that screen. S2 has its own hash so browser Back works between S1, S2 and S3. Unknown hashes go to `#start`.
+
+**Route guards.** `#position` without a position redirects to `#start`. `#progress` without an onboarding record or a half-set-up vault redirects to `#start`. `#start` with an active position redirects to `#position` (the brand mark therefore goes to the position when one exists). Disconnecting returns to `#start` and clears nothing on chain; local onboarding records are kept per wallet and reused on reconnect. Sandbox routes mirror the same five under `#sandbox/…` (section 8a) and never redirect into live routes; `#sandbox/close` and `#sandbox/closed` redirect to `#sandbox/position`.
 
 **Returning user, no clicks:** open the site, the wallet reconnects silently through MetaMask's remembered permission, discovery runs, and the position screen appears. If MetaMask has no remembered permission, S1 shows with Connect wallet in the header.
 
@@ -299,20 +301,26 @@ Layout reference: Design canvas https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhm
 ```
 app/
   src/
-    main.tsx                 new: providers + hash router (#start, #connect, #progress, #position)
-    screens/                 new: Choose, Settings, Connect, Progress, Position, CloseFlow, StartOver, DesktopGate
-    flow/                    new: onboarding state machine + persistence, close-flow state machine, gas model
-    components/              new UI pieces + moved src/ui/*
+    main.tsx                 new: providers + hash router, five live routes (#start, #settings, #connect,
+                             #progress, #position) mirrored under #sandbox/…
+    screens/                 new: Choose, Settings, Connect, Progress, Position (with CloseFlow and StartOver
+                             as position states)
+    flow/                    new: routes + entry resolver (S0), onboarding state machine + persistence,
+                             close-flow state machine, gas model
+    components/              new UI pieces (shell, wallet slot, DesktopGate) + moved src/ui/*
+    adapters/                new: WalletAdapter / ProtocolAdapter interfaces, live/ (wagmi MetaMask-only config,
+                             pass-through to protocol/*), sandbox/ (§8a), AdapterProvider
     protocol/                moved as-is: near.ts near-rpc.ts near-security.ts relayer.ts positions.ts
                              create-vault.ts vault-setup.ts initial-rules.ts live-actions.ts (helpers only)
                              owner-recovery.ts transaction-recovery.ts agent-evidence.ts activity.ts
-                             wallet.ts wallet-utils.ts protection-clock.ts verification-age.ts use-now.ts
-    styles/                  prototype-controls.css, tokens, new screen CSS
+                             wallet-utils.ts protection-clock.ts verification-age.ts use-now.ts
+                             discovery-state.ts vault-read-state.ts vault-funding.ts
+    styles/                  prototype-controls.css, base, shell, LTV track, new screen CSS
   e2e/                       fixture.ts, data.ts kept; new specs; harness mounts new components
   scripts/                   unchanged
 ```
 
-- Removed from the bundle: `EditRules`, `VaultRules`, `RevokeAgent`, `HeldCancellation`, `NearHistory`, `AgentHistory`, `VaultTable`, `LiveVaultTable`, `VaultDiscovery` UI, `VaultRecovery`, `recovery-market.ts`, `held-cancellation.ts`, `near-history.ts`, `rules.ts`, `revocation.ts`. Their unit tests go with them.
+- Removed from the bundle: `EditRules`, `VaultRules`, `RevokeAgent`, `HeldCancellation`, `NearHistory`, `AgentHistory`, `VaultTable`, `LiveVaultTable`, `VaultDiscovery` UI, `VaultRecovery`, `recovery-market.ts`, `held-cancellation.ts`, `near-history.ts`, `rules.ts`, `revocation.ts`. Also removed in Phase 1 because the new entry no longer uses them: the old cockpit screens (`VaultHome`, `VaultDetail`, `LiveActions`, `VaultFunding`, `VaultSetup`, `CreateVaultJob`, `AgentApproval`, `AgentEvidence`, `VerificationDetails`, `VerificationPage`, `Activity`, `WalletConnect`, `VaultSelectionContext`, `PrototypeFilter`), `vault-layout.ts`, `position-table-state.ts`, `wallet-options.ts` and their CSS; readable later via `git show main:app/src/…`. The old `wallet.ts` is replaced by `adapters/live/wagmi-config.ts` (MetaMask only). Their unit tests go with them.
 - State: React Query for polling reads (`position`, `vaultView`, `agentVaults`, `activity`), small reducers for the two step machines. No global store.
 - Config: `scripts/generate-config.mjs` unchanged; `config.app.json` unchanged (`markets: ["live","backup"]`).
 - Wallet: `createConfig({ chains:[baseSepolia], connectors:[injected({ target:'metaMask' })] })`.
@@ -340,8 +348,8 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 | S3 Connect | `#sandbox/connect` | Already "connected"; funding check always passes; no faucet panel; Create position enabled |
 | S4 Progress | `#sandbox/progress` | Each stage advances on a 1–3 s timer; "Waiting for MetaMask…" is replaced by "Simulated signature" / "Simulated transaction"; agent registration completes in ~5 s; verification rows read "Simulated (not checked)" |
 | S5 Position | `#sandbox/position` | After ~20 s a scripted price drop (−30%) pushes LTV from 50% to about 71%; the simulated agent posts a `Reduced` action within the cooldown and LTV returns to 50%; interest accrues visibly; hash links disabled and tagged "simulated" |
-| S6 Close | `#sandbox/close` | Shortfall exists (interest), wallet has enough USDC, so the transfer step runs without a faucet panel; all steps instant |
-| S7 Closed | `#sandbox/closed` | Start over creates a new simulated vault at once (no rate limit) |
+| S6 Close | `#sandbox/position` (close state; `#sandbox/close` redirects here) | Shortfall exists (interest), wallet has enough USDC, so the transfer step runs without a faucet panel; all steps instant |
+| S7 Closed | `#sandbox/position` (closed state; `#sandbox/closed` redirects here) | Start over creates a new simulated vault at once (no rate limit) |
 
 **Entering.** "Try in sandbox" appears in three places: beside Connect MetaMask on S3, in the no-MetaMask state, and in the wallet-slot menu when not connected. It opens the explainer sheet (S8). **Activate sandbox** switches the adapters, sets the banner, and lands on `#sandbox/start` with the amount field prefilled (0.5 ETH) so the user can go straight to Continue.
 

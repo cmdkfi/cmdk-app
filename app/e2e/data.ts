@@ -1,4 +1,4 @@
-import type {MarketPosition} from '../src/positions.ts'
+import type {MarketPosition} from '../src/protocol/positions.ts'
 export const OWNER='0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A'
 export const BASE='0x1563915e194D8CfBA1943570603F7606A3115508'
 export const OTHER='0x5CbDd86a2FA8Dc4bDdd8a8f69dBa48572EeC07FB'
