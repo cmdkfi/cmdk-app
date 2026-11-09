@@ -1,10 +1,10 @@
 import {VerificationPage} from './VerificationPage.tsx'
 import { Activity } from './Activity.tsx'
+import {VaultDiscovery} from './VaultDiscovery.tsx'
 import { VaultDetail } from './VaultDetail.tsx'
 import { useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
 import { WalletConnect } from './WalletConnect.tsx'
-import { VaultDiscovery } from './VaultDiscovery.tsx'
 import { useVaultSelection } from './VaultSelectionContext.tsx'
 import { CreateVaultJob } from './CreateVaultJob.tsx'
 import { shortAddress } from './wallet-utils.ts'
@@ -22,7 +22,7 @@ export function VaultHome({ activity = false, detail = false, create = false, ve
     if (isConnected && !wasConnected.current) closeAfterConnection.current = true
     wasConnected.current = isConnected
     if (!isConnected) closeAfterConnection.current = false
-    if (closeAfterConnection.current && (discovery.kind === 'ready' || discovery.kind === 'pending')) {
+    if (closeAfterConnection.current && (discovery.kind === 'ready' || discovery.kind === 'pending' || discovery.kind === 'error')) {
       dialog.current?.close()
       closeAfterConnection.current = false
     }
@@ -38,7 +38,7 @@ export function VaultHome({ activity = false, detail = false, create = false, ve
     </header>
     <main className="vault-main">
       <div className="vault-title"><h1>{verification!==undefined?'Verification':activity ? 'Activity' : detail ? 'Vault overview' : 'Your vaults'}</h1></div>
-      {verification!==undefined?<VerificationPage accountId={verification}/>:create ? <CreateVaultJob key={address?.toLowerCase() ?? 'disconnected'} /> : detail && isConnected ? <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
+      {verification!==undefined?<VerificationPage accountId={verification}/>:create ? <CreateVaultJob key={address?.toLowerCase() ?? 'disconnected'} /> : detail && isConnected ? discovery.stale ? <><p role="alert">Vault ownership could not be rechecked. Management is unavailable until discovery recovers.</p><VaultDiscovery/></> : <VaultDetail vault={discovery.selected} /> : !isConnected ? <PrototypeSurface className="vault-welcome">
 
         <h2>{activity ? 'Your activity starts here' : 'Connect to find your vaults'}</h2>
         <p>{activity ? 'Connect your wallet to view activity for your address.' : 'Find your vaults or create your first one.'}</p>

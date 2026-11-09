@@ -16,3 +16,8 @@ test('HTTP 429 respects Retry-After without issuing repeated requests',async()=>
  await assert.rejects(nearQuery('https://limited',{},fetcher),/Retry after/)
  assert.equal(calls,1)
 })
+
+test('unavailable Retry-After uses a conservative cooldown instead of hammering an opaque rate limit',async()=>{
+ const before=Date.now()
+ await assert.rejects(nearQuery('https://no-exposed-retry',{},async()=>new Response('',{status:429})),error=>error.retryAt>=before+59000&&error.retryable===true)
+})

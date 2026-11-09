@@ -1,4 +1,4 @@
-import {nearQuery} from './near-rpc.ts'
+import {NearReadError,nearQuery} from './near-rpc.ts'
 export type CreateVaultPolicy = { cooldownSecs: number; depositNear: string; markets: { id: string; loan_token: string; collateral_token: string; executor: string; slice_max: string }[] }
 export type AgentMeasurement = { mrtd: string; rtmr0: string; rtmr1: string; rtmr2: string; compose_hash: string; os_image_hash: string }
 export type AppConfig = { marketLabels?:Record<string,string>; baseChainId: number; nearNetwork: string; nearRpcUrl: string; baseRpcUrl: string; relayerUrl: string; relayerUrlFallback: string; near: { factory: string | null }; agent: { measurement: AgentMeasurement | null; version: string | null; sourceCommit: string | null }; createVault: CreateVaultPolicy | null }
@@ -44,28 +44,35 @@ export async function viewNear<T>(rpcUrl: string, accountId: string, methodName:
   return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result))) as T
 }
 
-export async function discoverVaults(config: AppConfig, address: string, fetcher: typeof fetch = fetch): Promise<{ vaults: Vault[]; failed: number }> {
+export async function discoverVaults(config: AppConfig, address: string, fetcher: typeof fetch = fetch): Promise<{ vaults: Vault[]; failed: number;unreadAccounts:string[];retryAt?:number }> {
   const factory = config.near.factory
   if (!factory) throw new Error('Factory deployment is not available yet.')
-  const factoryState = await viewNear<{ count: number }>(config.nearRpcUrl, factory, 'get_config', fetcher)
+  async function read<T>(account:string,method:string):Promise<T>{
+    for(let attempt=0;;attempt++){try{return await viewNear<T>(config.nearRpcUrl,account,method,fetcher)}catch(error){if(!(error instanceof NearReadError)||!error.retryable||error.retryAt||attempt>=1)throw error;await new Promise(resolve=>setTimeout(resolve,750))}}
+  }
+  const factoryState = await read<{count:number}>(factory,'get_config')
   if (!Number.isSafeInteger(factoryState.count) || factoryState.count < 0 || factoryState.count > 10000) throw new Error('Factory returned an invalid vault count.')
   const vaults: Vault[] = []
   let failed = 0
-  for (let start = 1; start <= factoryState.count; start += 5) {
-    const batch = Array.from({ length: Math.min(5, factoryState.count - start + 1) }, (_, offset) => start + offset)
+  const unreadAccounts:string[]=[]
+  let retryAt:number|undefined
+  for (let start = 1; start <= factoryState.count; start += 2) {
+    const batch = Array.from({ length: Math.min(2, factoryState.count - start + 1) }, (_, offset) => start + offset)
     const results = await Promise.allSettled(batch.map(async number => {
       const accountId = `v${number}.${factory}`
-      const state = await viewNear<{ owner?: string; base_address?: string; markets?: unknown[] }>(config.nearRpcUrl, accountId, 'get_state', fetcher)
+      const state = await read<{owner?:string;base_address?:string;markets?:unknown[]}>(accountId,'get_state')
+      if(typeof state.owner!=='string'||!state.owner)throw Error('Vault owner is unavailable.')
       return { number, accountId, state }
     }))
-    for (const result of results) {
-      if (result.status === 'rejected') { failed++; continue }
+    for (const [offset,result] of results.entries()) {
+      if (result.status === 'rejected') { failed++;unreadAccounts.push(`v${batch[offset]}.${factory}`);if(result.reason instanceof NearReadError&&result.reason.retryAt)retryAt=Math.max(retryAt??0,result.reason.retryAt);continue }
       const { number, accountId, state } = result.value
       if (state.owner?.toLowerCase() === address.toLowerCase()) {
         vaults.push({ accountId, number, owner: state.owner, baseAddress: state.base_address, marketCount: Array.isArray(state.markets) ? state.markets.length : 0 })
       }
     }
+    if(results.every(result=>result.status==='rejected'&&result.reason instanceof NearReadError&&result.reason.retryable)){for(let n=start+batch.length;n<=factoryState.count;n++){failed++;unreadAccounts.push(`v${n}.${factory}`)}break}
   }
   vaults.sort((a, b) => b.number - a.number)
-  return { vaults, failed }
+  return { vaults, failed,unreadAccounts,retryAt }
 }

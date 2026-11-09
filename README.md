@@ -69,3 +69,9 @@ Boot file checks are size-bounded and compare bytes/SHA-256 against the index, t
 Protocol source checked against cmdkfi/app main 47fd4fb; relevant agent code remains unchanged from the preceding review. Factory enumeration is the supported owner discovery mechanism; no owner-index or new agent telemetry API is required before the deadline. NearBlocks remains the NEAR discovery source; job responses and transcripts provide call detail, receipts provide execution outcomes.
 
 A vault-wide background read failure preserves the same owner/vault’s last successful snapshot, visibly read-only, instead of unmounting Verification. Cached data is never carried to a different vault or owner; independent recovery remains available.
+
+For the isolated RPC-failure and recovery scenarios in installed Google Chrome:
+```sh
+CMDK_TEST_CHROME=1 pnpm --dir app exec playwright test e2e/discovery.spec.ts --project=desktop
+```
+The normal browser suite covers desktop and mobile with controlled test-only RPC/wallet fixtures; it does not submit live transactions.
