@@ -4,7 +4,7 @@
 import type { Hex } from 'viem'
 import { ProtocolError, type Adapters, type AgentFacts, type ProtocolAdapter, type VaultView, type WalletAdapter, type WalletOption, type WalletState } from '../types.ts'
 import { SANDBOX_VAULT, SIM, sandboxConfig } from './config.ts'
-import { ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, WAD } from './engine.ts'
+import { liquidationIncentiveFactor, LLTV, ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, WAD } from './engine.ts'
 
 const NO_WALLETS: WalletOption[] = []
 const CONNECTED: WalletState = { status: 'connected', address: SANDBOX_OWNER, chainId: 84532, walletName: 'Sandbox wallet' }
@@ -55,7 +55,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
     kind: 'sandbox',
     loadConfig: async () => app,
     readStatic: async () => ({ kind: 'deployment-static', data: null }),
-    readMarketQuote: async () => ({ blockNumber: block(), lltv: pct(86), loanDecimals: 6, collateralDecimals: 18, price: engine.price(), liquidity: 1_000_000n * 10n ** 6n, borrowApr: Number(RATE_APR_WAD) / 1e18 }),
+    readMarketQuote: async () => ({ blockNumber: block(), lltv: LLTV, loanDecimals: 6, collateralDecimals: 18, price: engine.price(), liquidity: 1_000_000n * 10n ** 6n, borrowApr: Number(RATE_APR_WAD) / 1e18 }),
     estimateDeposit: (_app, quote, amountWei) => {
       if (quote.price === null || amountWei <= 0n) return { value: null, target: null, borrow: null, limited: false, resultingLtv: null, liquidityKnown: true, maxAmountAtTarget: null }
       const value = valueOf(amountWei, quote.price), target = value * pct(c.target) / WAD
@@ -104,7 +104,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const price = engine.price(), debt = engine.debt(), value = valueOf(v.collateral, price), now = engine.now()
       const corridor = { target: pct(c.target), act: pct(c.act), floor: pct(c.floor), sellBudget: pct(c.budget), migrateAllowed: c.migrate, set: v.approved }
       const feeds = [{ address: SIM.feed, description: 'ETH / USD', maxAge: 1200, updatedAt: BigInt(Math.floor(now / 1000) - 10) }]
-      const market = (id: `0x${string}`, collateral: bigint, d: bigint, val: bigint) => ({ id, executor: SIM.executor, collateral, debt: d, value: val, ltv: ltvOf(d, val), lltv: pct(86), corridor, closedForAgent: false, collateralToken: SIM.weth, loanDecimals: 6, collateralDecimals: 18, feeds })
+      const market = (id: `0x${string}`, collateral: bigint, d: bigint, val: bigint) => ({ id, executor: SIM.executor, collateral, debt: d, value: val, ltv: ltvOf(d, val), lltv: LLTV, corridor, closedForAgent: false, collateralToken: SIM.weth, loanDecimals: 6, collateralDecimals: 18, feeds })
       // protective sales are not counted in the discretionary window (Executor.sol l.296), so the budget stays whole
       const remaining = v.collateral * pct(c.budget) / WAD
       return {
@@ -147,6 +147,16 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
     },
     // The panel shows "Simulated (not checked)" in the sandbox and never asks for facts (VerificationPanel.tsx).
     readVerification: async () => { throw new ProtocolError('unavailable', 'Verification is not run in the sandbox.') },
+    crash: {
+      read: async () => {
+        const v = vault()
+        if (!v || (!v.crash && (v.openedAt === null || v.collateral === 0n))) return null
+        const run = v.crash
+        return { status: run ? run.status : 'ready', start: run ? run.start : null, stages: run ? run.stages : [], lltv: LLTV, act: pct(c.act), liquidationIncentive: liquidationIncentiveFactor(LLTV) }
+      },
+      run: async () => engine.crashRun(),
+      next: async () => engine.crashNext(),
+    },
   }
 }
 

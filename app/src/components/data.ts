@@ -1,6 +1,6 @@
 // React Query hooks over the adapters. Every key includes the adapter kind so live and sandbox data
 // never share a cache entry (PRD §8a "never mix"). Failed reads surface as errors, never as values.
-import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Address } from 'viem'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
@@ -171,4 +171,20 @@ export function useVerification(vaultId: string | undefined, poll: boolean) {
   const { protocol, kind } = useAdapters()
   const app = useAppConfig().data
   return useQuery({ queryKey: ['verification', kind, vaultId ?? null], enabled: !!app && !!vaultId, queryFn: () => protocol.readVerification(app!, vaultId!), refetchInterval: poll ? 30_000 : false, staleTime: 0, retry: false })
+}
+
+/** Sandbox only (PRD §8a.1): the market crash of the open position; disabled on the live adapter, which has no `crash`. */
+export function useCrash(vaultId: string | undefined) {
+  const { kind, protocol } = useAdapters()
+  return useQuery({ queryKey: ['crash', kind, vaultId ?? null], enabled: !!protocol.crash && !!vaultId, queryFn: () => protocol.crash!.read(), retry: false })
+}
+
+/** Runs the crash or advances it one stage, then re-reads everything the stage changed (hero, track, agent, actions, close plan). */
+export function useCrashStep() {
+  const { kind, protocol } = useAdapters()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (step: 'run' | 'next') => (step === 'run' ? protocol.crash!.run() : protocol.crash!.next()),
+    onSettled: () => Promise.all(['crash', 'position', 'agent', 'activity', 'close-plan'].map(key => queryClient.invalidateQueries({ queryKey: [key, kind] }))),
+  })
 }

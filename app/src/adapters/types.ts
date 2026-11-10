@@ -133,6 +133,34 @@ export type WalletTokens = { eth: bigint; weth: bigint; usdc: bigint }
 export type WalletTx = { to: Address; data: Hex; value: bigint }
 export type WalletTxIntent = { kind: 'wrap'; amount: bigint } | { kind: 'transfer'; token: 'weth' | 'usdc'; to: Address; amount: bigint } | { kind: 'topUp'; to: Address; amount: bigint }
 /** One check's outcome: the value read, or why it could not be read; `at` is when the check finished (PRD §6). */
+/** Sandbox only (PRD §8a.1): the position when the market crash was run, at the start price. */
+export type CrashStart = { price: bigint; collateral: bigint; debt: bigint; value: bigint; ltv: bigint | null; borrowed: bigint }
+/** One crash stage: the price, the same loan without the agent (a calculation) and the sandbox position (with the agent). */
+export type CrashStage = {
+  index: 1 | 2 | 3
+  price: bigint
+  /** What Morpho would have done: `liquidation` when a liquidator acted at this stage; `liquidatedEarlier` when it already had. */
+  without: { collateral: bigint; debt: bigint; value: bigint; ltv: bigint | null; liquidation: { repaid: bigint; seized: bigint; ltvBefore: bigint | null } | null; liquidatedEarlier: boolean }
+  /** The sandbox position after the stage; `reduce` when the agent's protective reduce acted at this stage. */
+  with: { collateral: bigint; debt: bigint; value: bigint; ltv: bigint | null; reduce: { repaid: bigint; sold: bigint; ltvBefore: bigint | null } | null }
+}
+export type CrashView = {
+  /** ready: an open position that has not run it; running: stages 1–3 shown; done: finished (once per position). */
+  status: 'ready' | 'running' | 'done'
+  start: CrashStart | null
+  stages: CrashStage[]
+  lltv: bigint
+  act: bigint
+  liquidationIncentive: bigint
+}
+/** The sandbox's market crash controls (PRD §8a.1 "crash.run(), crash.next()"); the live adapter has none. */
+export interface CrashControl {
+  /** null when there is no open position to run it on. */
+  read(): Promise<CrashView | null>
+  run(): Promise<void>
+  next(): Promise<void>
+}
+
 export type Fetched<T> = { ok: true; at: number; value: T } | { ok: false; at: number; error: string }
 
 /**
@@ -309,6 +337,10 @@ export interface ProtocolAdapter {
    * l.498-503), view_account against the factory code hash (vault/factory/src/lib.rs l.152; scripts/reproduce-hash.sh l.122-125).
    */
   readVerification(app: LoadedConfig, vaultId: string): Promise<VerificationFacts>
+
+  // ---- Phase 11 (§8a.1) ----------------------------------------------------------------------------------------
+  /** Sandbox only: the user-run market crash. Absent on the live adapter. */
+  readonly crash?: CrashControl
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

@@ -155,3 +155,18 @@ dialog.sheet{margin:auto}
 dialog.sheet::backdrop{background:rgba(0,0,0,.5)}
 .token-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#627eea}
 .token-icon img{display:block;width:22px;height:22px;border-radius:50%}
+
+/* Market crash card (sandbox S5, PRD §8a.1) */
+.crash .crash-intro{margin:0;font-size:15px;line-height:1.5;max-width:640px}
+.btn.btn--big{min-height:56px;font-size:16px;padding:16px 32px;justify-self:start}
+.crash .btn{justify-self:start}
+.crash-table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.5}
+.crash-table th,.crash-table td{text-align:left;vertical-align:top;padding:12px 20px 12px 0;border-top:1px solid var(--line)}
+.crash-table thead th{border-top:0;padding-top:0;font-weight:500;color:var(--ink);font-size:14px}
+.crash-table thead th span,.crash-table tbody th span{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+.crash-table tbody th{font-weight:500;width:24%;color:var(--ink)}
+.crash-table td{width:38%;color:var(--muted)}
+.crash-table td strong{color:var(--ink);font-weight:600}
+.crash-summary{margin:0;font-size:14px;line-height:1.5}
+.crash-summary strong{font-weight:600}
+

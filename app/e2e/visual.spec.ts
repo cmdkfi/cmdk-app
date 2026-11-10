@@ -2,8 +2,10 @@
 // docs/mockups cannot drift unnoticed. Baselines are per platform (playwright.config.ts snapshotPathTemplate):
 // darwin for local runs, linux for CI and the deploy workflow; scripts/update-visual-baselines.sh rewrites both, and
 // only on purpose. Time is frozen at the fixture's clock, timezone and locale are fixed, animations are off.
-import type { Page } from '@playwright/test'
+import type { BrowserContext, Page } from '@playwright/test'
 import { test, expect, fixtureLog, ADDRESSES, BASE, LIVE, OWNER, vault, type LiveFixture } from './live-fixture.ts'
+import { SandboxEngine, STAGE_MS, STORAGE_KEY } from '../src/adapters/sandbox/engine.ts'
+import { stringifyBig } from '../src/flow/json.ts'
 
 const { WETH, EXECUTOR, MORPHO, USDC, NOW, HEAD } = ADDRESSES
 const E = 10n ** 18n
@@ -183,3 +185,46 @@ test('S11 Leave the sandbox?', async ({ page, context, fx }) => {
   await expect(page.getByRole('dialog', { name: 'Leave the sandbox?' })).toBeVisible()
   await shot(page, 's11-leave-sandbox')
 })
+
+// Phase 11 sandbox market crash (PRD §8a.1). The sandbox engine's state for a position opened with 0.5 ETH, built with
+// the engine itself on the frozen clock (create, setup, wrap, transfer, open, USDC to the wallet, as S4 runs them) and
+// seeded into sessionStorage, so block numbers and action times are fixed; the stages are then clicked in the page.
+function sandboxOpenPosition(): string {
+  const pct = (n: number) => BigInt(n) * 10n ** 16n
+  let now = (NOW + 20) * 1000 - 30_000
+  // the corridor only steers the agent's reduce, which runs in the page's own engine (built from sandboxConfig)
+  const engine = new SandboxEngine({ target: pct(50), act: pct(70), floor: pct(30), budget: pct(20) }, () => now, false)
+  const deposit = 5n * E / 10n
+  engine.createVault(); now += STAGE_MS
+  engine.ownerCall('setup', {}, 1); now += STAGE_MS
+  engine.walletTx({ kind: 'wrap', amount: deposit }); engine.walletTx({ kind: 'transfer', token: 'weth', amount: deposit })
+  engine.ownerCall('open', { collateral_in: deposit.toString(), target_ltv: pct(50).toString() }, 2); now += STAGE_MS
+  engine.ownerCall('withdraw', { token: 'usdc', amount: engine.state().vault!.idle.usdc.toString() }, 3); now += STAGE_MS
+  now = (NOW + 20) * 1000
+  return stringifyBig(engine.state())
+}
+
+async function sandboxPosition(page: Page, context: BrowserContext, fx: LiveFixture) {
+  await fx.install(context); await frozen(page)
+  await context.addInitScript(([key, value]) => { window.sessionStorage.setItem(key, value) }, [STORAGE_KEY, sandboxOpenPosition()] as const)
+  await page.goto('/#sandbox/position')
+  await expect(page.getByRole('region', { name: 'Market crash' })).toBeVisible()
+}
+
+test('Sandbox S5: Market crash before the run', async ({ page, context, fx }) => {
+  await sandboxPosition(page, context, fx)
+  await expect(page.getByRole('button', { name: 'Run market crash' })).toBeVisible()
+  await shot(page, 'sandbox-s5-crash-ready')
+})
+
+test('Sandbox S5: Market crash at stage 3', async ({ page, context, fx }) => {
+  await sandboxPosition(page, context, fx)
+  const card = page.getByRole('region', { name: 'Market crash' })
+  await card.getByRole('button', { name: 'Run market crash' }).click()
+  await card.getByRole('button', { name: 'Next: the price keeps falling' }).click()
+  await card.getByRole('button', { name: 'Next: the price recovers' }).click()
+  await expect(card.locator('.crash-summary')).toContainText('$596 with the agent, $82 without')
+  await expect(page.locator('.event').filter({ hasText: 'Reduced' })).toHaveCount(1)
+  await shot(page, 'sandbox-s5-crash-stage3')
+})
+

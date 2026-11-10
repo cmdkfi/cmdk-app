@@ -36,8 +36,10 @@ from S5's "Verify the agent".
 
 **Sandbox (Phase 6b).** "Try in sandbox" (on S3 and in the header while no wallet is connected) runs the same five screens
 under `#sandbox/…` on a simulated wallet and a simulated protocol (`app/src/adapters/sandbox/`): stages advance on 2 s
-timers, the agent registers after 5 s, a scripted −30% price move 20 s after open is followed by the agent's protective
-reduce to 50% computed with the protocol's own `repayToLtv`. A banner marks every sandbox screen, explorer links are
+timers and the agent registers after 5 s. The price never moves on a timer: on S5 the **Market crash** card (Phase 11,
+PRD §8a.1) plays a scripted price path the user advances in three stages (−30%, −45%, back to the start) and shows a
+calculated "without the agent" outcome (Morpho Blue's liquidation, from `Morpho.sol` `liquidate`) beside the sandbox
+position, where the agent's protective reduce uses the protocol's own `repayToLtv`. A banner marks every sandbox screen, explorer links are
 disabled and tagged "simulated", and verification rows read "Simulated (not checked)". The previous app removed demo
 balances and demo routes; this sandbox is acceptable because it is isolated and labelled: it never instantiates the
 live adapters, never contacts a network host and never writes localStorage (its state lives in sessionStorage and is
@@ -149,11 +151,11 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 150 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 158 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 82 browser scenarios, desktop Chromium (15 of them screenshot comparisons)
+pnpm test:browser           # 85 browser scenarios, desktop Chromium (17 of them screenshot comparisons)
 pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
 

@@ -191,13 +191,13 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [ ] The product owner approves; merge PR #80 into main (main deploys automatically). Only on the product owner's explicit word.
 
 ## Phase 11 — Sandbox market crash (PRD §8a.1; product owner, 11 Nov, after the live review)
-- [ ] Commit the product owner's PRD §8a.1 and this phase first (`git diff HEAD -- docs tasks`).
-- [ ] Engine: remove the timed drop and reduce; add the three explicit stages (×0.70, ×0.55 of start, back to start) and the "without the agent" calculation with Morpho Blue's liquidation incentive, cited from the Morpho source (`Morpho.sol` `liquidate`, `LIQUIDATION_CURSOR`, `MAX_LIQUIDATION_INCENTIVE_FACTOR`); the protective reduce stays on `repayToLtv`. Unit tests with the §8a.1 figures.
-- [ ] S5 sandbox: the Market crash card under the hero with **Run market crash**, three stages advanced by the user, two columns per stage, the stage 3 summary line, the finished state, once per position, Start over offers it again; Close position available at every stage.
-- [ ] Copy exactly as §8a.1, including the honesty lines; S8 explainer sheet gains "Open a position, then run a market crash to see what the agent does."
-- [ ] Browser test for the whole run; screenshots before the run and at stage 3 (both platforms via the baseline job).
-- [ ] README and audit status: one sentence that the sandbox price path is scripted and shows a calculated "without the agent" outcome.
-- [ ] Five checks, commit, push; CI green. No deploy, no merge: the product owner reviews the deployed preview after their own deploy.
+- [x] Commit the product owner's PRD §8a.1 and this phase first (`git diff HEAD -- docs tasks`).
+- [x] Engine: remove the timed drop and reduce; add the three explicit stages (×0.70, ×0.55 of start, back to start) and the "without the agent" calculation with Morpho Blue's liquidation incentive, cited from the Morpho source (`Morpho.sol` `liquidate`, `LIQUIDATION_CURSOR`, `MAX_LIQUIDATION_INCENTIVE_FACTOR`); the protective reduce stays on `repayToLtv`. Unit tests with the §8a.1 figures.
+- [x] S5 sandbox: the Market crash card under the hero with **Run market crash**, three stages advanced by the user, two columns per stage, the stage 3 summary line, the finished state, once per position, Start over offers it again; Close position available at every stage.
+- [x] Copy exactly as §8a.1, including the honesty lines; S8 explainer sheet gains "Open a position, then run a market crash to see what the agent does."
+- [x] Browser test for the whole run; screenshots before the run and at stage 3 (both platforms via the baseline job).
+- [x] README and audit status: one sentence that the sandbox price path is scripted and shows a calculated "without the agent" outcome.
+- [x] Five checks, commit, push; CI green. No deploy, no merge: the product owner reviews the deployed preview after their own deploy.
 
 ## Mockups
 - [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
@@ -489,3 +489,29 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
 - *Merge:* not done; it waits for the product owner's explicit word (PR #80).
 
 **Before merge (10 Nov 2026, product owner's live review passed: sandbox, v10, fresh wallet v11).** One fix: the sandbox setup emitted a single `CorridorSet` (live market), so recent actions showed "Rules set on the live market" only, while the live setup sets the corridor on both markets in two Base transactions and shows two rows. The engine now emits one event per market, each with its own transaction hash (`adapters/sandbox/engine.ts`, vault/src/lib.rs l.289-320). Covered by the engine unit test and `e2e/sandbox.spec.ts`. The screenshot baselines are unaffected (no sandbox recent actions in them).
+
+**Phase 11 (11 Nov 2026, cmdkfi/app `22a5191`; the product owner's §8a.1 and this phase committed first, 906a331; `git diff HEAD -- docs tasks` empty before this note except the README/audit sentence and these ticks).**
+- *Morpho source:* morpho-org/morpho-blue `430bd61` (main): `ConstantsLib.sol` l.11 `LIQUIDATION_CURSOR = 0.3e18`, l.14 `MAX_LIQUIDATION_INCENTIVE_FACTOR = 1.15e18`. `Morpho.sol` `liquidate`: l.365-369 is the incentive factor, l.377-379 the seized amount for a repaid amount (`wMulDown(LIF).mulDivDown(ORACLE_PRICE_SCALE, price)`), l.390-396 bad debt. `_isHealthy` is l.527-539. Read with `gh api`, not from memory.
+- *Engine:*
+  - No timed events remain (`DROP_AFTER_OPEN_MS` and `REDUCE_AFTER_DROP_MS` removed; storage key v2 discards a v1 tab state).
+  - `crashRun()` / `crashNext()` give three stages (×0.70, ×0.55, ×1.00 of the price when run). After each price move the protective reduce runs (`repayToLtv`, unchanged). Beside it is the pure `withoutAgent()` with Morpho's health check, incentive and seize, capped at the collateral.
+  - The run is once per position; every open resets it.
+  - The adapter exposes `crash.read/run/next` as an optional `ProtocolAdapter.crash`; the live adapter has none.
+- *Figures:* the unit tests assert the §8a.1 numbers exactly from the bigint math:
+  - repay 481.5 USDC, sold 0.214285714285714285 WETH, LTV back to exactly 50%
+  - seized 0.474473334466156896, kept 0.025527 WETH ($45.067328)
+  - stage 3: $81.940596 without; $917.142857 / 321 USDC / $596.142857 with
+  - LIF 1.043841336116910229
+- *Card (`screens/MarketCrash.tsx`, copy in `flow/crash.ts`):*
+  - Placed above the Agent and Market cards (after the LTV track) on an open sandbox position that is not closing.
+  - Rows accumulate (Open, 1, 2, 3) in the two columns; the summary line comes after stage 3; Done leaves the finished tag and the table, with no button.
+  - The honesty line shows once.
+  - Close position stays enabled at every stage. The card disappears while a close runs and after it; Start over plus a new open offers the run again.
+  - *Rounding:* the card rounds to the precision §8a.1 prints (0.286, 0.026, $82), so its copy is the PRD's verbatim. Everywhere else the app truncates (`flow/format.ts`). With the fixed clock of the screenshots, the hero reads 320.99 USDC (truncated; the debt is a hair under 321) beside the card's 321 USDC.
+- *S8 sheet:* the §8a.1 sentence is added. The Agent row "Scripted: one price drop, one reduce" (not PRD copy, and now wrong) reads "Simulated; acts in the market crash you run".
+- *After a mid-run close:* the sandbox price stays where the run left it. Start over opens the new position at that price, and its crash starts from there (the intro's "falls 45% and recovers" is relative, so it stays true).
+- *Tests:*
+  - 8 new unit tests: 4 engine tests (no timer, exact stages, interest, close mid-run and Start over) and 4 copy tests (each string as §8a.1).
+  - Browser: the full run with both columns per stage, the `Reduced` row, the hero at 63.6%, the summary, Done and the finished card, still with no network request and no localStorage. A new scenario covers Close position at stage 2, Start over, and the crash offered again.
+  - Two screenshots (before the run, at stage 3) from an engine state seeded at the frozen clock; the S8 baseline was updated for its new copy.
+

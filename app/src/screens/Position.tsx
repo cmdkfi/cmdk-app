@@ -17,6 +17,7 @@ import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
 import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, positionVariant, type AgentState, type Variant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
+import { MarketCrash } from './MarketCrash.tsx'
 import { VerificationPanel } from './VerificationPanel.tsx'
 
 const BASE_SEPOLIA = 84532
@@ -377,6 +378,9 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
       {owner && chainOk && mode === 'live' && <p className="muted small wallet-line">Your wallet <code title={owner}>{shortAddress(owner)}</code> · <ShowUsdcButton /></p>}
       {showIdle && <p className="muted small idle-line">At your position address, outside Morpho: {[idle.weth > 0n && weth(idle.weth), idle.usdc > app.guided.usdcDust && usdc(idle.usdc), idle.eth > 0n && `${formatUnits(idle.eth, 18, 6)} ETH for gas`].filter(Boolean).join(' · ')}</p>}
     </div> : null}
+
+    {/* PRD §8a.1: the sandbox's Market crash card above the Agent and Market cards, on an open position not being closed */}
+    {mode === 'sandbox' && variant === 'active' && !closing && <MarketCrash vaultId={vaultId} />}
 
     <section className="cols-2 agent-market" aria-label="Agent and market">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}

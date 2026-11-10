@@ -31,11 +31,12 @@ export function SandboxSheet({ onClose }: { onClose: () => void }) {
   return <Sheet label="Try in sandbox" onClose={onClose}>
     <h2>Try in sandbox</h2>
     <p className="muted">Simulated wallet and simulated protocol. Nothing touches Base Sepolia or NEAR. Numbers are illustrative.</p>
+    <p className="muted">Open a position, then run a market crash to see what the agent does.</p>
     <dl className="rows" style={{ margin: 0 }}>
       <div className="row"><dt className="k">Wallet</dt><dd className="v">Simulated, 10 ETH · 5,000 USDC</dd></div>
       <div className="row"><dt className="k">Protocol</dt><dd className="v">Simulated in your browser</dd></div>
       <div className="row"><dt className="k">Network calls</dt><dd className="v">None</dd></div>
-      <div className="row"><dt className="k">Agent</dt><dd className="v">Scripted: one price drop, one reduce</dd></div>
+      <div className="row"><dt className="k">Agent</dt><dd className="v">Simulated; acts in the market crash you run</dd></div>
     </dl>
     <button type="button" className="btn primary" onClick={activate}>Activate sandbox</button>
     <button type="button" className="btn ghost" style={{ justifySelf: 'start', paddingLeft: 0 }} onClick={onClose}>Back</button>
