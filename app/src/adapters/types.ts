@@ -83,6 +83,8 @@ export type VaultView = {
   agentPublicKey: string | null
   setupComplete: boolean
   measurementApproved: boolean
+  /** The vault holds the published markets, executor and cooldown (protocol/near/vault.ts `policyMatches`). */
+  policyMatches: boolean
   idle: { eth: bigint; weth: bigint; usdc: bigint }
   markets: { id: Hex; collateral: bigint; borrowShares: bigint; debt: bigint }[]
   setup: unknown

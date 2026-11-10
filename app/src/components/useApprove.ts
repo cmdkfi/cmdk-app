@@ -25,7 +25,7 @@ const approveSpec: OwnerSpec<ApproveId, ApproveRecord> = {
   // done when the vault approves the baked measurement, which the 1a guard found equal to the published manifest
   // right before signing (approveStep runs the guard before this check too)
   complete: v => v.measurementApproved,
-  intent: (_v, env) => setupIntent(env, 'approve'),
+  intent: (v, env) => setupIntent(env, 'approve', v),
   doneNote: () => 'Your vault approves the current agent version. The agent registers on its own.',
 }
 

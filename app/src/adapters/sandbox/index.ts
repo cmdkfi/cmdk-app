@@ -44,7 +44,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
     const debt = engine.debt()
     return {
       accountId: SANDBOX_VAULT, number: 10, owner: SANDBOX_OWNER, baseAddress: SANDBOX_POSITION, ownerNonce: v.ownerNonce,
-      agentPublicKey: engine.registeredAt() ? 'ed25519:sandbox' : null, setupComplete: v.approved, measurementApproved: v.approved,
+      agentPublicKey: engine.registeredAt() ? 'ed25519:sandbox' : null, setupComplete: v.approved, measurementApproved: v.approved, policyMatches: true,
       idle: { ...v.idle },
       markets: [{ id: SIM.live, collateral: v.collateral, borrowShares: v.principal, debt }, { id: SIM.backup, collateral: 0n, borrowShares: 0n, debt: 0n }],
       setup: null,

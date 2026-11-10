@@ -129,11 +129,15 @@ export type OwnerSpec<Id extends string, R extends ChainRecord<Id>> = {
  * The setup owner call's intent, shared by S4 setup and the S5 re-approval (Phase 7c). Phase 7b item 1a: approving a
  * measurement the published manifest no longer names costs a signature and leaves the vault unwatched (v10, 9 Nov),
  * so the measurement baked into config.json (the one setupArgs sends) is compared with the manifest right before the
- * prompt; a mismatch pauses the step.
+ * prompt; a mismatch pauses the step. Setup approves the executor stored in the vault, and anyone can create a vault for
+ * any owner with any policy, so a vault (from the fresh read `v`) without the published markets, executor and cooldown
+ * is refused before the prompt.
  */
 export const CONFIG_BEHIND = 'This app\'s configuration is behind the published agent version; try again later.'
+export const POLICY_MISMATCH = 'This vault\'s markets or Executor differ from the published deployment, so no signature is requested. Anyone can create a vault for any address; this app sets up only vaults with the published settings.'
 
-export async function setupIntent<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, id: Id): Promise<OwnerIntent | null> {
+export async function setupIntent<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, id: Id, v: VaultView): Promise<OwnerIntent | null> {
+  if (!v.policyMatches) { env.patch(id, { status: 'paused', pause: { line: POLICY_MISMATCH } }); return null }
   if (await env.protocol.configMatchesPublished(env.app)) return { method: 'setup' }
   env.patch(id, { status: 'paused', pause: { line: CONFIG_BEHIND, retry: 'check' } })
   return null

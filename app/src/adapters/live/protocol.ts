@@ -8,7 +8,7 @@ import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket,
 import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRow, codeMatchesFactory, composeHashMatches, fetchPublishedManifest, measurementMatches, sha256Hex } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList, viewAccount, type NearRpc } from '../../protocol/near/rpc.ts'
-import { discoverWithHint, getFactoryConfig, getState, type VaultState } from '../../protocol/near/vault.ts'
+import { discoverWithHint, getFactoryConfig, getState, policyMatches, type VaultState } from '../../protocol/near/vault.ts'
 import { closeArgs, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
 import { agentEvidence, agentIndex, agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
 import { sendEth, transferToken, wrapEth } from '../../protocol/wallet/tx.ts'
@@ -17,6 +17,8 @@ import { ProtocolError, type DeploymentStatic, type Fetched, type ProtocolAdapte
 const relayer = ({ config }: LoadedConfig) => ({ primary: config.relayerUrl, fallback: config.relayerUrlFallback })
 /** NEAR reads: the fallback is asked only after a retryable failure of the primary (protocol/near/rpc.ts). */
 const nearRpc = (config: LoadedConfig['config']) => ({ primary: config.nearRpcUrl, fallback: config.nearRpcUrlFallback })
+/** The published policy: what the app creates vaults with, and what a vault must hold to be adopted or set up. */
+const publishedPolicy = ({ createVault: cv }: LoadedConfig['config']) => ({ cooldown_secs: cv.cooldownSecs, markets: cv.markets.map(m => ({ id: m.id, loan_token: m.loan_token, collateral_token: m.collateral_token, executor: m.executor, slice_max: m.slice_max })) })
 
 /** Relayer failures in the terms S4 acts on (RELAYER.md l.59-69). */
 function mapped(error: unknown): never {
@@ -82,7 +84,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       return accountKind(await readCode(baseClient(config.baseRpcUrl), address))
     },
     async discoverPosition({ config, guided }, owner, hint) {
-      const found = await discoverWithHint(nearRpc(config), config.near.factory, owner, guided.firstVaultNumber, hint ?? null)
+      const found = await discoverWithHint(nearRpc(config), config.near.factory, owner, guided.firstVaultNumber, publishedPolicy(config), hint ?? null)
       if (!found) return null
       // the get_state discovery just read is the one S5's position and agent reads share next (PRD §9 6)
       shared.set(found.accountId, { at: Date.now(), state: Promise.resolve(found.state) })
@@ -109,7 +111,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       return {
         accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address,
         ownerNonce: state.owner_nonce, agentPublicKey: state.agent?.public_key ?? null,
-        setupComplete: setupComplete(snapshot.setup, measurementApproved), measurementApproved,
+        setupComplete: setupComplete(snapshot.setup, measurementApproved), measurementApproved, policyMatches: policyMatches(state, publishedPolicy(config)),
         idle: snapshot.idle, markets: snapshot.markets.map(m => ({ id: m.id, collateral: m.collateral, borrowShares: m.borrowShares, debt: m.debt })), setup: snapshot.setup,
       }
     },
@@ -130,9 +132,7 @@ export function createLiveProtocol(): ProtocolAdapter {
     },
     readReceipts: ({ config }, hashes) => readReceipts(baseClient(config.baseRpcUrl), hashes),
     async createVault(app, owner) {
-      const cv = app.config.createVault
-      const policy = { cooldown_secs: cv.cooldownSecs, markets: cv.markets.map(m => ({ id: m.id, loan_token: m.loan_token, collateral_token: m.collateral_token, executor: m.executor, slice_max: m.slice_max })) }
-      try { return await createVault(relayer(app), { owner, policy, depositNear: cv.depositNear }) } catch (error) { return mapped(error) }
+      try { return await createVault(relayer(app), { owner, policy: publishedPolicy(app.config), depositNear: app.config.createVault.depositNear }) } catch (error) { return mapped(error) }
     },
     async ownerCall(app, vaultId, message, signature) {
       try { return await ownerCall(relayer(app), { vault: vaultId, message, signature }) } catch (error) { return mapped(error) }

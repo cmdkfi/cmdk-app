@@ -113,6 +113,8 @@ export type VaultFixture = {
    * one, vault/src/lib.rs l.482; revoke_agent clears both, l.419-424), as if the agent registered at once.
    */
   agentKey?: boolean
+  /** The executor get_state reports for both markets. Default: the published one (config.createVault). */
+  executor?: Hex
 }
 
 export function vault(overrides: Partial<VaultFixture> = {}): VaultFixture {
@@ -187,6 +189,8 @@ export class LiveFixture {
   feedStale = false
   /** create-vault: 'ok', or 'lose-job' (the vault is created but GET /job answers 404). */
   createMode: 'ok' | 'lose-job' = 'ok'
+  /** The executor of the vault create-vault makes (a relayer that ignores the posted policy); default the published one. */
+  createExecutor: Hex | undefined = undefined
   /**
    * Per owner-call, consumed in order: 'lose-job' runs the call but forgets the job; 'answer-503' answers the POST
    * with 503 and runs nothing (the relayer redeploy seen during the 9 Nov rehearsal).
@@ -225,7 +229,7 @@ export class LiveFixture {
   private state(n: number) {
     const v = this.vaults.get(n)
     const nonce = v?.ownerNonce ?? 3
-    const m = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, previous_executors: [], slice_max: '1000000000', corridor_set: v?.corridorSet ?? false })
+    const m = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: v?.executor ?? EXECUTOR, previous_executors: [], slice_max: '1000000000', corridor_set: v?.corridorSet ?? false })
     return { owner: v?.owner ?? OTHER, owner_nonce: nonce, signer: 'signer.fixture.testnet', path: 'cmdk-base', base_address: BASE, morpho: MORPHO, cooldown_secs: 120, last_agent_action: 0, markets: [m(LIVE), m(BACKUP)], approved: v?.approved ?? null, agent: this.hasAgentKey(n) ? { public_key: 'ed25519:' + '2'.repeat(44), expires_at: NOW + 86400 } : null }
   }
 
@@ -413,7 +417,7 @@ export class LiveFixture {
   /** relayer.py create_vault: the factory makes v<count+1>, the float goes to its position address (RELAYER.md l.73, l.195-206). */
   private createVault(id: string) {
     const n = ++this.factoryCount
-    this.vaults.set(n, vault({ collateral: 0n, authorized: false, loanAllowance: 0n, collateralAllowance: 0n, corridorSet: false, approved: null, idle: { eth: this.floatWei, weth: 0n, usdc: 0n } }))
+    this.vaults.set(n, vault({ collateral: 0n, authorized: false, loanAllowance: 0n, collateralAllowance: 0n, corridorSet: false, approved: null, idle: { eth: this.floatWei, weth: 0n, usdc: 0n }, executor: this.createExecutor }))
     if (this.createMode === 'ok') this.jobs.set(id, { ok: true, job: id, kind: 'create_vault', stage: 'done', vault: `v${n}.${FACTORY}`, base_address: BASE, near_tx: 'C'.repeat(44) })
   }
 
