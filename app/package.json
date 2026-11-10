@@ -13,7 +13,8 @@
     "build": "pnpm run prepare:prototype && pnpm run prepare:config && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test:browser": "tsc -p tsconfig.e2e.json && playwright test",
-    "test:bundle-boundary": "node scripts/check-test-boundary.mjs"
+    "test:bundle-boundary": "node scripts/check-test-boundary.mjs",
+    "test:visual:update": "sh scripts/update-visual-baselines.sh"
   },
   "dependencies": {
     "@tanstack/query-sync-storage-persister": "5.105.2",

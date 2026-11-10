@@ -172,9 +172,10 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] README and PRD wording: "MetaMask" → "an injected wallet" wherever it is not about the MetaMask-specific network values.
 
 ## Phase 9 — Visual pass to the mockups (PRD §7 as revised 10 Nov)
-- [ ] Port `docs/mockups/cmdk.css` as the app's stylesheet (tokens, type scale, spacing, 960/1120 columns, tiles, rows, steps, checks, LTV track, help panels, sheets); keep the CmdkReference font.
-- [ ] Rebuild each screen's markup to the artboard structure: S0 header, S1 catalogue + amount card, S2 corridor + three lists, S3 facts + help panel variant, S4 steps + verification rail, S5 hero/corridor/agent/market/actions, S6 close steps + USDC panel, S7 closed, sandbox banner/sheet (for Phase 6b).
-- [ ] Screenshot comparison per screen in the browser suite (desktop viewport, fixture data) with a tolerance; update the baselines only on purpose.
+- [x] Port `docs/mockups/cmdk.css` as the app's stylesheet (tokens, type scale, spacing, 960/1120 columns, tiles, rows, steps, checks, LTV track, help panels, sheets); keep the CmdkReference font.
+- [x] Rebuild each screen's markup to the artboard structure: S0 header, S1 catalogue + amount card, S2 corridor + three lists, S3 facts + help panel variant, S4 steps + verification rail, S5 hero/corridor/agent/market/actions, S6 close steps + USDC panel, S7 closed, sandbox banner/sheet (for Phase 6b).
+- [x] Screenshot comparison per screen in the browser suite (desktop viewport, fixture data) with a tolerance; update the baselines only on purpose.
+- [ ] Linux baselines: the product owner runs `frontend quality` on the branch with `visual_baselines: true`; the artifact is reviewed and committed (until then the 12 screenshot tests fail on CI and in `deploy testnet`).
 - [ ] Product owner reviews the deployed preview screen by screen against the canvas before Phase 6b starts.
 
 ## Phase 6b (updated 10 Nov) — Sandbox for production
@@ -395,3 +396,38 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - a chain change mid-flow → the line, and Switch continues
 - *Results:* typecheck, 145/145 unit tests, build, bundle boundary, 65/65 Playwright desktop (load average 29 during the run); the Phase 8 scenarios and the wallet-slot tests passed 3× repeated (27/27).
 - *Docs:* PRD S3, scope, FR-5a, §8 and acceptance wording say "wallet"; the S3 heading is "Connect wallet". The README says any injected wallet. The rehearsal file has the second recorded run and the S3 step for Phase 8.
+
+**Phase 9 (10 Nov 2026, cmdkfi/app `22a5191`, unchanged; `git diff HEAD -- docs tasks` empty at start; before this note only this phase's own edits).**
+- *Stylesheet:* `app/src/styles/cmdk.css` is `docs/mockups/cmdk.css`, with the same selectors and values, scoped to `.vault-app`. Colours go through the tokens of `prototype-controls.css`, so the light variant still works, but it was not checked by eye. It replaces `shell.css`, `screens.css` and `ltv-track.css`. A named section holds the inline layout styles of the artboards (`page`, `split-14`, `cols-3`, …). A second marked section holds states no artboard draws: the wallet menu, step pauses and the Why details, the desktop gate, unavailable values, the dialog backdrop. The font stays CmdkReference.
+- *Markup:* every screen follows its artboard.
+  - Shell: header `.header/.brand/.chip`, `main` at 960 px for S1–S3 and 1120 px for S4–S7.
+  - S1: the catalogue surface with token tiles, then the amount surface (input, then rows).
+  - S2: the corridor scaled to the liquidation LTV, three list surfaces, the acknowledgement notice.
+  - S3: facts in rows plus the action in one surface, with the `.help` aside for S3a. The wallet list (no artboard) uses the tile style.
+  - S4: steps in a surface on the 1.4fr side, the verification rail on the 1fr side. Steps use the `.step` grid with ✓ when done. Checks use `.check` with status tags.
+  - S5–S7: a split head with Close position / Start over on the right; three `.big` figures, the corridor surface, agent and market cards with rows and tags, `.event` rows; S6 has the steps beside the Get test USDC `.help` aside; the review sheet is `.sheet`.
+  - No copy, flow rule or protocol code changed. Element roles kept for the tests: tiles stay list items, the help panels are `aside` (complementary), and the agent state is the card's status tag with the detail under it.
+- *Screenshots:* `e2e/visual.spec.ts`, 12 states: S1, S2, S3 wallet list, S3 connected, S3a, S4 with a declined prompt and the rail, S5, S0 wallet menu, S6 Get test USDC, S6 review sheet, S7 closed, S5 liquidated. The clock is frozen at the fixture's NOW, UTC and en-US, animations off, tolerance `maxDiffPixelRatio` 0.01.
+  - A 1280×2200 viewport instead of `fullPage`: a full-page capture resizes the viewport, the shell unmounts below 960 px (FR-16), and the first baselines caught "Connecting…" and a review sheet that had closed.
+  - Baselines are per platform (`e2e/__screenshots__/{platform}/`): darwin for local runs, linux for `frontend quality` and `deploy testnet`. `pnpm test:visual:update` rewrites darwin. Linux comes from a new job in `frontend quality`, run by hand with `visual_baselines: true` (same runner, Node, pnpm and steps as the checks; a new workflow file could not be dispatched from a branch, because GitHub requires a hand-run workflow to exist on the default branch), whose artifact is downloaded with `gh run download`, reviewed and committed (product owner's choice). Producing them in Docker here failed: amd64 emulation in a 4 GB Docker VM shared with about ten other containers got the install killed for memory, then ran each test for about 44 s until it failed.
+- *Fixed on review of the baselines:* the address box's Copy button wrapped onto two lines.
+- *Artboard details that conflict with a PRD rule (not resolved; the app follows the PRD):*
+  1. The artboards load Inter from Google Fonts. PRD §9: no third-party fonts; §7: CmdkReference.
+  2. S0 draws a **Connect wallet** button in the header when not connected. PRD S0 and FR-3 (10 Nov): no Connect button; the slot appears only once connected.
+  3. S7: "Starting over creates a new vault and position address", and a row "Older vaults of this wallet v3". PRD D5 reuses the empty vault; D4 never reads or shows vaults below the cutoff.
+  4. S4 draws "Agent registration" as step 3 and the WETH deposit as one step with 4a wrap and 4b transfer. The PRD S4 table says the same, but the app has six steps (wrap and transfer separate, registration in the rail) since Phase 3. Not changed: it is a flow change, for the product owner to decide.
+  5. S4 prints each Why line inline. PRD S4: "an expandable Why line". The app keeps `<details>`.
+  6. S4's verification tags read "Registering", "Not yet", "Info", "Out of scope". PRD §6 statuses: Checked, Mismatch, Unavailable, Not checked, and Statement since Phase 7b.
+  7. S5 links the market id to BaseScan. PRD S5: no explorer page exists for a Morpho market id; the links go to the Morpho and Executor contracts.
+  8. S5 "Key expires in 6 days · renews automatically" is a promise the app does not make. The app shows the expiry date from the chain.
+  9. S5 lists "Registered on your vault … NEAR tx" in Recent actions. PRD FR-10: the list comes from Base logs only.
+  10. S6 shows the review as a notice under the steps; PRD S6 has a review sheet before the first signature (kept). S6 also puts the amount in step 1's title ("Send 81.14 USDC…"); the app's titles are fixed.
+  11. S3 shows "Connect MetaMask" and "Try in sandbox". Superseded by PRD S3 (10 Nov); the sandbox is Phase 6b.
+- *Artboard text the app does not have (not added: no copy changes in this phase):*
+  - S4 head tag "Step 4 of 6 · waiting for MetaMask"
+  - S5 "Risk corridor" heading with the oracle line beside it (the oracle stays in the market card)
+  - the line under the LTV figure; the agent card's "May do" row; the market card's Venue/Pair split and live tag
+  - the S6 summary rows above the steps
+  - S7's "Left at position address" figure and its explanatory "Start over" section
+  - S1 "Borrow rate … / year" (the app says APR, PRD S1)
+- *Unused components:* `PrototypeControls.tsx`, `VerificationDisclosure.tsx` and `TokenIcon.tsx` were already unused before this phase; their old CSS is gone with `screens.css`.

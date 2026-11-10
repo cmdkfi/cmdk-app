@@ -13,6 +13,8 @@ const TITLE: Record<RowId, string> = {
   unchecked: 'What is not checked here',
 }
 
+const TAG: Record<VerificationRow['status'], string> = { Checked: ' ok', Mismatch: ' bad', Unavailable: ' warn', 'Not checked': '', Statement: '' }
+
 const time = (ms: number) => new Date(ms).toLocaleTimeString()
 /** "Checked at" only where the check ran to a result; a read that failed or had nothing to compare was only tried (Phase 7b). */
 const when = (row: VerificationRow) => (row.checkedAt === null ? null : row.status === 'Checked' || row.status === 'Mismatch' ? `Checked at ${time(row.checkedAt)}` : `Last tried at ${time(row.checkedAt)}`)
@@ -37,17 +39,21 @@ export function VerificationPanel({ vaultId, poll, compact }: { vaultId: string 
       case 'unchecked': return <>Needs Docker and <code>dstack-mr</code>; see <a href={app.guided.help.measurementDoc} target="_blank" rel="noreferrer">agent/MEASUREMENT.md</a>.</>
     }
   }
-  return <section className={`verify prototype-surface${compact ? ' verify--compact' : ''}`} aria-labelledby="verify-title">
-    <div className="verify__head">
+  // docs/mockups/S4-Progress "Agent verification": check rows with a status tag on the right
+  return <section className={`surface stack-8 verify-panel${compact ? ' verify--compact' : ''}`} aria-labelledby="verify-title">
+    <div className="card-head">
       <h2 id="verify-title">Agent verification</h2>
-      {vaultId && <button type="button" className="link-button" disabled={facts.isFetching} onClick={() => { void facts.refetch() }}>{facts.isFetching ? 'Checking…' : 'Check again'}</button>}
+      {vaultId && <button type="button" className="link-button small" disabled={facts.isFetching} onClick={() => { void facts.refetch() }}>{facts.isFetching ? 'Checking…' : 'Check again'}</button>}
     </div>
-    <p className="screen__note">"Checked" means the check ran in this session and matched. Nothing here is shown as checked without a result.</p>
-    <ol className="verify__rows">
-      {rows.map(row => <li key={row.id} className={`verify__row verify__row--${row.status.replace(' ', '-').toLowerCase()}`} aria-label={TITLE[row.id]}>
-        <div className="verify__line"><strong>{TITLE[row.id]}</strong><span className="verify__status" role="status">{row.status}</span></div>
-        <p className="verify__result">{row.result}</p>
-        <p className="verify__how">{when(row) && <><span className="verify__time">{when(row)}</span> · </>}How to check yourself: {how(row)}</p>
+    <p className="muted small">"Checked" means the check ran in this session and matched. Nothing here is shown as checked without a result.</p>
+    <ol className="plain-list" style={{ gap: 0 }}>
+      {rows.map(row => <li key={row.id} className={`check verify__row verify__row--${row.status.replace(' ', '-').toLowerCase()}`} aria-label={TITLE[row.id]}>
+        <div>
+          {TITLE[row.id]}
+          <div className="how">{row.result}</div>
+          <div className="how">{when(row) && <>{when(row)} · </>}How to check yourself: {how(row)}</div>
+        </div>
+        <span className={`tag${TAG[row.status]}`} role="status">{row.status}</span>
       </li>)}
     </ol>
   </section>

@@ -57,40 +57,49 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
       const shown = estimate ? (estimate.limited ? estimate.resultingLtv : BigInt(app.guided.corridor.target) * 10n ** 16n) : null
       ob.begin(newRecord({ factory: app.config.near.factory, owner, amountWei: check.kind === 'ok' ? check.wei : null, shownLtv: shown, vault: { accountId: summary.vault.accountId, number: summary.vault.number, baseAddress: summary.vault.baseAddress }, resumeAt: resumeStep(status), now: Date.now() }))
     }
-    return <section className="screen screen--wide" aria-labelledby="screen-title">
-      <h1 id="screen-title">Opening your position</h1>
-      {resume === 'deposit' && <p className="screen__lead">Your vault is ready. Deposit to open a position.</p>}
-      {resume === 'setup' && <p className="screen__lead">Your vault exists but its setup is not complete. One signature finishes it.</p>}
-      {resume === 'open' && <p className="screen__lead">Your WETH is at your position address. One signature opens the position.</p>}
-      {summary && <p className="screen__note">Vault {vaultLink(summary.vault.accountId)} · position address {shortAddress(summary.vault.baseAddress)}</p>}
-      <div className="screen__actions">
-        {check.kind === 'ok' || resume === 'setup' || resume === 'open'
-          ? <button type="button" className="prototype-button is-primary" disabled={!summary || !owner} onClick={start}>{check.kind === 'ok' ? `Continue with ${formatUnits(check.wei, 18, 6)} ETH` : 'Continue'}</button>
-          : <a className="prototype-button is-primary" href={href('start')}>Choose how much ETH to deposit</a>}
+    return <section className="page" aria-labelledby="screen-title">
+      <div className="page-head">
+        <h1 id="screen-title">Opening your position</h1>
+        {resume === 'deposit' && <p className="muted">Your vault is ready. Deposit to open a position.</p>}
+        {resume === 'setup' && <p className="muted">Your vault exists but its setup is not complete. One signature finishes it.</p>}
+        {resume === 'open' && <p className="muted">Your WETH is at your position address. One signature opens the position.</p>}
       </div>
+      <section className="surface stack-20" style={{ maxWidth: 640 }}>
+        {summary && <p className="muted small">Vault {vaultLink(summary.vault.accountId)} · position address {shortAddress(summary.vault.baseAddress)}</p>}
+        <div>
+          {check.kind === 'ok' || resume === 'setup' || resume === 'open'
+            ? <button type="button" className="btn primary" disabled={!summary || !owner} onClick={start}>{check.kind === 'ok' ? `Continue with ${formatUnits(check.wei, 18, 6)} ETH` : 'Continue'}</button>
+            : <a className="btn primary" href={href('start')}>Choose how much ETH to deposit</a>}
+        </div>
+      </section>
     </section>
   }
 
   const active = STEPS.find(id => r.steps[id].status !== 'done' && r.steps[id].status !== 'skipped')
   const canContinue = !ob.running && !!active && r.steps[active].status === 'waiting'
-  return <section className="screen screen--wide progress" aria-labelledby="screen-title">
-    <h1 id="screen-title">Opening your position</h1>
-    <p className="screen__lead">
-      {r.amountWei ? `Deposit ${formatUnits(BigInt(r.amountWei), 18, 6)} ETH, borrow USDC at ${app ? `${app.guided.corridor.target}%` : 'the target'} LTV.` : 'Resuming your position.'}
-      {' '}Every signature and transaction is requested in order; you only act inside {walletLabel}.
-    </p>
-    <div className="progress__grid">
-      <ol className="steps">
-        {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)}
-          extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk ? <p className="step__note"><ShowUsdcButton /></p> : undefined} />)}
-      </ol>
-      <aside className="progress__rail" aria-label="Agent">
-        {r.vault && <p className="screen__note">Vault {vaultLink(r.vault.accountId)}<br />Position address <code>{r.vault.baseAddress}</code></p>}
-        <VerificationPanel vaultId={r.vault?.accountId} poll compact />
-        <p className="screen__note">Agent registration usually completes within a few minutes; the steps continue meanwhile.</p>
-      </aside>
+  // docs/mockups/S4-Progress: head, then steps (1.4fr) and the verification rail (1fr)
+  return <section className="page" aria-labelledby="screen-title">
+    <div className="page-head">
+      <h1 id="screen-title">Opening your position</h1>
+      <p className="muted">
+        {r.amountWei ? `Deposit ${formatUnits(BigInt(r.amountWei), 18, 6)} ETH, borrow USDC at ${app ? `${app.guided.corridor.target}%` : 'the target'} LTV.` : 'Resuming your position.'}
+        {' '}Every signature and transaction is requested in order; you only act inside {walletLabel}.
+      </p>
     </div>
-    {canContinue && <div className="screen__actions"><button type="button" className="prototype-button is-primary" onClick={ob.start}>Continue</button></div>}
-    {r.steps.open.belowTarget && r.steps.open.status !== 'done' && <p className="screen__note">The market can lend less than the 50% target today; the position opens at {formatWadPercent(BigInt(r.steps.open.belowTarget))}.</p>}
+    <div className="split-14">
+      <section className="surface" aria-label="Steps">
+        <ol className="steps">
+          {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} active={id === active}
+            extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk ? <p className="note"><ShowUsdcButton /></p> : undefined} />)}
+        </ol>
+        {canContinue && <div className="step-actions"><button type="button" className="btn primary" onClick={ob.start}>Continue</button></div>}
+        {r.steps.open.belowTarget && r.steps.open.status !== 'done' && <p className="notice" style={{ marginTop: 20 }}>The market can lend less than the 50% target today; the position opens at {formatWadPercent(BigInt(r.steps.open.belowTarget))}.</p>}
+      </section>
+      <div className="stack" aria-label="Agent">
+        {r.vault && <p className="muted small">Vault {vaultLink(r.vault.accountId)}<br />Position address <code>{r.vault.baseAddress}</code></p>}
+        <VerificationPanel vaultId={r.vault?.accountId} poll compact />
+        <p className="muted small">Agent registration usually completes within a few minutes; the steps continue meanwhile.</p>
+      </div>
+    </div>
   </section>
 }

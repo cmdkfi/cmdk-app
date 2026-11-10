@@ -7,9 +7,7 @@ import { persistable, QUERY_CACHE_KEY } from './flow/caches.ts'
 import { parseBig, stringifyBig } from './flow/json.ts'
 import './styles/base.css'
 import './styles/prototype-controls.css'
-import './styles/ltv-track.css'
-import './styles/shell.css'
-import './styles/screens.css'
+import './styles/cmdk.css'
 
 function storage(): Storage | undefined {
   try { return window.localStorage } catch { return undefined }

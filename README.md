@@ -144,7 +144,8 @@ pnpm test                   # 145 Node unit tests (protocol math, messages, flow
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 65 browser scenarios, desktop Chromium
+pnpm test:browser           # 77 browser scenarios, desktop Chromium (12 of them screenshot comparisons)
+pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
 
 The browser scenarios run the real app against `app/e2e/live-fixture.ts`: fake wallets (EIP-1193, announced through EIP-6963, plus an optional unannounced `window.ethereum`) and
@@ -157,6 +158,13 @@ refresh, the browser caches, the NEAR fallback, a relayer 503 on an owner call, 
 stale vault approval and its re-approval from S5 (including a reload mid-call), a setup guard against a stale app
 configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
 transaction, and they do not replace a live signed rehearsal.
+
+The screens' markup and CSS follow the mockups in `docs/mockups/` (`app/src/styles/cmdk.css` is their `cmdk.css`, in the
+app's colour tokens). `app/e2e/visual.spec.ts` compares one screenshot per screen state against baselines in
+`app/e2e/__screenshots__/{darwin,linux}/`; CI and the deploy workflow use the linux set. A deliberate visual change
+updates darwin with `pnpm test:visual:update` and linux with the `frontend quality` workflow run by hand with `visual_baselines: true` (same runner and
+steps as CI; its artifact `visual-baselines-linux` is downloaded with `gh run download`); the new images are reviewed
+before they are committed.
 
 Pull requests to `main` run `frontend quality` (build, unit tests, bundle boundary, browser scenarios); pushes to `main`
 deploy to testnet.cmdk.fi. The `deploy testnet` workflow can also be run by hand on a branch for a preview.

@@ -3,6 +3,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      visual_baselines:
+        description: 'Only produce the linux screenshot baselines (Phase 9) as an artifact; skip the checks'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -10,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
+    if: ${{ !inputs.visual_baselines }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,4 +49,37 @@ jobs:
           path: |
             app/test-results/
             app/playwright-report/
+          retention-days: 7
+
+  # Phase 9: the linux baselines of app/e2e/visual.spec.ts, on this job's runner, Node, pnpm and steps. Run by hand on a
+  # branch after a deliberate visual change (visual_baselines: true); the artifact is reviewed and committed to
+  # app/e2e/__screenshots__/linux/. Nothing is pushed from here.
+  visual-baselines:
+    if: ${{ inputs.visual_baselines }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.7.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm, cache-dependency-path: app/pnpm-lock.yaml}
+      - name: Read public testnet manifest
+        run: |
+          mkdir -p deployments
+          curl --retry 2 -fsSL https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json -o deployments/testnet.json
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm build
+        working-directory: app
+      - name: Install test browser
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: app
+      - name: Screenshot baselines
+        run: pnpm exec playwright test e2e/visual.spec.ts --update-snapshots
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: app/e2e/__screenshots__/linux/
+          if-no-files-found: error
           retention-days: 7

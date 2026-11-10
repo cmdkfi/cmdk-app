@@ -19,9 +19,9 @@ async function openPosition(page: Page) {
   await expect(page).toHaveURL(/#position$/)
 }
 
-const card = (page: Page, title: string) => page.locator('section.card-s5').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
-const fact = (page: Page, cardTitle: string, label: string) => card(page, cardTitle).locator('.card-s5__facts > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
-const figure = (page: Page, label: string) => page.locator('.hero-s5__figure').filter({ has: page.getByText(label, { exact: true }) })
+const card = (page: Page, title: string) => page.locator('section.card').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+const fact = (page: Page, cardTitle: string, label: string) => card(page, cardTitle).locator('.rows > .row').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
+const figure = (page: Page, label: string) => page.locator('.figure').filter({ has: page.getByText(label, { exact: true }) })
 
 test('active position: hero, agent, market, idle line and recent actions render from the reads', async ({ page, context, fx }) => {
   activeVault(fx)
@@ -36,13 +36,13 @@ test('active position: hero, agent, market, idle line and recent actions render 
   await expect(page.getByRole('heading', { name: 'Your position' })).toBeVisible()
   await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, \\d+ s ago$`))).toBeVisible()
   // hero: debt accrued to the read block, collateral in WETH and USD, LTV with the corridor and LLTV marks
-  await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
+  await expect(figure(page, 'Debt').locator('.big')).toHaveText('160 USDC')
   await expect(figure(page, 'Debt')).toContainText(`with interest accrued to block ${HEAD}`)
-  await expect(figure(page, 'Collateral').locator('strong')).toHaveText('0.1 WETH')
+  await expect(figure(page, 'Collateral').locator('.big')).toHaveText('0.1 WETH')
   await expect(figure(page, 'Collateral')).toContainText('≈ $320 at the market oracle')
-  await expect(figure(page, 'LTV').locator('strong')).toHaveText('50%')
+  await expect(figure(page, 'LTV').locator('.big')).toHaveText('50%')
   for (const [label, value] of [['Floor', '30%'], ['Target', '50%'], ['Agent acts', '70%'], ['Liquidation', '86%']]) {
-    await expect(figure(page, 'LTV').locator('.vault-ltv-legend > div').filter({ hasText: label }).locator('dd')).toHaveText(value)
+    await expect(page.locator('.legend > div').filter({ hasText: label }).locator('dd')).toHaveText(value)
   }
   // agent card: /agent/vaults row + NEAR key check; sell budget (0.1 + 0.005) × 20 % − 0.005 = 0.016 WETH
   await expect(card(page, 'Agent').getByRole('status')).toHaveText('Active')
@@ -63,7 +63,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   // idle balances at the position address (the fixture vault holds 0.005 ETH for gas)
   await expect(page.locator('.idle-line')).toHaveText('At your position address, outside Morpho: 0.005 ETH for gas')
   // recent actions, newest first, labelled by event name
-  const rows = card(page, 'Recent actions').locator('.actions__row')
+  const rows = card(page, 'Recent actions').locator('.event')
   await expect(rows).toHaveCount(3)
   await expect(rows.nth(0)).toContainText('AgentReduced: sold 0.01 WETH to repay 20 USDC, LTV 71% → 50%')
   await expect(rows.nth(1)).toContainText('YouOpened: supplied 0.1 WETH, borrowed 160 USDC at 50% LTV')
@@ -82,12 +82,12 @@ test('read failure: the last snapshot stays, marked read-only with its age; the 
   activeVault(fx)
   await page.clock.install()
   await fx.install(context); await openPosition(page)
-  await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
+  await expect(figure(page, 'Debt').locator('.big')).toHaveText('160 USDC')
   fx.baseDown = true
   await page.clock.fastForward(31_000)
   await expect(page.getByRole('alert').filter({ hasText: new RegExp(`^The latest read failed\\. This is the snapshot from block ${HEAD}, \\d+ s ago; it is read-only until a read succeeds\\.$`) })).toBeVisible()
   await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, \\d+ s ago · read-only$`))).toBeVisible()
-  await expect(figure(page, 'Debt').locator('strong')).toHaveText('160 USDC')
+  await expect(figure(page, 'Debt').locator('.big')).toHaveText('160 USDC')
   await expect(page.locator('.position--stale')).toHaveCount(1)
   fx.baseDown = false
   await page.clock.fastForward(31_000)
@@ -100,8 +100,8 @@ test('liquidated: collateral 0 with debt left shows the remaining debt, no recov
   await fx.install(context); await openPosition(page)
   await expect(page.getByRole('heading', { name: 'Position liquidated' })).toBeVisible()
   await expect(page.getByText('Morpho liquidated the collateral. 160 USDC of debt remains on the market. This app offers no recovery for a liquidated position.')).toBeVisible()
-  await expect(figure(page, 'Collateral').locator('strong')).toHaveText('0 WETH')
-  await expect(figure(page, 'LTV').locator('strong')).toHaveText('unbounded')
+  await expect(figure(page, 'Collateral').locator('.big')).toHaveText('0 WETH')
+  await expect(figure(page, 'LTV').locator('.big')).toHaveText('unbounded')
   await expect(page.getByRole('button', { name: 'Close position' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /start over/i })).toHaveCount(0)
   await expect(page.getByText(/recover(ed|s)? your/i)).toHaveCount(0)
@@ -116,7 +116,7 @@ test('recent actions: Load earlier extends by 10,000 blocks until the Executor d
     fixtureLog(EXECUTOR, 'CorridorSet', { caller: BASE, market: LIVE, corridor: { target: 5n * 10n ** 17n, act: 7n * 10n ** 17n, floor: 3n * 10n ** 17n, sellBudget: 2n * 10n ** 17n, migrateAllowed: true, exitAllowed: true, set: true } }, DEPLOY + 2_999n),
   ]
   await fx.install(context); await openPosition(page)
-  const actions = card(page, 'Recent actions'), rows = actions.locator('.actions__row')
+  const actions = card(page, 'Recent actions'), rows = actions.locator('.event')
   await expect(actions.getByText(`Blocks ${DEPLOY + 15_000n}–${DEPLOY + 24_999n}`, { exact: true })).toBeVisible()
   await expect(rows).toHaveCount(1)
   await expect(rows.nth(0)).toContainText('YouRepaid 1 USDC')
@@ -144,7 +144,7 @@ test('Phase 7b: token legs of an Executor call fold into its row; one disclaimer
     fixtureLog(USDC, 'Transfer', { from: MORPHO, to: BASE, value: 160_000_000n }, HEAD - 10n, 3, 'open'),
   ]
   await fx.install(context); await openPosition(page)
-  const rows = card(page, 'Recent actions').locator('.actions__row')
+  const rows = card(page, 'Recent actions').locator('.event')
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toHaveText(/^YouOpened: supplied 0\.1 WETH, borrowed 160 USDC at 50% LTV/)
   await expect(rows.nth(1)).toContainText('YouSent 0.1 WETH from your wallet to your position address')
@@ -172,7 +172,9 @@ test('Phase 7b: Show USDC in MetaMask asks the wallet to watch the config USDC (
 
 // Phase 7c: re-approve from S5
 const OLD = { ...MEASUREMENT, compose_hash: '21'.repeat(32) } // the previous agent image's compose hash (v10, 9 Nov)
-const agentStatus = (page: Page) => card(page, 'Agent').locator('.card-s5__status')
+// the state is the card's tag (docs/mockups/S5-Position); the detail is the line under it
+const agentStatus = (page: Page) => card(page, 'Agent').locator('.card-head').getByRole('status')
+const agentDetail = (page: Page) => card(page, 'Agent').locator('.agent-detail')
 
 test('Phase 7c: an open position under an outdated approval offers "Approve current agent version"; one setup signature, then Registering, then Active', async ({ page, context, fx }) => {
   activeVault(fx, { approved: OLD, agentKey: false })
@@ -180,7 +182,8 @@ test('Phase 7c: an open position under an outdated approval offers "Approve curr
   await fx.install(context)
   await page.clock.install()
   await openPosition(page) // classifyVault stays active: S5, not S4
-  await expect(agentStatus(page)).toHaveText('Outdated · Your vault approved an earlier agent version; the running agent does not watch it.')
+  await expect(agentStatus(page)).toHaveText('Outdated')
+  await expect(agentDetail(page)).toHaveText('Your vault approved an earlier agent version; the running agent does not watch it.')
   await card(page, 'Agent').getByRole('button', { name: 'Approve current agent version' }).click()
   const step = card(page, 'Agent').getByRole('listitem', { name: 'Approve the agent version' })
   await expect(step.getByRole('status')).toHaveText('Done', { timeout: 20_000 })
@@ -191,7 +194,8 @@ test('Phase 7c: an open position under an outdated approval offers "Approve curr
   expect(fx.posts.filter(p => p.path === '/owner-call')).toHaveLength(1)
   await expect(page).toHaveURL(/#position$/)
   // the vault approves the published version now; the agent has not registered yet
-  await expect(agentStatus(page)).toHaveText('Registering · Registering (usually within a few minutes).', { timeout: 20_000 })
+  await expect(agentStatus(page)).toHaveText('Registering', { timeout: 20_000 })
+  await expect(agentDetail(page)).toHaveText('Registering (usually within a few minutes).')
   await expect(card(page, 'Agent').getByRole('button', { name: 'Approve current agent version' })).toHaveCount(0)
   // the agent registers: key on the vault, row in its list; the next 30 s poll shows Active
   fx.vaults.get(10)!.agentKey = true
@@ -207,7 +211,8 @@ test('Phase 7c: Not approved with an open position offers "Approve agent"; a rel
   fx.ownerCallModes = ['answer-503']
   await fx.install(context)
   await openPosition(page)
-  await expect(agentStatus(page)).toHaveText('Not approved · Your vault approves no agent version, so no agent watches it.')
+  await expect(agentStatus(page)).toHaveText('Not approved')
+  await expect(agentDetail(page)).toHaveText('Your vault approves no agent version, so no agent watches it.')
   await card(page, 'Agent').getByRole('button', { name: 'Approve agent' }).click()
   const step = card(page, 'Agent').getByRole('listitem', { name: 'Approve the agent version' })
   await expect(step.getByRole('status')).toHaveText('Checking…', { timeout: 20_000 })

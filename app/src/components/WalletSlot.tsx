@@ -25,7 +25,7 @@ function SlotMenu({ label, items }: { label: string; items: MenuItem[] }) {
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
   }, [open])
   return <div className="wallet-slot-menu" ref={root}>
-    <button type="button" className="wallet-slot" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+    <button type="button" className="chip wallet wallet-slot" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
       {label}<span aria-hidden="true" className="wallet-slot__caret">▾</span>
     </button>
     {open && <div role="menu" aria-label={label} className="wallet-slot-menu__list">
@@ -62,10 +62,10 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onSwitch, on
   if (SANDBOX && kind === 'sandbox') return <SlotMenu label="Sandbox wallet · simulated" items={[{ label: 'Leave sandbox', onSelect: onLeave }]} />
   if (state.status === 'disconnected') return null
   if (state.status === 'connecting' || checkingVaults) {
-    return <span className="wallet-slot wallet-slot--busy" role="status"><span className="wallet-slot__pulse" aria-hidden="true" />{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</span>
+    return <span className="chip wallet wallet-slot" role="status"><span className="pulse" aria-hidden="true" />{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</span>
   }
   const short = shortAddress(state.address)
-  if (state.chainId !== BASE_SEPOLIA) return <button type="button" className="wallet-slot wallet-slot--warning" onClick={onSwitch}>{short} · Switch to Base Sepolia</button>
+  if (state.chainId !== BASE_SEPOLIA) return <button type="button" className="btn wallet-slot warning" onClick={onSwitch}>{short} · Switch to Base Sepolia</button>
   return <SlotMenu label={`${short} · Base Sepolia`} items={[
     { label: copied ? 'Copied' : 'Copy address', onSelect: () => { void navigator.clipboard?.writeText(state.address).then(() => setCopied(true), () => undefined) } },
     ...(explorer ? [{ label: 'View on BaseScan', href: `${explorer.replace(/\/$/, '')}/address/${state.address}` }] : []),

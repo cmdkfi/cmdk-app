@@ -36,30 +36,36 @@ function countdown(seconds: number): string {
 function CheckLine({ check, now }: { check: NonNullable<StepState['check']>; now: number }) {
   const left = check.nearNow !== undefined && check.readAt !== undefined ? check.expiry - (check.nearNow + (now - check.readAt / 1000)) : check.expiry - now
   const at = new Date((now + left) * 1000).toLocaleTimeString()
-  return <p className="step__note step__check">{check.reason} Waiting for the signed message to expire at {at} ({countdown(left)} left) unless the vault shows it ran.</p>
+  return <p className="note">{check.reason} Waiting for the signed message to expire at {at} ({countdown(left)} left) unless the vault shows it ran.</p>
 }
 
-export function StepRow({ title, why, index, step, explorer, onAct, now, extra }: { title: string; why: string; index: number; step: StepState; explorer?: string; onAct: (kind: RetryKind) => void; now: number; extra?: ReactNode }) {
+/**
+ * docs/mockups/S4-Progress .step: number (✓ when done), body, status on the right. `active` marks the step the chain is
+ * on. The Why line stays an expandable <details> (PRD S4 "an expandable Why line"; the artboard prints it inline).
+ */
+export function StepRow({ title, why, index, step, explorer, onAct, now, extra, active }: { title: string; why: string; index: number; step: StepState; explorer?: string; onAct: (kind: RetryKind) => void; now: number; extra?: ReactNode; active?: boolean }) {
   const p = step.pause
   const wallet = useWalletLabel()
   const wait = p?.retryAfter && p.since ? Math.max(0, Math.ceil(p.retryAfter - (now - p.since / 1000))) : 0
-  return <li className={`step step--${step.status}`} aria-label={title}>
-    <span className="step__index" aria-hidden="true">{index}</span>
-    <div className="step__body">
-      <div className="step__head"><strong>{title}</strong><span className="step__status" role="status">{step.status === 'prompting' ? `Waiting for ${wallet}…` : STATUS[step.status]}</span></div>
-      {step.note && <p className="step__note">{step.note}</p>}
+  const done = step.status === 'done' || step.status === 'skipped'
+  return <li className={`step ${step.status}${done ? ' done' : ''}${active && !done ? ' active' : ''}`} aria-label={title}>
+    <span className="n" aria-hidden="true">{done ? '✓' : index}</span>
+    <div className="body">
+      <strong>{title}</strong>
+      {step.note && <p className="note">{step.note}</p>}
       {step.status === 'checking' && step.check && <CheckLine check={step.check} now={now} />}
-      {step.topUp && step.topUp.status !== 'needed' && <p className="step__note">Gas top-up: {formatUnits(BigInt(step.topUp.amountWei), 18, 6)} ETH · {step.topUp.status === 'done' ? 'confirmed' : step.topUp.status === 'confirming' ? 'confirming…' : `waiting for ${wallet}…`}</p>}
-      {step.txHash && explorer && <p className="step__note"><a href={`${explorer}/tx/${step.txHash}`} target="_blank" rel="noreferrer">Transaction {shortAddress(step.txHash)}</a></p>}
-      {step.job && <p className="step__note">Relayer job <code>{step.job}</code></p>}
+      {step.topUp && step.topUp.status !== 'needed' && <p className="note">Gas top-up: {formatUnits(BigInt(step.topUp.amountWei), 18, 6)} ETH · {step.topUp.status === 'done' ? 'confirmed' : step.topUp.status === 'confirming' ? 'confirming…' : `waiting for ${wallet}…`}</p>}
+      {step.txHash && explorer && <p className="note"><a href={`${explorer}/tx/${step.txHash}`} target="_blank" rel="noreferrer">Transaction {shortAddress(step.txHash)}</a></p>}
+      {step.job && <p className="note">Relayer job <code>{step.job}</code></p>}
       {extra}
-      {p && <div className="step__pause" role="alert">
+      {p && <div className="pause" role="alert">
         <p>{p.line}</p>
-        {p.text && <pre className="step__error">{p.text}</pre>}
+        {p.text && <pre>{p.text}</pre>}
         {p.job && <p>Job <code>{p.job}</code></p>}
-        {p.retry && <button type="button" className="prototype-button" disabled={wait > 0} onClick={() => onAct(p.retry!)}>{wait > 0 ? `Try again in ${wait} s` : retryLabel(p.retry, step)}</button>}
+        {p.retry && <button type="button" className="btn" disabled={wait > 0} onClick={() => onAct(p.retry!)}>{wait > 0 ? `Try again in ${wait} s` : retryLabel(p.retry, step)}</button>}
       </div>}
-      <details className="step__why"><summary>Why</summary><p>{why}</p></details>
+      <details className="why"><summary>Why</summary><p>{why}</p></details>
     </div>
+    <span className="st" role="status">{step.status === 'checking' || step.status === 'confirming' || step.status === 'prompting' || step.status === 'funding' ? <span className="pulse" aria-hidden="true" /> : null}{step.status === 'prompting' ? `Waiting for ${wallet}…` : STATUS[step.status]}</span>
   </li>
 }

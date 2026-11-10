@@ -9,7 +9,7 @@ export function DiscoveryBanner({ banner }: { banner: ScreenProps['banner'] }) {
   if (!banner) return null
   return <div className="notice notice--warning" role="alert">
     <span>Could not read your vaults. Nothing is shown as missing until they can be read.</span>
-    <button type="button" className="prototype-button" onClick={banner.retry}>Retry</button>
+    <button type="button" className="btn" onClick={banner.retry}>Retry</button>
   </div>
 }
 

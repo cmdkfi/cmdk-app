@@ -21,7 +21,7 @@ async function openPosition(page: Page) {
   await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page).toHaveURL(/#position$/)
   await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, \\d+ s ago$`))).toBeVisible()
-  await expect(page.locator('.actions__row')).toHaveCount(3)
+  await expect(page.locator('.event')).toHaveCount(3)
 }
 
 const readLine = (page: Page, block: bigint, suffix = '') => page.getByText(new RegExp(`^Read at block ${block}, \\d+ (s|min) ago${suffix}$`))
@@ -35,7 +35,7 @@ test('§9 1, 2, 6 and Phase 7b: one S5 refresh is at most 8 HTTP requests: block
   fx.head += 1n
   await page.clock.fastForward(31_000)
   await expect(readLine(page, HEAD + 1n)).toBeVisible()
-  await expect(page.locator('section.card-s5').filter({ hasText: 'Agent' }).first().getByRole('status')).toHaveText('Active')
+  await expect(page.locator('section.card').filter({ hasText: 'Agent' }).first().getByRole('status')).toHaveText('Active')
   await page.waitForTimeout(1_000)
   const refresh = fx.requests
   expect(refresh.length, JSON.stringify(refresh)).toBeLessThanOrEqual(8)
@@ -61,7 +61,7 @@ test('§9 4, 5: on return the saved snapshot paints at once with its block and a
   fx.requests.length = 0
   await page.reload()
   await expect(readLine(page, HEAD, ' · refreshing')).toBeVisible({ timeout: 20_000 })
-  await expect(page.locator('.hero-s5__figure').filter({ hasText: 'Debt' }).locator('strong')).toHaveText('160 USDC')
+  await expect(page.locator('.figure').filter({ hasText: 'Debt' }).locator('.big')).toHaveText('160 USDC')
   await expect(page.getByRole('button', { name: 'Close position' })).toBeDisabled()
   await expect(page.locator('#close-reason')).toHaveText('Refreshing your position…')
   await expect(readLine(page, HEAD + 5n)).toBeVisible({ timeout: 20_000 })
@@ -82,9 +82,9 @@ test('§9 3: the saved activity shows at once on return and only the blocks afte
   await page.reload()
   // the saved list (blocks up to HEAD − 1, two confirmations at the time) shows before the new window lands
   await expect(page.getByText('saved list, reading newer blocks…', { exact: false })).toBeVisible({ timeout: 20_000 })
-  await expect(page.locator('.actions__row')).toHaveCount(3)
-  await expect(page.locator('.actions__row')).toHaveCount(4, { timeout: 20_000 })
-  await expect(page.locator('.actions__row').first()).toContainText('YouRepaid 2 USDC')
+  await expect(page.locator('.event')).toHaveCount(3)
+  await expect(page.locator('.event')).toHaveCount(4, { timeout: 20_000 })
+  await expect(page.locator('.event').first()).toContainText('YouRepaid 2 USDC')
   // one window: from the first unsaved block (HEAD) to the new head; its two topic-filtered queries share the range
   expect([...new Set(fx.logWindows.map(([from, to]) => `${from}-${to}`))]).toEqual([`${HEAD}-${HEAD + 20n}`])
   expect(fx.logWindows).toHaveLength(2)

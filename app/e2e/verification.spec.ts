@@ -90,8 +90,9 @@ test('Phase 7b: the agent list lagging the chain (live 9 Nov row) reads Active o
   // tasks/rehearsal-2026-11-10.md: v10 held the agent key on NEAR while the agent's list still said registering · revoked
   fx.agentRows = [{ slot: 0, vault: VAULT, base_address: BASE, registration: 'registering', registration_tx: null, agent_status: 'revoked', expires_at: null, last_tick_unix: null }]
   await fx.install(context); await openVerification(page)
-  const card = page.locator('section.card-s5').filter({ hasText: 'Agent' }).first()
-  await expect(card.getByRole('status')).toHaveText("Active · Your vault shows the registration; the agent's list has not caught up yet.")
+  const card = page.locator('section.card').filter({ hasText: 'Agent' }).first()
+  await expect(card.getByRole('status')).toHaveText('Active')
+  await expect(card.locator('.agent-detail')).toHaveText("Your vault shows the registration; the agent's list has not caught up yet.")
   expect(await statuses(page)).toEqual(['Checked', 'Checked', 'Not checked', 'Checked', 'Checked', 'Statement', 'Statement'])
   await expect(row(page, ROWS[2])).toContainText("The agent's list has not caught up yet; your vault already holds the restricted agent key")
 })
@@ -110,8 +111,9 @@ test('Phase 7b: a vault that approved an earlier agent version reads Outdated on
   fx.agentRows = []
   fx.publishedMeasurement = { ...MEASUREMENT, compose_hash: 'db4f5085'.padEnd(64, '0') }
   await fx.install(context); await openVerification(page)
-  const card = page.locator('section.card-s5').filter({ hasText: 'Agent' }).first()
-  await expect(card.getByRole('status')).toHaveText('Outdated · Your vault approved an earlier agent version; the running agent does not watch it.')
+  const card = page.locator('section.card').filter({ hasText: 'Agent' }).first()
+  await expect(card.getByRole('status')).toHaveText('Outdated')
+  await expect(card.locator('.agent-detail')).toHaveText('Your vault approved an earlier agent version; the running agent does not watch it.')
   await expect(row(page, ROWS[0]).getByRole('status')).toHaveText('Mismatch')
   await expect(row(page, ROWS[2])).toContainText('The running agent does not watch your vault: it approved an earlier agent version (see the first row).')
 })

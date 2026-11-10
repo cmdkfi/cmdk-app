@@ -62,7 +62,7 @@ test('S3: short on Base Sepolia ETH opens the faucet panel and continues by itse
   await chooseAndAcknowledge(page); await connect(page)
   await expect(page.getByText('None for this wallet')).toBeVisible()
   await expect(page).toHaveURL(/#connect$/)
-  const panel = page.getByRole('region', { name: 'Get Base Sepolia ETH' })
+  const panel = page.getByRole('complementary', { name: 'Get Base Sepolia ETH' })
   await expect(panel).toBeVisible()
   await expect(panel).toContainText('ETH missing')
   await expect(panel).toContainText(OWNER)
@@ -84,7 +84,7 @@ test('S3: WETH already in the wallet needs gas for one transfer only', async ({ 
   await expect(page.getByText('WETH already in wallet')).toBeVisible()
   await expect(page.getByText('1 transaction', { exact: false })).toBeVisible()
   await expect(page.getByText('Enough')).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Get Base Sepolia ETH' })).toHaveCount(0)
+  await expect(page.getByRole('complementary', { name: 'Get Base Sepolia ETH' })).toHaveCount(0)
 })
 
 test('S3: a contract wallet is blocked with the reason', async ({ page, context, fx }) => {

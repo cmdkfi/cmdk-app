@@ -112,7 +112,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   const banner = resolution.kind === 'route' && resolution.banner === 'discovery-failed' ? { retry: discovery.retry } : null
 
   let screen
-  if (resolution.kind === 'wait') screen = <section className="screen" role="status"><p className="screen__note">{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</p></section>
+  if (resolution.kind === 'wait') screen = <section className="page" role="status"><p className="muted">{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</p></section>
   else switch (resolution.route) {
     case 'start': screen = <Choose mode={mode} href={href} banner={banner} />; break
     case 'settings': screen = <Settings mode={mode} href={href} banner={banner} />; break
@@ -121,10 +121,12 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     case 'position': screen = <Position mode={mode} href={href} variant={resolution.variant} discovery={discovery} />; break
   }
 
-  return <div className="app-shell">
-    <header className="shell-header">
-      <a className="shell-brand" href={href('start')} aria-label="cmdk home">⌘K</a>
-      <div className="shell-header__actions">
+  // docs/mockups: S1–S3 in the 960 px column, S4–S7 in the 1120 px one
+  const wide = resolution.kind === 'route' && (resolution.route === 'progress' || resolution.route === 'position')
+  return <div className="shell">
+    <header className="header">
+      <a className="brand" href={href('start')} aria-label="cmdk home">⌘K</a>
+      <div className="header-actions">
         <WalletSlot
           kind={mode}
           state={state}
@@ -134,11 +136,11 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
           onDisconnect={run(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
           onLeave={() => { window.location.hash = '#start' }}
         />
-        <span className="shell-chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
+        <span className="chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
       </div>
     </header>
-    <main className="shell-main">{screen}</main>
-    <footer className="shell-footer">
+    <main className={`main${wide ? ' wide' : ''}`}>{screen}</main>
+    <footer className="footer">
       <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
       <a href="https://github.com/cmdkfi/app" target="_blank" rel="noreferrer">Protocol source</a>
     </footer>

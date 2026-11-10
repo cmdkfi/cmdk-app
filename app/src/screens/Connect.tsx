@@ -15,15 +15,15 @@ const eth = (wei: bigint) => `${formatUnits(wei, 18, 6)} ETH`
 
 function NetworkHelp({ network, docs }: { network: AddChainParams; docs: string }) {
   return <details className="network-help">
-    <summary>Having trouble switching networks? Add Base Sepolia manually</summary>
-    <dl>
-      <div><dt>Network name</dt><dd>{network.chainName}</dd></div>
-      <div><dt>RPC URL</dt><dd>{network.rpcUrls[0]}</dd></div>
-      <div><dt>Chain ID</dt><dd>{parseInt(network.chainId, 16)}</dd></div>
-      <div><dt>Currency</dt><dd>{network.nativeCurrency.symbol}</dd></div>
-      <div><dt>Explorer</dt><dd>{network.blockExplorerUrls[0]}</dd></div>
+    <summary className="muted small">Having trouble switching networks? Add Base Sepolia manually</summary>
+    <dl className="rows small" style={{ marginTop: 8 }}>
+      <div className="row"><dt className="k">Network name</dt><dd className="v">{network.chainName}</dd></div>
+      <div className="row"><dt className="k">RPC URL</dt><dd className="v">{network.rpcUrls[0]}</dd></div>
+      <div className="row"><dt className="k">Chain ID</dt><dd className="v">{parseInt(network.chainId, 16)}</dd></div>
+      <div className="row"><dt className="k">Currency</dt><dd className="v">{network.nativeCurrency.symbol}</dd></div>
+      <div className="row"><dt className="k">Explorer</dt><dd className="v">{network.blockExplorerUrls[0]}</dd></div>
     </dl>
-    <a href={docs} target="_blank" rel="noreferrer">Base docs: connecting to Base</a>
+    <a className="small" href={docs} target="_blank" rel="noreferrer">Base docs: connecting to Base</a>
   </details>
 }
 
@@ -31,22 +31,22 @@ function NetworkHelp({ network, docs }: { network: AddChainParams; docs: string 
 function GetEth({ address, missing, guided, checkedAt, onClose }: { address: string; missing: bigint; guided: Guided; checkedAt: number; onClose: () => void }) {
   const now = useNow()
   const [copied, setCopied] = useState(false)
-  return <section className="help-panel prototype-surface" aria-labelledby="get-eth-title">
-    <div className="help-panel__head">
+  return <aside className="help" aria-labelledby="get-eth-title">
+    <div className="card-head">
       <h2 id="get-eth-title">Get Base Sepolia ETH</h2>
-      <span className="help-panel__missing">{eth(missing)} missing</span>
-      <button type="button" className="prototype-button help-panel__close" onClick={onClose}>Close</button>
+      <span className="tag warn">{eth(missing)} missing</span>
     </div>
-    <p>Testnet ETH is free. Request it from one of these faucets, then come back. This page checks your balance every 10 seconds and continues by itself.</p>
-    <div className="help-panel__address"><code>{address}</code>
-      <button type="button" className="prototype-button" onClick={() => { void navigator.clipboard?.writeText(address).then(() => setCopied(true), () => undefined) }}>{copied ? 'Copied' : 'Copy'}</button>
+    <p className="muted small">Testnet ETH is free. Request it from one of these faucets, then come back. This page checks your balance every 10 seconds and continues by itself.</p>
+    <div className="addr"><span>{address}</span>
+      <button type="button" onClick={() => { void navigator.clipboard?.writeText(address).then(() => setCopied(true), () => undefined) }}>{copied ? 'Copied' : 'Copy'}</button>
     </div>
-    <ul className="help-panel__links">
-      {guided.help.ethFaucets.map(link => <li key={link.url}><a href={link.url} target="_blank" rel="noreferrer">{link.label}</a> <span>— {link.note}</span></li>)}
-    </ul>
-    <p className="help-panel__small">Limits apply, usually one request per day per faucet.</p>
-    <p className="help-panel__small" role="status">Waiting for funds… last checked {Math.max(0, Math.round(now - checkedAt / 1000))} s ago</p>
-  </section>
+    <ol>
+      {guided.help.ethFaucets.map(link => <li key={link.url}><a href={link.url} target="_blank" rel="noreferrer">{link.label}</a> <span className="muted small">— {link.note}</span></li>)}
+    </ol>
+    <p className="muted small">Limits apply, usually one request per day per faucet.</p>
+    <p className="small" role="status"><span className="pulse" aria-hidden="true" />Waiting for funds… last checked {Math.max(0, Math.round(now - checkedAt / 1000))} s ago</p>
+    <button type="button" className="btn ghost" style={{ justifySelf: 'start', paddingLeft: 0 }} onClick={onClose}>Close</button>
+  </aside>
 }
 
 export function Connect({ mode, href, banner, discovery }: ScreenProps & { discovery: ReturnType<typeof useDiscovery> }) {
@@ -81,27 +81,28 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
   if (!guided) {
     body = <p className="notice" role={app.isError ? 'alert' : 'status'}>{app.isError ? 'The app configuration could not be loaded.' : 'Loading…'}</p>
   } else if (state.status === 'disconnected' && wallets.length === 0) {
-    body = <div className="connect-state">
+    body = <section className="surface stack-20" style={{ maxWidth: 640 }}>
       <p>No browser wallet was found. This testnet app works with a wallet extension on desktop, such as MetaMask, Rabby, Coinbase Wallet, Brave or OKX.</p>
-      <a className="prototype-button is-primary" href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
-    </div>
+      <a className="btn primary" style={{ justifySelf: 'start' }} href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
+    </section>
   } else if (state.status === 'disconnected') {
     // PRD S3 (10 Nov): every injected wallet announced through EIP-6963, plus window.ethereum when not announced
-    body = <div className="connect-state">
-      <ul className="wallet-list" aria-label="Wallets in this browser">
-        {wallets.map(option => <li key={option.id}><button type="button" className="prototype-button wallet-option" disabled={busy} onClick={act(() => wallet.connect(option.id))}>
-          {option.icon && <img src={option.icon} alt="" width={24} height={24} />}<span>{option.name}</span>
+    // the list in the catalogue's tile style (docs/mockups/Main.dc.html .tile); S3 has no artboard for this state
+    body = <section className="surface stack" style={{ maxWidth: 640 }}>
+      <ul className="plain-list" aria-label="Wallets in this browser">
+        {wallets.map(option => <li key={option.id}><button type="button" className="tile wallet-option" disabled={busy} onClick={act(() => wallet.connect(option.id))}>
+          {option.icon ? <img src={option.icon} alt="" width={28} height={28} /> : <span className="token venue" aria-hidden="true" />}<span className="label">{option.name}</span>
         </button></li>)}
       </ul>
-    </div>
+    </section>
   } else if (state.status === 'connecting') {
-    body = <p className="notice" role="status">Waiting for your wallet…</p>
+    body = <p className="notice" role="status"><span className="pulse" aria-hidden="true" />Waiting for your wallet…</p>
   } else if (!onBase) {
-    body = <div className="connect-state">
+    body = <section className="surface stack-20" style={{ maxWidth: 640 }}>
       <p>Your wallet is on another network. Switch to Base Sepolia; if the wallet does not know it yet, it asks you to add it with the values below.</p>
-      <button type="button" className="prototype-button is-primary" disabled={busy} onClick={act(() => wallet.switchToBaseSepolia(guided.network))}>Switch to Base Sepolia</button>
+      <button type="button" className="btn primary" style={{ justifySelf: 'start' }} disabled={busy} onClick={act(() => wallet.switchToBaseSepolia(guided.network))}>Switch to Base Sepolia</button>
       <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
-    </div>
+    </section>
   } else {
     const address = state.address
     const kindText = account.data === 'plain' ? 'Plain account (supported)' : account.data === 'delegated' ? 'EIP-7702 delegated account (supported)' : account.data === 'contract' ? 'Contract wallet (not supported)' : account.isError ? null : 'checking…'
@@ -142,41 +143,49 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
       window.location.hash = href('progress')
     }
 
-    body = <>
-      <dl className="facts prototype-surface">
-        <div><dt>Wallet</dt><dd>{state.walletName ?? 'Browser wallet'} · {shortAddress(address)}</dd></div>
-        <div><dt>Network</dt><dd>Base Sepolia</dd></div>
-        <div><dt>Account type</dt><dd>{kindText ?? <Unavailable />}</dd></div>
-        {blocked && <div className="facts__alert" role="alert"><dt>Not supported</dt><dd>This address is a contract wallet. Vault owner messages are verified with ecrecover, which only an externally owned key can satisfy. Connect a regular account (an externally owned key).</dd></div>}
-        {!blocked && <>
-          <div><dt>Base Sepolia ETH</dt><dd>{funding.data ? eth(funding.data.eth) : amount === null ? '—' : funding.isError ? <Unavailable /> : 'reading…'}</dd></div>
-          {funding.data && funding.data.weth > 0n && <div><dt>WETH in wallet</dt><dd>{eth(funding.data.weth).replace('ETH', 'WETH')}</dd></div>}
-          {amount === null
-            ? <div><dt>Deposit</dt><dd><a href={href('start')}>Choose an amount first</a></dd></div>
-            : <div><dt>Needed for {eth(amount)} deposit</dt><dd>{need
-              ? <>{need.wrap > 0n ? `${eth(need.wrap)} to wrap` : 'WETH already in wallet'} + ~{eth(need.gas)} gas ({need.transactions} {need.transactions === 1 ? 'transaction' : 'transactions'}) = <strong>{eth(need.required)}</strong> <span className={need.enough ? 'tag tag--good' : 'tag tag--warn'}>{need.enough ? 'Enough' : `${eth(need.missing)} missing`}</span></>
-              : funding.isError ? <><Unavailable /> <button type="button" className="link-button" onClick={() => { void funding.refetch() }}>Retry</button></> : 'reading…'}</dd></div>}
-        </>}
-        <div><dt>Existing position</dt><dd>{positionText}</dd></div>
-        {creationNeeded && relayer.data && relayer.data.kind !== 'ready' && <div className="facts__alert" role="alert"><dt>Creation temporarily unavailable</dt><dd>{relayer.data.message}</dd></div>}
-        {creationNeeded && relayer.isError && <div className="facts__alert" role="alert"><dt>Creation temporarily unavailable</dt><dd>The relayer could not be reached.</dd></div>}
-      </dl>
+    const row = (k: ReactNode, v: ReactNode, alert = false) => <div className={`row${alert ? ' row--alert' : ''}`} role={alert ? 'alert' : undefined}><dt className="k">{k}</dt><dd className="v">{v}</dd></div>
+    // docs/mockups/S3-Connect: wallet facts, the one click and Back in a surface; the S3a panel beside it
+    body = <div className="split-11">
+      <section className="surface stack-20" aria-label="Wallet">
+        <dl className="rows facts" style={{ margin: 0 }}>
+          {row('Wallet', `${state.walletName ?? 'Browser wallet'} · ${shortAddress(address)}`)}
+          {row('Network', <span className="tag ok">Base Sepolia</span>)}
+          {row('Account type', kindText ?? <Unavailable />)}
+          {blocked && row('Not supported', 'This address is a contract wallet. Vault owner messages are verified with ecrecover, which only an externally owned key can satisfy. Connect a regular account (an externally owned key).', true)}
+          {!blocked && <>
+            {row('Base Sepolia ETH', funding.data ? eth(funding.data.eth) : amount === null ? '—' : funding.isError ? <Unavailable /> : 'reading…')}
+            {funding.data && funding.data.weth > 0n && row('WETH in wallet', eth(funding.data.weth).replace('ETH', 'WETH'))}
+            {amount === null
+              ? row('Deposit', <a href={href('start')}>Choose an amount first</a>)
+              : row(`Needed for ${eth(amount)} deposit`, need
+                ? <>{need.wrap > 0n ? `${eth(need.wrap)} to wrap` : 'WETH already in wallet'} + ~{eth(need.gas)} gas ({need.transactions} {need.transactions === 1 ? 'transaction' : 'transactions'}) = <strong>{eth(need.required)}</strong> <span className={need.enough ? 'tag ok' : 'tag warn'}>{need.enough ? 'Enough' : `${eth(need.missing)} missing`}</span></>
+                : funding.isError ? <><Unavailable /> <button type="button" className="link-button" onClick={() => { void funding.refetch() }}>Retry</button></> : 'reading…')}
+          </>}
+          {row('Existing position', positionText)}
+          {creationNeeded && relayer.data && relayer.data.kind !== 'ready' && row('Creation temporarily unavailable', relayer.data.message, true)}
+          {creationNeeded && relayer.isError && row('Creation temporarily unavailable', 'The relayer could not be reached.', true)}
+        </dl>
+        <div className="stack-10 create-action">
+          <button type="button" className="btn primary" disabled={!resume && createReason !== null} aria-describedby="create-reason" onClick={create}>{resume ? 'Continue where you left off' : status === 'ready' ? 'Deposit' : 'Create position'}</button>
+          {resume ? <p id="create-reason" className="small">Your position is being set up on vault {paused!.vault!.accountId}; continue on the progress screen.</p> : createReason && <p id="create-reason" className="small">{createReason}</p>}
+          <p className="muted small create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside {label}.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}><a className="btn ghost" href={href('settings')}>Back</a></div>
+        <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
+      </section>
       {need && !need.enough && !panelClosed && <GetEth address={address} missing={need.missing} guided={guided} checkedAt={funding.dataUpdatedAt} onClose={() => setPanelClosed(true)} />}
-      <div className="create-action">
-        <button type="button" className="prototype-button is-primary" disabled={!resume && createReason !== null} aria-describedby="create-reason" onClick={create}>{resume ? 'Continue where you left off' : status === 'ready' ? 'Deposit' : 'Create position'}</button>
-        {resume ? <p id="create-reason">Your position is being set up on vault {paused!.vault!.accountId}; continue on the progress screen.</p> : createReason && <p id="create-reason">{createReason}</p>}
-        <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside {label}.</p>
-      </div>
-      <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
-    </>
+    </div>
   }
 
-  return <section className="screen screen--wide" aria-labelledby="screen-title">
+  const connected = state.status === 'connected' && onBase && !!guided
+  return <section className="page" aria-labelledby="screen-title">
     <DiscoveryBanner banner={banner} />
-    <h1 id="screen-title">Connect wallet</h1>
-    <p className="screen__lead">A desktop browser wallet on Base Sepolia. The app switches the network for you, or adds it, with your wallet's own confirmation.</p>
+    <div className="page-head">
+      <h1 id="screen-title">Connect wallet</h1>
+      <p className="muted">A desktop browser wallet on Base Sepolia. The app switches the network for you, or adds it, with your wallet's own confirmation.</p>
+    </div>
     {body}
     {error && <p className="notice notice--warning" role="alert">{error}</p>}
-    <div className="screen__actions"><a className="prototype-button" href={href('settings')}>Back</a></div>
+    {!connected && <div className="page-actions"><a className="btn ghost" href={href('settings')}>Back</a></div>}
   </section>
 }

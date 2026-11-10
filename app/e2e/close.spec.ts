@@ -34,11 +34,11 @@ async function startClosing(page: Page) {
 
 async function expectClosed(page: Page) {
   await expect(page.getByRole('heading', { name: 'Position closed' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('.hero-s5__figure').filter({ hasText: 'Debt' }).locator('strong')).toHaveText('0 USDC')
-  await expect(page.locator('.hero-s5__figure').filter({ hasText: 'Collateral' }).locator('strong')).toHaveText('0 WETH')
+  await expect(page.locator('.figure').filter({ hasText: 'Debt' }).locator('.big')).toHaveText('0 USDC')
+  await expect(page.locator('.figure').filter({ hasText: 'Collateral' }).locator('.big')).toHaveText('0 WETH')
   await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
   // Phase 7b: no collateral, so no budget to report (was "no active corridor")
-  await expect(page.locator('section.card-s5').filter({ hasText: 'Sell budget left today' }).locator('.card-s5__facts > div').filter({ hasText: 'Sell budget left today' }).locator('dd')).toHaveText('no position')
+  await expect(page.locator('section.card').filter({ hasText: 'Sell budget left today' }).locator('.rows > .row').filter({ hasText: 'Sell budget left today' }).locator('dd')).toHaveText('no position')
 }
 
 test('review sheet: debt, interest, headroom, amount sent, collateral returned, destination, expiry and no close without repaying', async ({ page, context, fx }) => {
@@ -47,7 +47,7 @@ test('review sheet: debt, interest, headroom, amount sent, collateral returned, 
   await expect(page.getByText('You will first send 161.6 USDC to your position address, then the debt is repaid and your WETH returns to your wallet.')).toBeVisible()
   await page.getByRole('button', { name: 'Close position' }).click()
   const s = sheet(page)
-  const row = (label: string) => s.locator('.card-s5__facts > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
+  const row = (label: string) => s.locator('.rows > .row').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
   await expect(row('Debt now')).toHaveText(`160.000001 USDC accrued to block ${HEAD}`)
   await expect(row('Interest over the next 10 minutes')).toHaveText('up to 0.000152 USDC')
   await expect(row('Headroom (1%, returned to you)')).toHaveText('1.600001 USDC')
@@ -102,10 +102,10 @@ test('wallet short of USDC: the Get test USDC panel shows the exact amount missi
   active(fx, 0n, 100_000_000n)
   await fx.install(context); await openPosition(page)
   await startClosing(page)
-  const panel = page.getByRole('region', { name: 'Get test USDC' })
+  const panel = page.getByRole('complementary', { name: 'Get test USDC' })
   await expect(panel).toBeVisible({ timeout: 15_000 })
   await expect(panel.getByText('61.600154 USDC missing')).toBeVisible()
-  await expect(panel.locator('.card-s5__facts > div').filter({ hasText: 'USDC in your wallet' }).locator('dd')).toHaveText('100 USDC')
+  await expect(panel.locator('.rows > .row').filter({ hasText: 'USDC in your wallet' }).locator('dd')).toHaveText('100 USDC')
   await expect(panel.getByText('Choose Base Sepolia in the network dropdown; USDC sent on another network cannot reach this wallet.', { exact: false })).toBeVisible()
   await expect(panel.getByRole('link', { name: 'Circle faucet' })).toHaveAttribute('href', 'https://faucet.circle.com')
   await expect(panel.getByRole('link', { name: 'Coinbase Developer Platform faucet' })).toBeVisible()
