@@ -64,8 +64,9 @@ function LtvTrack({ m }: { m: PositionMarket }) {
     { key: 'act', at: m.corridor.set ? m.corridor.act : null, label: 'Agent acts' },
     { key: 'liq', at: m.lltv, label: 'Liquidation' },
   ]
-  return <section className="surface" aria-label="Risk corridor">
-    <div className="ltv-track" aria-hidden="true" style={{ marginTop: 12 }}>
+  return <section className="surface" aria-labelledby="corridor-title">
+    <div className="card-head"><h3 id="corridor-title">Risk corridor</h3></div>
+    <div className="ltv-track" aria-hidden="true">
       {m.ltv !== null && <div className="ltv-fill" style={{ width: `${Math.min(100, pctNum(m.ltv))}%` }} />}
       {marks.filter(x => x.at !== null).map(x => <span key={x.key} className={`tick ${x.key}`} style={{ left: `${pctNum(x.at!)}%` }} />)}
       {m.ltv !== null && <span className="cur" style={{ left: `${Math.min(100, pctNum(m.ltv))}%` }} />}
@@ -93,7 +94,7 @@ function ApproveInline({ label, approve, explorer, now, onBegin }: { label: stri
 const APPROVE_TITLE = 'Approve the agent version'
 const APPROVE_WHY = 'The agent watches your vault only while your vault approves its exact version (the six measurement values in the published manifest). One signature sets the approval; the rest of your setup is left as it is.'
 
-function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, explorer, onApprove }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; explorer: string; onApprove: (() => void) | null }) {
+function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, explorer, onApprove, corridor }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; explorer: string; onApprove: (() => void) | null; corridor: { migrate: boolean; exit: boolean } }) {
   const agent = useAgent(vaultId)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
   const label = approveAction(status?.state ?? null, variant, closing)
@@ -105,6 +106,8 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
     <div className="card-head"><h3 id="agent-title">Agent</h3><span className={`tag${status ? AGENT_TAG[status.state] : ''}`} role="status">{status ? status.state : 'Reading…'}</span></div>
     {status?.detail && <p className="muted small agent-detail">{status.detail}</p>}
     <dl className="rows">
+      {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it can never increase debt */}
+      {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increase your debt on this venue`)}
       {row2('Last check', row?.last_tick_unix ? `${date(row.last_tick_unix)} (${ago(now - row.last_tick_unix)})` : <Unavailable>none reported</Unavailable>)}
       {row2('Key expires', agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : agent.data ? <Unavailable>no key on your vault</Unavailable> : <Unavailable />)}
       {row2('Discretionary sell budget left today', collateral === 0n
@@ -224,7 +227,7 @@ function ReviewSheet({ app, plan, owner, onStart, onCancel }: { app: LoadedConfi
   </dialog>
 }
 
-function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; close: Close; owner: Address; explorer: string; now: number }) {
+function CloseSteps({ app, close, owner, explorer, now, plan }: { app: LoadedConfig; close: Close; owner: Address; explorer: string; now: number; plan: ClosePlan | undefined }) {
   const walletLabel = useWalletLabel()
   const r = close.record!
   const ids = visibleCloseSteps(r)
@@ -238,6 +241,14 @@ function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; c
         <h2 id="closing-title">Closing your position</h2>
         <p className="muted small">Every signature and transaction is requested in order; you only act inside {walletLabel}.</p>
       </div>
+      {/* docs/mockups/S6-Close: the amounts above the steps, from the last close-plan read (Phase 10, product owner) */}
+      {plan && <dl className="rows" style={{ margin: '0 0 8px' }}>
+        <div className="row"><dt className="k">Debt incl. interest (fresh read)</dt><dd className="v">{usdcExact(plan.debtNow)}</dd></div>
+        <div className="row"><dt className="k">Relayer headroom (1%, returned as leftover)</dt><dd className="v">{usdcExact(plan.needNow - plan.debtNow)}</dd></div>
+        <div className="row"><dt className="k">USDC at position address</dt><dd className="v">{usdcExact(plan.idle.usdc)}</dd></div>
+        <div className="row"><dt className="k">USDC in your wallet</dt><dd className="v">{usdcExact(plan.walletUsdc)}</dd></div>
+        <div className="row"><dt className="k"><strong>Still needed</strong></dt><dd className="v"><strong>{usdcExact(closeShortfall(plan))}</strong></dd></div>
+      </dl>}
       <ol className="steps">
         {ids.map((id, index) => <StepRow key={id} title={CLOSE_TITLE[id]} why={CLOSE_WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => close.act(id, kind)} active={id === active} prompt={id === 'transfer' || id === 'transfer2' ? 'transaction' : 'signature'} />)}
       </ol>
@@ -263,7 +274,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const approve = useApprove(mode, app, owner, chainOk, closeVault, () => undefined)
   const [review, setReview] = useState(false)
   const [verifying, setVerifying] = useState(false)
-  const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed' && !closing)
+  // read on S5 and on Close position; while a close runs it is re-read every 10 s for the summary rows (a fresh read)
+  const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed', closing)
   const [, setAmount] = useSessionValue(mode, 'amount', defaultDeposit(mode))
 
   if (!app || !vaultId) return <section className="page page--tight" aria-labelledby="screen-title"><h1 id="screen-title">Your position</h1><p className="muted small" role="status">Reading your vault…</p></section>
@@ -352,7 +364,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     {review && plan.isFetching && <p className="muted small" role="status">Reading the amount to repay…</p>}
     {review && plan.isError && !plan.isFetching && <p className="notice notice--warning" role="alert">The amount to repay could not be read. Nothing is signed.</p>}
     {review && plan.data && !plan.isFetching && !plan.isError && owner && <ReviewSheet app={app} plan={plan.data} owner={owner} onStart={startClosing} onCancel={() => setReview(false)} />}
-    {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} />}
+    {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} plan={plan.data} />}
 
     <section className="cols-3" aria-label="Balances">
       {figure('Debt', debtN, debtU, `with interest accrued to block ${view.blockNumber.toString()}`)}
@@ -368,7 +380,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
 
     <section className="cols-2 agent-market" aria-label="Agent and market">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}
-        variant={variant} closing={closing} approve={approve} explorer={explorer}
+        variant={variant} closing={closing} approve={approve} explorer={explorer} corridor={app.guided.corridor}
         onApprove={owner && closeVault && !restored && !stale ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </section>

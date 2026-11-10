@@ -185,7 +185,10 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] Scope and rules exactly as PRD §8a (entry sheet, banner, `#sandbox/…` routes, scripted price drop and agent reduce, close, Start over, Leave sandbox).
 
 ## Phase 10 — Merge
-- [ ] Final docs pass (README counts, PRD status line, audit status "pending" list), product owner's approval, merge PR #80 into main; main deploys automatically.
+- [x] (product owner, 10 Nov) PRD S4 table corrected to the app's six steps; registration is the rail's row, not a step.
+- [x] (product owner, 10 Nov) Frozen artboard copy added: S4 head tag "Step N of 6", S5 "Risk corridor" heading, the agent card's "May do" row (fact 7; the product owner's message said fact 2, which is about owner signatures), S6 summary rows above the close steps (re-read every 10 s while closing). The S7 extra figure is skipped.
+- [x] Final docs pass: README counts and protocol commit, PRD status line, audit status header and "pending" list.
+- [ ] The product owner approves; merge PR #80 into main (main deploys automatically). Only on the product owner's explicit word.
 
 ## Mockups
 - [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
@@ -462,3 +465,16 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
 - *Found by the new browser test:* the TanStack persister wrote its live key (`cmdk.live.queries.v1`, empty) while in the sandbox. Its storage now ignores writes on `#sandbox` routes.
 - *Found by the route test:* an alias redirect race. On `#sandbox/close`, App's canonical-hash effect, reading a stale hash, undid the guard's redirect, so `#sandbox/start` content showed under `#sandbox/position`. App now re-reads `location.hash`. Live routes have no alias, so only the sandbox showed it.
 - *Browser:* `e2e/sandbox.spec.ts`. S3 → activate → S1 0.5 ETH → S2 → S3 → Create position → S4 with simulated rows → S5 → the drop and reduce (71.x% → 50%) → close → Start over → Leave. Across the run there were no new requests, wallet calls or hosts after activation, and no localStorage key was added. Also: the header entry, the no-wallet entry, a reload that stays in the sandbox, and Stay in the leave sheet. Screenshots of S8, sandbox S1 with the banner and S11 were added (15 states).
+
+**Phase 10 (10 Nov 2026, cmdkfi/app `22a5191`, unchanged; `git diff HEAD -- docs tasks` empty at start).**
+- *PRD S4:* the table now lists the six steps the app runs (create, setup, wrap, transfer, open, withdraw). Agent registration is described as the verification rail's row, and the head shows "Step N of 6".
+- *Frozen copy, added (product owner):*
+  - the S4 tag
+  - "Risk corridor" over the LTV track (the oracle line stays in the market card)
+  - "May do: Reduce · migrate to backup · exit · never increase your debt on this venue" (from config's migrate/exit flags; PRD fact 7)
+  - the S6 rows "Debt incl. interest (fresh read)", "Relayer headroom (1%, returned as leftover)", "USDC at position address", "USDC in your wallet", "Still needed" (= the transfer's shortfall). The close plan is now re-read every 10 s while a close runs, for "fresh read".
+
+  Browser assertions for each.
+- *Layout fix found on the new baselines:* a long row value made its key wrap ("May / do"). Row keys no longer shrink below their width, capped at 55%.
+- *Docs:* the PRD status line names the implemented state and the rechecked commit; I checked that vault/, executor/ and scripts/ are unchanged between `47fd4fb` and `22a5191`. The audit status has a 10 Nov header, the rehearsals as done, and the product owner's review of the preview as pending. The README names the rechecked commit and the new counts.
+- *Merge:* not done; it waits for the product owner's explicit word (PR #80).

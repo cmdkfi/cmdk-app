@@ -79,13 +79,18 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
   const active = STEPS.find(id => r.steps[id].status !== 'done' && r.steps[id].status !== 'skipped')
   const canContinue = !ob.running && !!active && r.steps[active].status === 'waiting'
   // docs/mockups/S4-Progress: head, then steps (1.4fr) and the verification rail (1fr)
+  // docs/mockups/S4-Progress: the head's tag names the active step (Phase 10, product owner)
+  const activeIndex = active ? STEPS.indexOf(active) + 1 : null
   return <section className="page" aria-labelledby="screen-title">
-    <div className="page-head">
-      <h1 id="screen-title">Opening your position</h1>
-      <p className="muted">
-        {r.amountWei ? `Deposit ${formatUnits(BigInt(r.amountWei), 18, 6)} ETH, borrow USDC at ${app ? `${app.guided.corridor.target}%` : 'the target'} LTV.` : 'Resuming your position.'}
-        {' '}Every signature and transaction is requested in order; you only act inside {walletLabel}.
-      </p>
+    <div className="page-head page-head--split">
+      <div>
+        <h1 id="screen-title">Opening your position</h1>
+        <p className="muted">
+          {r.amountWei ? `Deposit ${formatUnits(BigInt(r.amountWei), 18, 6)} ETH, borrow USDC at ${app ? `${app.guided.corridor.target}%` : 'the target'} LTV.` : 'Resuming your position.'}
+          {' '}Every signature and transaction is requested in order; you only act inside {walletLabel}.
+        </p>
+      </div>
+      {activeIndex !== null && <span className="tag warn">Step {activeIndex} of {STEPS.length}</span>}
     </div>
     <div className="split-14">
       <section className="surface" aria-label="Steps">

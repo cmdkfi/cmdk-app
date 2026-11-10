@@ -159,10 +159,10 @@ export function useActivity(positionAddress: Address | undefined, toBlock: bigin
  * S6 close plan (debt now and 10 min ahead, the relayer's 1% headroom, idle and wallet USDC): read when S5 shows and
  * again on Close position (the review sheet waits for that read); not part of the 30 s refresh (PRD §9 1).
  */
-export function useClosePlan(vaultId: string | undefined, owner: Address | undefined, enabled: boolean) {
+export function useClosePlan(vaultId: string | undefined, owner: Address | undefined, enabled: boolean, poll = false) {
   const { protocol, kind } = useAdapters()
   const app = useAppConfig().data
-  return useQuery({ queryKey: ['close-plan', kind, vaultId ?? null, owner?.toLowerCase() ?? null], enabled: enabled && !!app && !!vaultId && !!owner, queryFn: () => protocol.readClosePlan(app!, vaultId!, owner!), retry: false })
+  return useQuery({ queryKey: ['close-plan', kind, vaultId ?? null, owner?.toLowerCase() ?? null], enabled: enabled && !!app && !!vaultId && !!owner, queryFn: () => protocol.readClosePlan(app!, vaultId!, owner!), refetchInterval: poll ? 10_000 : false, retry: false })
 }
 
 

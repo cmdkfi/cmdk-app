@@ -105,6 +105,11 @@ test('wallet short of USDC: the Get test USDC panel shows the exact amount missi
   const panel = page.getByRole('complementary', { name: 'Get test USDC' })
   await expect(panel).toBeVisible({ timeout: 15_000 })
   await expect(panel.getByText('61.600154 USDC missing')).toBeVisible()
+  // the S6 summary above the steps (Phase 10): the plan's amounts; "Still needed" is what the transfer step sends
+  const summary = page.getByRole('region', { name: 'Closing your position' }).locator('.rows').first()
+  await expect(summary.locator('.row').filter({ hasText: 'Still needed' }).locator('dd')).toHaveText('161.600154 USDC')
+  await expect(summary.locator('.row').filter({ hasText: 'USDC in your wallet' }).locator('dd')).toHaveText('100 USDC')
+  await expect(summary.locator('.row').filter({ hasText: 'Debt incl. interest (fresh read)' }).locator('dd')).toHaveText(/^160\.\d+ USDC$/)
   await expect(panel.locator('.rows > .row').filter({ hasText: 'USDC in your wallet' }).locator('dd')).toHaveText('100 USDC')
   await expect(panel.getByText('Choose Base Sepolia in the network dropdown; USDC sent on another network cannot reach this wallet.', { exact: false })).toBeVisible()
   await expect(panel.getByRole('link', { name: 'Circle faucet' })).toHaveAttribute('href', 'https://faucet.circle.com')

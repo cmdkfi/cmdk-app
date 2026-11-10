@@ -72,6 +72,7 @@ test('rejection pauses the step with Retry and keeps the data; Retry asks again'
   await createPosition(page)
   const setup = step(page, 'Approve agent and rules')
   await expect(setup).toContainText('You declined the request in MetaMask. Nothing was sent.')
+  await expect(page.locator('.page-head .tag')).toHaveText('Step 2 of 6') // the S4 head names the active step (Phase 10)
   await expect(step(page, 'Create your position').getByRole('status')).toHaveText('Done')
   expect(ownerCalls(fx)).toEqual([])
   await setup.getByRole('button', { name: 'Try again' }).click()

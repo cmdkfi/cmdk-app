@@ -1,6 +1,11 @@
-# Protocol/frontend audit status — guided flow, 2026-11-09
+# Protocol/frontend audit status — guided flow, 2026-11-10
 
-Source: cmdkfi/app `47fd4fb` (origin/main, rechecked at every phase). Branch `feat/guided-flow` replaces the cockpit with
+Source: cmdkfi/app `22a5191` (origin/main on 10 Nov, rechecked at every phase; written against `47fd4fb`, and the commits
+since change only the Worker's crons and caching, the agent's NEAR RPC failover and the published measurement).
+Update 10 Nov (Phases 7b–10): 150 Node unit tests, 82 desktop browser scenarios (15 of them screenshot comparisons
+against per-platform baselines; linux baselines produced on CI), CI green on the branch, and two recorded live signed
+rehearsals (`tasks/rehearsal-2026-11-10.md`: 9–10 Nov open/close/Start over on v10; 10 Nov re-approval and open after the
+agent image change). The paragraph below is the 9 Nov state. Branch `feat/guided-flow` replaces the cockpit with
 the guided flow of `docs/prd-guided-flow.md`; it was written from the protocol repository, not ported from the cockpit
 (lessons 9 Nov: the old code is documentation). Checks: 135 Node unit tests, 49 desktop browser scenarios against the
 controlled fixture (run three times), a production-bundle check (no fixture markers, no sandbox), and read-only live
@@ -30,7 +35,8 @@ with a funded wallet.
 
 ### Pending
 
-- **Live signed rehearsal** on Base Sepolia with a real MetaMask (script: `tasks/rehearsal-2026-11-10.md`, Phase 7 step 3): open with 0.01 ETH, close with a faucet claim, Start over. Fixes from it come before anything else.
+- **Done, 9–10 Nov:** the live signed rehearsals (`tasks/rehearsal-2026-11-10.md`, two recorded runs); their findings became Phases 7b, 7c and 8a.
+- **Pending: the product owner's screen-by-screen review** of the deployed preview against the canvas (Phases 8, 9, 6b and 10 have not been rehearsed live: any injected wallet, the visual pass, the sandbox, the Phase 10 copy).
 - **Sandbox (Phase 6b, 10 Nov).** Shipped in every build (`VITE_SANDBOX=0` leaves it out). Why a sandbox is acceptable after the previous app removed demo balances and demo routes: it is isolated and labelled. It runs on simulated adapters only (the live ones are never constructed while it is active), never contacts a network host, never writes localStorage (sessionStorage only, cleared by Leave sandbox or by closing the tab), shows a banner on every screen, disables and tags every explorer link, and its verification rows read "Simulated (not checked)", never "Checked". `e2e/sandbox.spec.ts` checks the no-network and no-localStorage rules over a full open-reduce-close run; the production bundle no longer rejects the word "sandbox" (the rule existed only while it was unbuilt). The scripted agent reduce uses the protocol's protective-branch math (`repayToLtv` to target, not budget-limited).
 - **Protocol paths not exercised live:** relayer refusals other than the gas check, a lost job, the R10 second transfer, migration to the backup market. They are covered by the controlled fixture only.
 
