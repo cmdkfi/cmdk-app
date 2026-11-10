@@ -167,10 +167,16 @@ export class SandboxEngine {
     const receipt = this.hash()
     job.receipts = [receipt]
     switch (job.method) {
-      case 'setup':
+      case 'setup': {
         v.approved = true; v.setupAt = at
+        // the live setup sets the corridor on both markets, each in its own Base transaction (vault/src/lib.rs
+        // l.289-320, PRD fact 3), so recent actions show one row per market
+        const backup = this.hash()
+        job.receipts = [receipt, backup]
         this.event({ name: 'CorridorSet', actor: 'you', at, hash: receipt, args: { market: 'live' } })
+        this.event({ name: 'CorridorSet', actor: 'you', at, hash: backup, args: { market: 'backup' } })
         break
+      }
       case 'open': {
         const collateralIn = BigInt(args.collateral_in), target = BigInt(args.target_ltv)
         v.idle.weth -= collateralIn; v.collateral += collateralIn

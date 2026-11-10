@@ -130,7 +130,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const from = fromBlock !== undefined && fromBlock > engine.firstBlock() ? fromBlock : engine.firstBlock()
       const items = s.events.map(e => ({ e, block: engine.blockAt(e.at) })).filter(({ block: b }) => b >= from && b <= to)
         .sort((a, b) => b.e.at - a.e.at || b.e.logIndex - a.e.logIndex)
-        .map(({ e, block: b }) => ({ name: e.name, actor: e.actor, blockNumber: b, time: BigInt(Math.floor(e.at / 1000)), transactionHash: e.hash, logIndex: e.logIndex, args: { ...e.args, market: e.args.market === 'live' ? SIM.live : e.args.market }, token: e.token === 'weth' ? SIM.weth : e.token === 'usdc' ? SIM.usdc : undefined }))
+        .map(({ e, block: b }) => ({ name: e.name, actor: e.actor, blockNumber: b, time: BigInt(Math.floor(e.at / 1000)), transactionHash: e.hash, logIndex: e.logIndex, args: { ...e.args, market: e.args.market === 'live' ? SIM.live : e.args.market === 'backup' ? SIM.backup : e.args.market }, token: e.token === 'weth' ? SIM.weth : e.token === 'usdc' ? SIM.usdc : undefined }))
       return { from, to, head, items, reachedStart: from === engine.firstBlock() }
     },
     readClosePlan: async () => {

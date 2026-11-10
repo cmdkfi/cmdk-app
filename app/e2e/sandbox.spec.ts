@@ -56,6 +56,9 @@ test('Phase 6b: the sandbox runs open, the scripted drop and reduce, close and S
   await expect(page.locator('.figure').filter({ hasText: 'LTV' }).locator('.big')).toHaveText('50%')
   await expect(page.locator('.simulated-link').first()).toContainText('simulated')
   await expect(page.locator('a[href*="basescan"], a[href*="nearblocks"]')).toHaveCount(0)
+  // setup set the corridor on both markets: two rows, as in the live app (product owner's live review, 10 Nov)
+  await expect(page.locator('.event').filter({ hasText: 'Rules set on the live market' })).toHaveCount(1)
+  await expect(page.locator('.event').filter({ hasText: 'Rules set on the backup market' })).toHaveCount(1)
   await expect(banner(page)).toBeVisible()
 
   // the scripted −30 % move 20 s after open, the protective reduce 5 s later; the next 30 s read shows both
