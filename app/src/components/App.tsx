@@ -13,6 +13,7 @@ import { Settings } from '../screens/Settings.tsx'
 import { useAppConfig, useDeploymentStatic, useDiscovery } from './data.ts'
 import { DesktopGate } from './DesktopGate.tsx'
 import { WalletSlot } from './WalletSlot.tsx'
+import { LeaveSandboxSheet, SandboxBanner, TryInSandbox } from './Sandbox.tsx'
 
 const BASE_SEPOLIA = 84532
 const DESKTOP = '(min-width: 960px)'
@@ -59,9 +60,9 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   const href = useCallback((to: Route) => hashFor({ mode, route: to }), [mode])
   // Onboarding and close records are local (flow/onboarding-record.ts); the close record is per vault.
   const factory = app.data?.config.near.factory
-  const onboardingRecord = mode === 'live' && !!owner && !!factory && loadRecord(mode, factory, owner) !== null
+  const onboardingRecord = !!owner && !!factory && loadRecord(mode, factory, owner) !== null
   const vaultId = discovery.result?.summary?.vault.accountId
-  const close = mode === 'live' && owner && factory && vaultId ? loadCloseRecord(mode, factory, owner, vaultId) : null
+  const close = owner && factory && vaultId ? loadCloseRecord(mode, factory, owner, vaultId) : null
   const input: EntryInput = { wallet: walletEntry(state), discovery: discovery.entry, onboardingRecord, closeRecord: !!close?.completed, closing: !!close && !close.completed }
 
   // The landing table runs once on "/" or "#start", and again when discovery resolves after a connect
@@ -94,9 +95,9 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     if (state.chainId !== BASE_SEPOLIA) void wallet.switchToBaseSepolia(network).catch(() => undefined)
   }, [connectionKey, state, network, wallet])
 
+  // The sandbox runs the same landing table and guards over its simulated adapters (PRD §8a: same flow, screen for screen)
   let resolution: Resolution
-  if (SANDBOX && mode === 'sandbox') resolution = { kind: 'route', route }
-  else if (pending === 'entry') resolution = landing(input)
+  if (pending === 'entry') resolution = landing(input)
   else if (pending === 'connect') resolution = afterConnect(route, input) ?? guard(route, input)
   else resolution = guard(route, input)
 
@@ -107,6 +108,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     if (target && (target !== route || entry)) replace(href(target))
   }, [settled, target, route, entry, href, replace])
 
+  const [leaving, setLeaving] = useState(false)
   const run = useCallback((action: () => Promise<void>) => () => { void action().catch(() => undefined) }, [])
   const explorer = app.data?.guided.network.blockExplorerUrls[0]
   const banner = resolution.kind === 'route' && resolution.banner === 'discovery-failed' ? { retry: discovery.retry } : null
@@ -123,7 +125,10 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
 
   // docs/mockups: S1–S3 in the 960 px column, S4–S7 in the 1120 px one
   const wide = resolution.kind === 'route' && (resolution.route === 'progress' || resolution.route === 'position')
+  const sandbox = SANDBOX && mode === 'sandbox'
   return <div className="shell">
+    {sandbox && <SandboxBanner onLeave={() => setLeaving(true)} />}
+    {leaving && <LeaveSandboxSheet onStay={() => setLeaving(false)} />}
     <header className="header">
       <a className="brand" href={href('start')} aria-label="cmdk home">⌘K</a>
       <div className="header-actions">
@@ -134,8 +139,9 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
           explorer={explorer}
           onSwitch={run(async () => { if (app.data) await wallet.switchToBaseSepolia(app.data.guided.network) })}
           onDisconnect={run(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
-          onLeave={() => { window.location.hash = '#start' }}
+          onLeave={() => setLeaving(true)}
         />
+        {SANDBOX && mode === 'live' && state.status === 'disconnected' && <TryInSandbox variant="link" />}
         <span className="chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
       </div>
     </header>
@@ -151,8 +157,13 @@ export function App() {
   const desktop = useDesktop()
   const [hash, replace] = useHash()
   const { place, canonical, entry } = parseHash(hash)
+  // Read the hash again here: the Shell's guard (a child effect, run first) may already have replaced it in this
+  // commit, and the canonical form of the stale hash would undo that (#sandbox/close → #sandbox/position → #sandbox/start).
   useEffect(() => {
-    if (desktop && !entry && canonical !== hash) replace(canonical)
+    if (!desktop || entry) return
+    const current = window.location.hash
+    const next = parseHash(current).canonical
+    if (next !== current) replace(next)
   }, [desktop, entry, canonical, hash, replace])
   if (!desktop) return <div className="vault-app"><DesktopGate /></div>
   return <div className="vault-app">

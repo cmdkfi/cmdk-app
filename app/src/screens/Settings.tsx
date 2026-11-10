@@ -33,7 +33,7 @@ export function Settings({ mode, href, banner }: ScreenProps) {
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Your protection, in one picture</h1>
-      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells a little collateral to bring it back to {c.target}%, never more than {c.budget}% of your collateral per day.</p>
+      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells collateral to bring it back to {c.target}%. Below {c.act}% it may sell at its own discretion, at most {c.budget}% of your collateral per rolling day.</p>
     </div>
 
     <figure className="surface corridor" style={{ margin: 0 }} aria-label="Loan-to-value corridor">
@@ -61,7 +61,8 @@ export function Settings({ mode, href, banner }: ScreenProps) {
         <h3 id="rules-never">The agent can never</h3>
         <ul className="list">
           <li>Increase your debt on this venue.</li>
-          <li>Sell more than {c.budget}% of your collateral in a day.</li>
+          {/* Executor.sol l.261-266, l.296: a protective reduce (above the act line) sells to target and is not budget-limited */}
+          <li>Sell at its own discretion more than {c.budget}% of your collateral per rolling day (above {c.act}% it sells what is needed to return to {c.target}%).</li>
           <li>Send funds anywhere except repaying your loan.</li>
           <li>Change these limits.</li>
         </ul>

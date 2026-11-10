@@ -8,6 +8,8 @@ import { fundingNeed } from '../flow/funding.ts'
 import type { AddChainParams, Guided } from '../flow/config.ts'
 import { connectionError, formatUnits, shortAddress } from '../flow/format.ts'
 import { useNow } from '../components/use-now.ts'
+import { TryInSandbox } from '../components/Sandbox.tsx'
+import { SANDBOX } from '../flow/build.ts'
 import { DiscoveryBanner, Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 
 const BASE_SEPOLIA = 84532
@@ -83,7 +85,10 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
   } else if (state.status === 'disconnected' && wallets.length === 0) {
     body = <section className="surface stack-20" style={{ maxWidth: 640 }}>
       <p>No browser wallet was found. This testnet app works with a wallet extension on desktop, such as MetaMask, Rabby, Coinbase Wallet, Brave or OKX.</p>
-      <a className="btn primary" style={{ justifySelf: 'start' }} href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <a className="btn primary" href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
+        {SANDBOX && mode === 'live' && <TryInSandbox />}
+      </div>
     </section>
   } else if (state.status === 'disconnected') {
     // PRD S3 (10 Nov): every injected wallet announced through EIP-6963, plus window.ethereum when not announced
@@ -94,6 +99,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
           {option.icon ? <img src={option.icon} alt="" width={28} height={28} /> : <span className="token venue" aria-hidden="true" />}<span className="label">{option.name}</span>
         </button></li>)}
       </ul>
+      {SANDBOX && mode === 'live' && <div><TryInSandbox /></div>}
     </section>
   } else if (state.status === 'connecting') {
     body = <p className="notice" role="status"><span className="pulse" aria-hidden="true" />Waiting for your wallet…</p>

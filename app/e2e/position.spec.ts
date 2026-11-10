@@ -47,7 +47,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   // agent card: /agent/vaults row + NEAR key check; sell budget (0.1 + 0.005) × 20 % − 0.005 = 0.016 WETH
   await expect(card(page, 'Agent').getByRole('status')).toHaveText('Active')
   await expect(fact(page, 'Agent', 'Last check')).toHaveText(/\(\d+ s ago\)$/)
-  await expect(fact(page, 'Agent', 'Sell budget left today')).toHaveText('0.016 WETH of 0.021 WETH (20% per rolling 24 h)')
+  await expect(fact(page, 'Agent', 'Discretionary sell budget left today')).toHaveText('0.016 WETH of 0.021 WETH (20% per rolling 24 h)')
   await card(page, 'Agent').getByRole('button', { name: 'Verify the agent' }).click()
   await expect(page.getByRole('region', { name: 'Agent verification' })).toBeVisible() // the §6 panel (Phase 6)
   // market card

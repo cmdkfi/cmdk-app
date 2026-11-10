@@ -97,3 +97,18 @@ test('the boundary scanner sees value and type imports', () => {
     { typeOnly: false, spec: 'wagmi' }, { typeOnly: true, spec: '../protocol/near.ts' }, { typeOnly: false, spec: './x.css' },
   ])
 })
+
+test('Phase 6b: the sandbox adapters never reach live code: no adapters/live, no protocol/, no wagmi or viem at runtime', async () => {
+  const sandbox = await sources('adapters/sandbox')
+  assert.ok(sandbox.length > 0)
+  const offenders = []
+  for (const file of sandbox) {
+    const text = await readFile(join(src, file), 'utf8')
+    for (const item of imports(text)) {
+      const target = item.spec.startsWith('.') ? relative(src, resolve(join(src, dirname(file)), item.spec)) : item.spec
+      if (target.startsWith('adapters/live') || target.startsWith('protocol/')) offenders.push(`${file}: ${item.spec}`)
+      if (!item.typeOnly && /^(wagmi|viem|@wagmi\/)/.test(item.spec)) offenders.push(`${file}: ${item.spec} (runtime)`)
+    }
+  }
+  assert.deepEqual(offenders, [])
+})

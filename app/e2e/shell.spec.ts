@@ -10,7 +10,8 @@ test('shell: S1 renders with header, wallet slot and footer; only the app and th
   await expect(page).toHaveURL(/#start$/)
   await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveText('⌘K')
   // Phase 8 (PRD S0, 10 Nov): no Connect button in the header; the wallet slot appears only once connected
-  await expect(page.getByRole('banner').getByRole('button')).toHaveCount(0)
+  // the only header control while disconnected is the sandbox entry (Phase 6b, product owner 10 Nov)
+  await expect(page.getByRole('banner').getByRole('button')).toHaveText(['Try in sandbox'])
   await expect(page.locator('.wallet-slot')).toHaveCount(0)
   await expect(page.getByText('Testnet · Base Sepolia · no real funds', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Borrow USDC against ETH. Keep risk on autopilot.')
@@ -22,7 +23,7 @@ test('shell: S1 renders with header, wallet slot and footer; only the app and th
   expect(fx.walletCalls.filter(method => !['eth_accounts', 'eth_chainId'].includes(method)), 'wallet prompts on load').toEqual([])
 })
 
-test('routes: browser Back moves between S1, S2 and S3; guarded routes redirect; sandbox hashes go to #start', async ({ page, context, fx }) => {
+test('routes: browser Back moves between S1, S2 and S3; guarded routes redirect; sandbox hashes stay in the sandbox', async ({ page, context, fx }) => {
   await fx.install(context)
   await page.goto('/#start')
   await page.getByLabel('Amount to deposit').fill('0.1')
@@ -37,9 +38,12 @@ test('routes: browser Back moves between S1, S2 and S3; guarded routes redirect;
   await page.goForward(); await expect(page).toHaveURL(/#settings$/)
   await expect(page.getByRole('checkbox')).toBeChecked()
   for (const hash of ['#position', '#progress', '#close', '#unknown']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#start$/) }
-  // no sandbox until Phase 6b: every #sandbox/… hash goes to #start in the live app
-  for (const hash of ['#sandbox/start', '#sandbox/close', '#sandbox/position']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#start$/) }
-  await expect(page.getByText(/[sS]andbox/)).toHaveCount(0)
+  // Phase 6b: #sandbox/… mirrors the routes and never redirects into a live one; without a simulated position the
+  // guards send close/position to #sandbox/start
+  for (const hash of ['#sandbox/start', '#sandbox/close', '#sandbox/position']) { await page.goto('/' + hash); await expect(page).toHaveURL(/#sandbox\/start$/) }
+  await page.goto('/#start')
+  // back in the live app: no sandbox banner (the header's "Try in sandbox" entry is expected)
+  await expect(page.getByRole('status').filter({ hasText: 'Sandbox · simulated data' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveAttribute('href', '#start')
 })
 

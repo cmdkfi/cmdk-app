@@ -155,3 +155,31 @@ test('S5 liquidated', async ({ page, context, fx }) => {
   await expect(page.getByText('No actions in this range.')).toBeVisible()
   await shot(page, 's5-liquidated')
 })
+
+// Phase 6b sandbox (docs/mockups S8, S11, the banner of S8–S11)
+test('S8 Try in sandbox sheet', async ({ page, context, fx }) => {
+  await fx.install(context); await frozen(page)
+  await page.goto('/#connect')
+  await page.getByRole('button', { name: 'Try in sandbox' }).last().click()
+  await expect(page.getByRole('dialog', { name: 'Try in sandbox' })).toBeVisible()
+  await shot(page, 's8-sandbox-sheet')
+})
+
+test('Sandbox S1 with the banner', async ({ page, context, fx }) => {
+  await fx.install(context); await frozen(page)
+  await page.goto('/#connect')
+  await page.getByRole('button', { name: 'Try in sandbox' }).last().click()
+  await page.getByRole('dialog', { name: 'Try in sandbox' }).getByRole('button', { name: 'Activate sandbox' }).click()
+  await expect(page.getByText('about 802.5 USDC')).toBeVisible()
+  await shot(page, 'sandbox-s1')
+})
+
+test('S11 Leave the sandbox?', async ({ page, context, fx }) => {
+  await fx.install(context); await frozen(page)
+  await page.goto('/#connect')
+  await page.getByRole('button', { name: 'Try in sandbox' }).last().click()
+  await page.getByRole('dialog', { name: 'Try in sandbox' }).getByRole('button', { name: 'Activate sandbox' }).click()
+  await page.getByRole('status').filter({ hasText: 'Sandbox · simulated data' }).getByRole('button', { name: 'Leave sandbox' }).click()
+  await expect(page.getByRole('dialog', { name: 'Leave the sandbox?' })).toBeVisible()
+  await shot(page, 's11-leave-sandbox')
+})

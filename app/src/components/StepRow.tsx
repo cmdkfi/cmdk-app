@@ -1,7 +1,8 @@
 // One step of a guided chain (S4 onboarding, S6 close): status, note, transaction and job links, the paused line with the
 // verbatim error and an explicit Retry label (PRD FR-5, Phase 3 Retry wording).
+import { ExtLink } from './Sandbox.tsx'
 import type { ReactNode } from 'react'
-import { useWalletLabel } from '../adapters/AdapterProvider.tsx'
+import { useAdapters, useWalletLabel } from '../adapters/AdapterProvider.tsx'
 import { formatUnits, shortAddress } from '../flow/format.ts'
 import type { RetryKind, StepState, StepStatus } from '../flow/onboarding.ts'
 
@@ -43,9 +44,12 @@ function CheckLine({ check, now }: { check: NonNullable<StepState['check']>; now
  * docs/mockups/S4-Progress .step: number (✓ when done), body, status on the right. `active` marks the step the chain is
  * on. The Why line stays an expandable <details> (PRD S4 "an expandable Why line"; the artboard prints it inline).
  */
-export function StepRow({ title, why, index, step, explorer, onAct, now, extra, active }: { title: string; why: string; index: number; step: StepState; explorer?: string; onAct: (kind: RetryKind) => void; now: number; extra?: ReactNode; active?: boolean }) {
+export function StepRow({ title, why, index, step, explorer, onAct, now, extra, active, prompt = 'signature' }: { title: string; why: string; index: number; step: StepState; explorer?: string; onAct: (kind: RetryKind) => void; now: number; extra?: ReactNode; active?: boolean; prompt?: 'signature' | 'transaction' }) {
   const p = step.pause
   const wallet = useWalletLabel()
+  // PRD §8a: in the sandbox "Waiting for MetaMask…" reads "Simulated signature" / "Simulated transaction"
+  const { kind } = useAdapters()
+  const prompting = kind === 'sandbox' ? `Simulated ${prompt}` : `Waiting for ${wallet}…`
   const wait = p?.retryAfter && p.since ? Math.max(0, Math.ceil(p.retryAfter - (now - p.since / 1000))) : 0
   const done = step.status === 'done' || step.status === 'skipped'
   return <li className={`step ${step.status}${done ? ' done' : ''}${active && !done ? ' active' : ''}`} aria-label={title}>
@@ -55,7 +59,7 @@ export function StepRow({ title, why, index, step, explorer, onAct, now, extra, 
       {step.note && <p className="note">{step.note}</p>}
       {step.status === 'checking' && step.check && <CheckLine check={step.check} now={now} />}
       {step.topUp && step.topUp.status !== 'needed' && <p className="note">Gas top-up: {formatUnits(BigInt(step.topUp.amountWei), 18, 6)} ETH · {step.topUp.status === 'done' ? 'confirmed' : step.topUp.status === 'confirming' ? 'confirming…' : `waiting for ${wallet}…`}</p>}
-      {step.txHash && explorer && <p className="note"><a href={`${explorer}/tx/${step.txHash}`} target="_blank" rel="noreferrer">Transaction {shortAddress(step.txHash)}</a></p>}
+      {step.txHash && explorer && <p className="note"><ExtLink href={`${explorer}/tx/${step.txHash}`}>Transaction {shortAddress(step.txHash)}</ExtLink></p>}
       {step.job && <p className="note">Relayer job <code>{step.job}</code></p>}
       {extra}
       {p && <div className="pause" role="alert">
@@ -66,6 +70,6 @@ export function StepRow({ title, why, index, step, explorer, onAct, now, extra, 
       </div>}
       <details className="why"><summary>Why</summary><p>{why}</p></details>
     </div>
-    <span className="st" role="status">{step.status === 'checking' || step.status === 'confirming' || step.status === 'prompting' || step.status === 'funding' ? <span className="pulse" aria-hidden="true" /> : null}{step.status === 'prompting' ? `Waiting for ${wallet}…` : STATUS[step.status]}</span>
+    <span className="st" role="status">{step.status === 'checking' || step.status === 'confirming' || step.status === 'prompting' || step.status === 'funding' ? <span className="pulse" aria-hidden="true" /> : null}{step.status === 'prompting' ? prompting : STATUS[step.status]}</span>
   </li>
 }

@@ -13,9 +13,9 @@ export function parseDecimal(text: string, decimals: number): bigint | null {
 
 /**
  * S1 amount prefill (PRD S1, product owner 9 Nov): 0.01 ETH keeps test positions within the market's liquidity and lets
- * one faucet claim cover the close. The sandbox sets its own (0.5 ETH) when it lands in Phase 6b.
+ * one faucet claim cover the close. The sandbox prefills 0.5 ETH (PRD §8a: its liquidity is simulated).
  */
-export const defaultDeposit = (mode: StorageMode): string => (mode === 'live' ? '0.01' : '')
+export const defaultDeposit = (mode: StorageMode): string => (mode === 'live' ? '0.01' : '0.5')
 
 export type AmountCheck =
   | { kind: 'empty' }

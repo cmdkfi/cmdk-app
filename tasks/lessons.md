@@ -80,3 +80,8 @@
 - **Rule:** no early return on a user action without visible state. A precondition the app can fix (chain, connection) is requested by the action itself; one it cannot fix is shown on the step with a button.
 - **Rule:** for every guard in a step runner, write one browser test where the guard fails after a reload, not only mid-flow.
 - **Also:** a wallet's network is per site. Never infer the chain from what the wallet shows elsewhere; ask for the switch right after connect and before each action.
+
+## 2026-11-10 — Copy promises are checked against the executor's branches, not the parameter names (product owner)
+- **What happened:** S2 said the agent sells "never more than 20% of your collateral per day", taken from the corridor's `sell_budget` parameter. `Executor.reduce` clamps to that budget only in its discretionary branch; a protective reduce above the act line sells to target with no budget clamp and is not counted (`Executor.sol` l.261-266, l.296; `agent/src/logic.rs` l.174). The promise was false. It surfaced while scripting the sandbox's price drop, whose "back to 50%" outcome looked impossible under the 20% cap; I asked with the wrong premise, and the product owner corrected it from the code.
+- **Rule:** every promise in copy (limits, caps, "never", "at most") is checked against every branch of the contract function that enforces it, with the line cited, before it ships; a parameter's name is not its semantics.
+- **Rule:** when a scenario looks impossible under a stated rule, read the enforcing code before proposing to bend the scenario or the rule.

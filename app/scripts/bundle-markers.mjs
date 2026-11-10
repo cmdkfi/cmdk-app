@@ -1,11 +1,9 @@
 // What must never ship in the production build (scripts/check-test-boundary.mjs): browser-test fixtures and wallet
-// controls, and — until Phase 6b re-enables it with VITE_SANDBOX=1 — anything of the sandbox.
+// controls. The sandbox ships since Phase 6b (PRD §8a); its isolation is proven by tests instead (never persists to
+// localStorage, never contacts a network host: e2e/sandbox.spec.ts, src/adapters/sandbox/engine.test.mjs).
 export const TEST_MARKERS = ['fixture.testnet', '/e2e/harness', 'fixtureWallet', 'fixtureSign']
-export const SANDBOX_MARKER = /[sS]andbox/
 
 /** The forbidden markers found in one built file's text. */
-export function forbiddenMarkers(content, { sandbox = false } = {}) {
-  const found = TEST_MARKERS.filter(marker => content.includes(marker))
-  if (!sandbox) { const m = SANDBOX_MARKER.exec(content); if (m) found.push(m[0]) }
-  return found
+export function forbiddenMarkers(content) {
+  return TEST_MARKERS.filter(marker => content.includes(marker))
 }

@@ -9,8 +9,19 @@ import './styles/base.css'
 import './styles/prototype-controls.css'
 import './styles/cmdk.css'
 
-function storage(): Storage | undefined {
-  try { return window.localStorage } catch { return undefined }
+/**
+ * localStorage for the persister, written only outside the sandbox: the persister writes its key even when no query
+ * qualifies, and the sandbox never persists to localStorage (PRD §8a; e2e/sandbox.spec.ts found the empty write).
+ */
+function storage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined {
+  let local: Storage
+  try { local = window.localStorage } catch { return undefined }
+  const sandbox = () => window.location.hash.startsWith('#sandbox')
+  return {
+    getItem: key => local.getItem(key),
+    setItem: (key, value) => { if (!sandbox()) local.setItem(key, value) },
+    removeItem: key => { if (!sandbox()) local.removeItem(key) },
+  }
 }
 
 // PRD §9 4: only the live position snapshot (key: 'position', 'live', owner, vault) is persisted, so it paints S5 on

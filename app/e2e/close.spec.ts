@@ -38,7 +38,7 @@ async function expectClosed(page: Page) {
   await expect(page.locator('.figure').filter({ hasText: 'Collateral' }).locator('.big')).toHaveText('0 WETH')
   await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
   // Phase 7b: no collateral, so no budget to report (was "no active corridor")
-  await expect(page.locator('section.card').filter({ hasText: 'Sell budget left today' }).locator('.rows > .row').filter({ hasText: 'Sell budget left today' }).locator('dd')).toHaveText('no position')
+  await expect(page.locator('section.card').filter({ hasText: 'Discretionary sell budget left today' }).locator('.rows > .row').filter({ hasText: 'Discretionary sell budget left today' }).locator('dd')).toHaveText('no position')
 }
 
 test('review sheet: debt, interest, headroom, amount sent, collateral returned, destination, expiry and no close without repaying', async ({ page, context, fx }) => {

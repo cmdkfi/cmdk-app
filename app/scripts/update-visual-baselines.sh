@@ -7,5 +7,5 @@
 # Review the new images before committing them.
 set -eu
 cd "$(dirname "$0")/.."
-pnpm exec playwright test e2e/visual.spec.ts --update-snapshots
+pnpm exec playwright test e2e/visual.spec.ts --update-snapshots=all
 echo "darwin baselines updated; run 'frontend quality' with visual_baselines = true for linux (see the comment at the top of this script)"

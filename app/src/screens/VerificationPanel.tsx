@@ -1,7 +1,8 @@
 // The agent verification panel (PRD §6): S4's right rail from step 1, and S5's "Verify the agent".
 import { useAppConfig, useVerification } from '../components/data.ts'
 import { useNow } from '../components/use-now.ts'
-import { verificationRows, type RowId, type VerificationRow } from '../flow/verification.ts'
+import { ROW_ORDER, verificationRows, type RowId, type VerificationRow } from '../flow/verification.ts'
+import { useAdapters } from '../adapters/AdapterProvider.tsx'
 
 const TITLE: Record<RowId, string> = {
   measurement: 'Agent version approved by your vault',
@@ -22,8 +23,20 @@ const when = (row: VerificationRow) => (row.checkedAt === null ? null : row.stat
 export function VerificationPanel({ vaultId, poll, compact }: { vaultId: string | undefined; poll: boolean; compact?: boolean }) {
   const app = useAppConfig().data
   const now = useNow()
-  const facts = useVerification(vaultId, poll)
+  const { kind } = useAdapters()
+  // PRD §8a: in the sandbox no check runs and every row reads "Simulated (not checked)", never "Checked"
+  const facts = useVerification(kind === 'sandbox' ? undefined : vaultId, poll)
   if (!app) return null
+  if (kind === 'sandbox') return <section className={`surface stack-8 verify-panel${compact ? ' verify--compact' : ''}`} aria-labelledby="verify-title">
+    <div className="card-head"><h2 id="verify-title">Agent verification</h2></div>
+    <p className="muted small">Verification is not available in the sandbox; see the live app.</p>
+    <ol className="plain-list" style={{ gap: 0 }}>
+      {ROW_ORDER.map(id => <li key={id} className="check verify__row" aria-label={TITLE[id]}>
+        <div>{TITLE[id]}</div>
+        <span className="tag" role="status">Simulated (not checked)</span>
+      </li>)}
+    </ol>
+  </section>
   const nearblocks = app.guided.help.nearblocks.replace(/\/$/, '')
   const vaultPage = vaultId ? `${nearblocks}/address/${vaultId}` : null
   const waiting = !vaultId ? { kind: 'no-vault' as const } : facts.isError ? { kind: 'failed' as const, error: facts.error.message, at: facts.errorUpdatedAt } : { kind: 'pending' as const }

@@ -116,12 +116,12 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 - [x] Unit tests: row status derivation for match, mismatch, unavailable, not checked, and the no-vault / pending / failed states. Browser: all rows Checked against the fixture; an altered manifest is Mismatch on row 1 only; a failing evidence fetch is Unavailable on row 2 only; the registration row reads Registering while the agent row is pending (S4 rail).
 
 ## Phase 6b — Sandbox mode (original item list; see the updated section below for order and the production flag)
-- [ ] Sandbox `WalletAdapter`: in-memory account, balances, instant signatures/transactions with fake hashes, scripted rejection toggle.
-- [ ] Sandbox `ProtocolAdapter`: state machine create → setup → open → scripted price drop → agent `Reduced` → close; stage timers 1–3 s; simulated interest and feeds; activity list and verification rows marked "Simulated".
-- [ ] UI: Try in sandbox entry on S3, no-MetaMask state and wallet-slot menu; explainer sheet with Activate (prefills 0.5 ETH, lands on `#sandbox/start`); persistent banner; wallet slot "Sandbox wallet"; disabled hash links tagged simulated; Leave sandbox confirmation (Leave / Stay) in banner and wallet menu; `#sandbox/…` routes mirroring every live route; `sessionStorage` only.
-- [ ] Scripted scenario: ~20 s after open, −30% price → LTV ≈71% → simulated agent `Reduced` within the cooldown → LTV 50%; visible interest accrual; closed → Start over creates a new simulated vault instantly.
-- [ ] Guard: live adapters are never constructed while the sandbox is active (unit test); fixture's unexpected-request guard proves zero network calls in sandbox (browser test).
-- [ ] README and `docs/audit-status.md`: state why a labelled, isolated sandbox is acceptable after demo routes were removed.
+- [x] Sandbox `WalletAdapter`: in-memory account, balances, instant signatures/transactions with fake hashes, scripted rejection toggle (not built: optional in PRD §8a; rejections are covered by the live fixture).
+- [x] Sandbox `ProtocolAdapter`: state machine create → setup → open → scripted price drop → agent `Reduced` → close; stage timers 1–3 s; simulated interest and feeds; activity list and verification rows marked "Simulated".
+- [x] UI: Try in sandbox entry on S3, the no-wallet state and the header while disconnected (product owner, 10 Nov); explainer sheet with Activate (prefills 0.5 ETH, lands on `#sandbox/start`); persistent banner; wallet slot "Sandbox wallet"; disabled hash links tagged simulated; Leave sandbox confirmation (Leave / Stay) in banner and wallet menu; `#sandbox/…` routes mirroring every live route; `sessionStorage` only.
+- [x] Scripted scenario: ~20 s after open, −30% price → LTV ≈71% → simulated agent `Reduced` within the cooldown → LTV 50%; visible interest accrual; closed → Start over reuses the simulated vault at the deposit step (PRD §8a S7 row, D5).
+- [x] Guard: live adapters are never constructed while the sandbox is active (unit test); fixture's unexpected-request guard proves zero network calls in sandbox (browser test).
+- [x] README and `docs/audit-status.md`: state why a labelled, isolated sandbox is acceptable after demo routes were removed.
 
 ## Phase 7 — Verification of the whole (before merge)
 - Superseded: `e2e/fixture.ts` and `e2e/harness.tsx` belonged to the cockpit; the guided flow's browser fixture is `e2e/live-fixture.ts`, which covers these (wallet transactions with receipts and balance changes, add-chain and 4902, faucet credit).
@@ -179,8 +179,10 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [ ] Product owner reviews the deployed preview screen by screen against the canvas before Phase 6b starts.
 
 ## Phase 6b (updated 10 Nov) — Sandbox for production
-- [ ] Build the simulated adapters behind the existing seams (`VITE_SANDBOX`), then enable the flag in the production build once the sandbox passes its tests; remove the bundle check's "no sandbox string" rule in the same commit and replace it with "sandbox never persists to localStorage and never contacts a network host" tests.
-- [ ] Scope and rules exactly as PRD §8a (entry sheet, banner, `#sandbox/…` routes, scripted price drop and agent reduce, close, Start over, Leave sandbox).
+- [x] (product owner, 10 Nov, first) Sell-budget copy: the 20% budget limits discretionary sells only; S2 paragraph and "can never" item, S5 "Discretionary sell budget left today", PRD fact 4a with Executor.sol and logic.rs citations, lesson.
+- [x] (product owner, 10 Nov) The scripted reduce returns LTV to 50% with `repayToLtv` (protective, not budget-limited; S10 figures superseded); the third entry is a header text link while disconnected.
+- [x] Build the simulated adapters behind the existing seams (`VITE_SANDBOX`), then enable the flag in the production build once the sandbox passes its tests; remove the bundle check's "no sandbox string" rule in the same commit and replace it with "sandbox never persists to localStorage and never contacts a network host" tests.
+- [x] Scope and rules exactly as PRD §8a (entry sheet, banner, `#sandbox/…` routes, scripted price drop and agent reduce, close, Start over, Leave sandbox).
 
 ## Phase 10 — Merge
 - [ ] Final docs pass (README counts, PRD status line, audit status "pending" list), product owner's approval, merge PR #80 into main; main deploys automatically.
@@ -433,3 +435,30 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
 - *Unused components:* `PrototypeControls.tsx`, `VerificationDisclosure.tsx` and `TokenIcon.tsx` were already unused before this phase; their old CSS is gone with `screens.css`.
 
 **Phase 9 baselines (10 Nov 2026).** The first linux set showed an S1 defect macOS hid: with Linux font metrics, the amount input's intrinsic width pushed the input box into the estimate column. Fixed in `cmdk.css` (`.input input{width:0;flex:1}`, `.stack{min-width:0}`; 9da2437); the darwin images did not change. Second run's linux set reviewed screen by screen against darwin: same states (S5 connected, review sheet open, S4 paused with the rail, S6 with Get test USDC), font hinting differs only. The app serves no light theme (`main.tsx` pins `data-theme="dark"`), so no light captures; the light tokens in `prototype-controls.css` are unused. Product owner decisions on the conflicts (10 Nov): CmdkReference stays; the PRD wins on all eleven; the six S4 steps stay and the PRD S4 table is corrected in Phase 10; the frozen artboard copy ("Step N of 6", "Risk corridor", the agent card's "May do" row, the S6 summary rows) is added in Phase 10; the S7 extra figure is skipped.
+
+**Phase 6b (10 Nov 2026, cmdkfi/app `22a5191`, unchanged; `git diff HEAD -- docs tasks` at start: only the sell-budget copy fix the product owner asked for that turn).**
+- *Sell-budget copy (product owner, first):* the 20% per rolling day budget limits discretionary sells only. `Executor.reduce`'s protective branch sells `repayToLtv` to target, with no clamp, and is not recorded (`Executor.sol` l.261-266, l.296; `agent/src/logic.rs` l.174, l.472-474; discretionary branch l.270-290). Changed:
+  - S2's paragraph and its "can never" item
+  - S5 "Discretionary sell budget left today"
+  - PRD fact 4a, S2 and FR-2
+  - a lesson
+- *Engine* (`adapters/sandbox/engine.ts`):
+  - One in-memory state, advanced by the clock when read (no timers), kept in sessionStorage.
+  - Stages take 2 s; the agent registers 5 s after setup; the owner_nonce + 1 rule and one owner call at a time apply.
+  - Wallet transactions confirm after 1 s. The scripted −30% move comes 20 s after open, and the protective reduce 5 s later uses `repayToLtv` to 50% (product owner: not budget-limited, not counted; the S10 artboard's figures are superseded).
+  - Unit tests: the `repayToLtv` vectors, stages and the nonce rule, the drop and reduce (peak between 71% and 72%, after between 49% and 50%, more than 40% sold), the close.
+- *Adapters* (`adapters/sandbox/index.ts`, `config.ts`):
+  - Every ProtocolAdapter and WalletAdapter method over the engine.
+  - The config is built in memory from `config.app.json` through `guidedValues` with simulated addresses; nothing is fetched.
+  - The sandbox wallet is "Sandbox wallet", connected from the start, with 10 ETH and 5,000 USDC.
+  - A new boundary test: `adapters/sandbox` never imports `adapters/live`, `protocol/`, or wagmi/viem at runtime (probed with a violating file).
+- *UI* (`components/Sandbox.tsx`):
+  - "Try in sandbox" beside the S3 wallet list, in the no-wallet state, and as a header link while disconnected (product owner).
+  - The S8 sheet (the PRD §8a sentences plus the artboard rows) and **Activate sandbox** (fresh state, 0.5 ETH, `#sandbox/start`).
+  - The banner "Sandbox · simulated data · Leave sandbox"; S11 "Leave the sandbox? Simulated data is discarded." with Stay / Leave, which clears every `cmdk.sandbox.*` key and lands on `#start`.
+  - Explorer links (`ExtLink`) disabled and tagged "simulated"; verification rows "Simulated (not checked)" (no check runs); prompts read "Simulated signature" / "Simulated transaction"; Show USDC hidden.
+  - The same landing table and guards run in both modes.
+- *Build:* the sandbox ships in every build (`VITE_SANDBOX=0` leaves it out); the bundle check's "no sandbox" rule is removed.
+- *Found by the new browser test:* the TanStack persister wrote its live key (`cmdk.live.queries.v1`, empty) while in the sandbox. Its storage now ignores writes on `#sandbox` routes.
+- *Found by the route test:* an alias redirect race. On `#sandbox/close`, App's canonical-hash effect, reading a stale hash, undid the guard's redirect, so `#sandbox/start` content showed under `#sandbox/position`. App now re-reads `location.hash`. Live routes have no alias, so only the sandbox showed it.
+- *Browser:* `e2e/sandbox.spec.ts`. S3 → activate → S1 0.5 ETH → S2 → S3 → Create position → S4 with simulated rows → S5 → the drop and reduce (71.x% → 50%) → close → Start over → Leave. Across the run there were no new requests, wallet calls or hosts after activation, and no localStorage key was added. Also: the header entry, the no-wallet entry, a reload that stays in the sandbox, and Stay in the leave sheet. Screenshots of S8, sandbox S1 with the banner and S11 were added (15 states).

@@ -4,6 +4,7 @@ import { useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
 import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
 import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
+import { ExtLink } from '../components/Sandbox.tsx'
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
 import { newApproveRecord, useApprove, type Approve } from '../components/useApprove.ts'
@@ -106,7 +107,7 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
     <dl className="rows">
       {row2('Last check', row?.last_tick_unix ? `${date(row.last_tick_unix)} (${ago(now - row.last_tick_unix)})` : <Unavailable>none reported</Unavailable>)}
       {row2('Key expires', agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : agent.data ? <Unavailable>no key on your vault</Unavailable> : <Unavailable />)}
-      {row2('Sell budget left today', collateral === 0n
+      {row2('Discretionary sell budget left today', collateral === 0n
         ? <Unavailable>no position</Unavailable>
         : budget && budget.budgetWad > 0n
           ? <>{weth(budget.remaining)} <span className="muted small">of {weth((budget.activeCollateral + budget.sold) * budget.budgetWad / 10n ** 18n)} ({formatWadPercent(budget.budgetWad)} per rolling 24 h)</span></>
@@ -135,10 +136,10 @@ function MarketCard({ app, view, market, chainNow }: { app: LoadedConfig; view: 
       {row2('Market', <>Morpho · USDC/WETH on Base Sepolia · {role ?? <Unavailable />}</>)}
       {market && row2('Liquidation LTV', formatWadPercent(market.lltv))}
       {market && row2('Oracle', <OracleLine market={market} chainNow={chainNow} />)}
-      {market && row2('Market id', <><code title={market.id}>{market.id.slice(0, 10)}…{market.id.slice(-6)}</code> · <a href={`${explorer}/address/${view.morpho}`} target="_blank" rel="noreferrer">Morpho</a> · <a href={`${explorer}/address/${market.executor}`} target="_blank" rel="noreferrer">Executor</a></>)}
+      {market && row2('Market id', <><code title={market.id}>{market.id.slice(0, 10)}…{market.id.slice(-6)}</code> · <ExtLink href={`${explorer}/address/${view.morpho}`}>Morpho</ExtLink> · <ExtLink href={`${explorer}/address/${market.executor}`}>Executor</ExtLink></>)}
       {row2('Backup market', BACKUP_TEXT[backup])}
-      {row2('Position address', <a href={`${explorer}/address/${view.vault.baseAddress}`} target="_blank" rel="noreferrer">{shortAddress(view.vault.baseAddress)}</a>)}
-      {row2('Vault', <a href={`${nearblocks}/address/${view.vault.accountId}`} target="_blank" rel="noreferrer">{view.vault.accountId}</a>)}
+      {row2('Position address', <ExtLink href={`${explorer}/address/${view.vault.baseAddress}`}>{shortAddress(view.vault.baseAddress)}</ExtLink>)}
+      {row2('Vault', <ExtLink href={`${nearblocks}/address/${view.vault.accountId}`}>{view.vault.accountId}</ExtLink>)}
     </dl>
   </section>
 }
@@ -161,7 +162,7 @@ function RecentActions({ app, view, owner, live }: { app: LoadedConfig; view: Po
     <ul className="plain-list" style={{ gap: 0, marginTop: 8 }}>
       {rows.map(row => <li key={row.transactionHash} className="event">
         <span className={`who ${row.who.toLowerCase()}`}>{row.who}</span>
-        <span>{row.text} · <a href={`${explorer}/tx/${row.transactionHash}`} target="_blank" rel="noreferrer">BaseScan</a></span>
+        <span>{row.text} · <ExtLink href={`${explorer}/tx/${row.transactionHash}`}>BaseScan</ExtLink></span>
         <span className="when">{row.time !== null ? date(row.time) : `block ${row.blockNumber.toString()}`}</span>
       </li>)}
     </ul>
@@ -238,7 +239,7 @@ function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; c
         <p className="muted small">Every signature and transaction is requested in order; you only act inside {walletLabel}.</p>
       </div>
       <ol className="steps">
-        {ids.map((id, index) => <StepRow key={id} title={CLOSE_TITLE[id]} why={CLOSE_WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => close.act(id, kind)} active={id === active} />)}
+        {ids.map((id, index) => <StepRow key={id} title={CLOSE_TITLE[id]} why={CLOSE_WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => close.act(id, kind)} active={id === active} prompt={id === 'transfer' || id === 'transfer2' ? 'transaction' : 'signature'} />)}
       </ol>
       {canContinue && <div className="step-actions"><button type="button" className="btn primary" onClick={close.start}>Continue</button></div>}
     </section>
@@ -360,8 +361,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     </section>
     {market && <LtvTrack m={market} />}
 
-    {(owner && chainOk) || showIdle ? <div className="stack-8">
-      {owner && chainOk && <p className="muted small wallet-line">Your wallet <code title={owner}>{shortAddress(owner)}</code> · <ShowUsdcButton /></p>}
+    {(owner && chainOk && mode === 'live') || showIdle ? <div className="stack-8">
+      {owner && chainOk && mode === 'live' && <p className="muted small wallet-line">Your wallet <code title={owner}>{shortAddress(owner)}</code> · <ShowUsdcButton /></p>}
       {showIdle && <p className="muted small idle-line">At your position address, outside Morpho: {[idle.weth > 0n && weth(idle.weth), idle.usdc > app.guided.usdcDust && usdc(idle.usdc), idle.eth > 0n && `${formatUnits(idle.eth, 18, 6)} ETH for gas`].filter(Boolean).join(' · ')}</p>}
     </div> : null}
 

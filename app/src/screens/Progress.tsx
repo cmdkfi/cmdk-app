@@ -1,4 +1,5 @@
 import { useAdapters, useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
+import { ExtLink } from '../components/Sandbox.tsx'
 import { useAppConfig, useDiscovery, useMarketQuote } from '../components/data.ts'
 import { useNow } from '../components/use-now.ts'
 import { useOnboarding } from '../components/useOnboarding.ts'
@@ -44,7 +45,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
   const [text] = useSessionValue(mode, 'amount', defaultDeposit(mode))
   const explorer = app?.guided.network.blockExplorerUrls[0]?.replace(/\/$/, '')
   const nearblocks = app?.guided.help.nearblocks.replace(/\/$/, '')
-  const vaultLink = (id: string) => (nearblocks ? <a href={`${nearblocks}/address/${id}`} target="_blank" rel="noreferrer">{id}</a> : id)
+  const vaultLink = (id: string) => (nearblocks ? <ExtLink href={`${nearblocks}/address/${id}`}>{id}</ExtLink> : id)
   const r = ob.record
 
   if (!r) {
@@ -90,7 +91,8 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
       <section className="surface" aria-label="Steps">
         <ol className="steps">
           {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} active={id === active}
-            extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk ? <p className="note"><ShowUsdcButton /></p> : undefined} />)}
+            prompt={id === 'wrap' || id === 'transfer' ? 'transaction' : 'signature'}
+            extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk && mode === 'live' ? <p className="note"><ShowUsdcButton /></p> : undefined} />)}
         </ol>
         {canContinue && <div className="step-actions"><button type="button" className="btn primary" onClick={ob.start}>Continue</button></div>}
         {r.steps.open.belowTarget && r.steps.open.status !== 'done' && <p className="notice" style={{ marginTop: 20 }}>The market can lend less than the 50% target today; the position opens at {formatWadPercent(BigInt(r.steps.open.belowTarget))}.</p>}

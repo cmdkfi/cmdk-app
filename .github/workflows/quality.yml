@@ -75,7 +75,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         working-directory: app
       - name: Screenshot baselines
-        run: pnpm exec playwright test e2e/visual.spec.ts --update-snapshots
+        run: pnpm exec playwright test e2e/visual.spec.ts --update-snapshots=all
         working-directory: app
       - uses: actions/upload-artifact@v4
         with:

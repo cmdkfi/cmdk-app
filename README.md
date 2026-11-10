@@ -32,8 +32,17 @@ does not apply (for example `#position` without a position goes to `#start`).
 | `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
 
 S6 (close) and S7 (closed, Start over) are states of `#position`, not routes. The agent verification panel (PRD §6) opens
-from S5's "Verify the agent". There is no sandbox in any build yet: it is planned (Phase 6b) and every `#sandbox/…` hash
-goes to `#start`.
+from S5's "Verify the agent".
+
+**Sandbox (Phase 6b).** "Try in sandbox" (on S3 and in the header while no wallet is connected) runs the same five screens
+under `#sandbox/…` on a simulated wallet and a simulated protocol (`app/src/adapters/sandbox/`): stages advance on 2 s
+timers, the agent registers after 5 s, a scripted −30% price move 20 s after open is followed by the agent's protective
+reduce to 50% computed with the protocol's own `repayToLtv`. A banner marks every sandbox screen, explorer links are
+disabled and tagged "simulated", and verification rows read "Simulated (not checked)". The previous app removed demo
+balances and demo routes; this sandbox is acceptable because it is isolated and labelled: it never instantiates the
+live adapters, never contacts a network host and never writes localStorage (its state lives in sessionStorage and is
+cleared by Leave sandbox or by closing the tab), which `e2e/sandbox.spec.ts` checks, and it makes no claim about the
+live protocol.
 
 ### One vault per wallet
 
@@ -140,11 +149,11 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 145 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 150 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 77 browser scenarios, desktop Chromium (12 of them screenshot comparisons)
+pnpm test:browser           # 82 browser scenarios, desktop Chromium (15 of them screenshot comparisons)
 pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
 
