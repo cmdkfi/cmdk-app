@@ -33,7 +33,7 @@ export function Settings({ mode, href, banner }: ScreenProps) {
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Your protection, in one picture</h1>
-      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells collateral to bring it back to {c.target}%. Below {c.act}% it may sell at its own discretion, at most {c.budget}% of your collateral per rolling day.</p>
+      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells collateral to bring it back to {c.target}%. Below {c.act}% it may sell at its own discretion, at most {c.budget}% of your collateral per rolling day. A protective sale that started above {c.act}% can continue below it, back toward {c.target}%, for up to 24 hours.</p>
     </div>
 
     <figure className="surface corridor" style={{ margin: 0 }} aria-label="Loan-to-value corridor">
@@ -60,10 +60,10 @@ export function Settings({ mode, href, banner }: ScreenProps) {
       <section className="surface stack" aria-labelledby="rules-never">
         <h3 id="rules-never">The agent can never</h3>
         <ul className="list">
-          {/* protocol README corridor table: a move may add one loan-token unit (0.000001 USDC) of rounding */}
-          <li>Increase your debt on this venue (a move may round it up by 0.000001 USDC).</li>
-          {/* Executor.sol l.261-266, l.296: a protective reduce (above the act line) sells to target and is not budget-limited */}
-          <li>Sell at its own discretion more than {c.budget}% of your collateral per rolling day (above {c.act}% it sells what is needed to return to {c.target}%).</li>
+          {/* protocol README: a move may add up to two loan-token units (0.000002 USDC) of rounding */}
+          <li>Increase your debt on this venue (a move may round it up by up to 0.000002 USDC).</li>
+          {/* Executor.sol l.261-266, l.296: a protective session starts above the act line, sells toward target for up to 24 h (also below the act line) and is not budget-limited */}
+          <li>Sell at its own discretion more than {c.budget}% of your collateral per rolling day (once the ratio passes {c.act}%, it sells what is needed to return to {c.target}%, for up to 24 hours).</li>
           <li>Send funds anywhere except repaying your loan.</li>
           <li>Change these limits.</li>
         </ul>
