@@ -1,22 +1,21 @@
 import { baseSepolia } from 'wagmi/chains'
 import {
   connect, disconnect, getAccount, reconnect, sendTransaction, signMessage, switchChain,
-  waitForTransactionReceipt, watchAccount, watchAsset,
+  waitForTransactionReceipt, watchAccount, watchAsset, watchConnectors,
 } from 'wagmi/actions'
-import type { WalletAdapter, WalletState } from '../types.ts'
+import type { WalletAdapter, WalletOption, WalletState } from '../types.ts'
 import { createWagmiConfig } from './wagmi-config.ts'
-
-const METAMASK_RDNS = ['io.metamask', 'io.metamask.flask']
+import { walletName, walletOptions } from './wallet-options.ts'
 
 function snapshot(account: ReturnType<typeof getAccount>): WalletState {
-  if (account.status === 'connected') return { status: 'connected', address: account.address, chainId: account.chainId }
+  if (account.status === 'connected') return { status: 'connected', address: account.address, chainId: account.chainId, walletName: walletName(account.connector?.name) }
   if (account.status === 'connecting' || account.status === 'reconnecting') return { status: 'connecting' }
   return { status: 'disconnected' }
 }
 
 function same(a: WalletState, b: WalletState) {
   if (a.status !== b.status) return false
-  return a.status !== 'connected' || (b.status === 'connected' && a.address === b.address && a.chainId === b.chainId)
+  return a.status !== 'connected' || (b.status === 'connected' && a.address === b.address && a.chainId === b.chainId && a.walletName === b.walletName)
 }
 
 export function createLiveWallet(): WalletAdapter {
@@ -31,29 +30,39 @@ export function createLiveWallet(): WalletAdapter {
       listeners.forEach(listener => listener())
     },
   })
-  // Silent reconnect through MetaMask's remembered permission (PRD S0); never prompts.
+  // Silent reconnect through the wallet's remembered permission (PRD S0); never prompts.
   void reconnect(config).catch(() => undefined)
 
-  const metaMask = () =>
-    config.connectors.find(item => METAMASK_RDNS.includes(item.id)) ??
-    config.connectors.find(item => item.id === 'metaMask')
-
-  const injectedMetaMask = () => {
-    const provider = (window as Window & { ethereum?: { isMetaMask?: boolean } }).ethereum
-    return provider?.isMetaMask === true
+  // The S3 list: recomputed whenever a wallet announces itself (EIP-6963); providers are compared by identity to tell
+  // whether window.ethereum was announced.
+  let wallets: WalletOption[] = []
+  const walletListeners = new Set<() => void>()
+  let listed = 0
+  const list = async () => {
+    const mine = ++listed
+    const infos = await Promise.all(config.connectors.map(async c => ({ id: c.id, name: c.name, icon: c.icon, type: c.type, provider: await c.getProvider().catch(() => undefined) })))
+    if (mine !== listed) return
+    wallets = walletOptions(infos, (window as Window & { ethereum?: unknown }).ethereum)
+    walletListeners.forEach(listener => listener())
   }
+  void list()
+  const unwatchConnectors = watchConnectors(config, { onChange: () => { void list() } })
 
   return {
     kind: 'live',
-    hasMetaMask: () => injectedMetaMask() || config.connectors.some(item => METAMASK_RDNS.includes(item.id)),
+    getWallets: () => wallets,
+    subscribeWallets(listener) {
+      walletListeners.add(listener)
+      return () => { walletListeners.delete(listener) }
+    },
     getState: () => state,
     subscribe(listener) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    async connect() {
-      const connector = metaMask()
-      if (!connector) throw new Error('MetaMask was not found in this browser.')
+    async connect(walletId) {
+      const connector = config.connectors.find(item => item.id === walletId)
+      if (!connector) throw new Error('This wallet was not found in this browser.')
       await connect(config, { connector })
     },
     async disconnect() { await disconnect(config) },
@@ -74,7 +83,9 @@ export function createLiveWallet(): WalletAdapter {
     watchAsset: asset => watchAsset(config, { type: 'ERC20', options: { address: asset.address, symbol: asset.symbol, decimals: asset.decimals, image: asset.image } }),
     dispose() {
       unwatch()
+      unwatchConnectors()
       listeners.clear()
+      walletListeners.clear()
     },
   }
 }

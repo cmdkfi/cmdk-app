@@ -68,7 +68,7 @@ wallet stays disabled until you do), then **Continue to wallet**.
 
 ## S3 — Connect (`#connect`)
 
-**Do:** **Connect MetaMask**, approve in MetaMask. If MetaMask is on another network, **Switch to Base Sepolia** and
+**Do:** under **Connect wallet**, choose **MetaMask** in the list (Phase 8: every wallet in the browser is listed), approve in MetaMask. The app asks MetaMask to switch to Base Sepolia right after connecting (Phase 8a); if it is still on another network, **Switch to Base Sepolia** and
 approve (or approve adding the network).
 
 **Must be visible:** Wallet "MetaMask · 0x…", Network Base Sepolia, Account type "Plain account (supported)",
@@ -288,3 +288,21 @@ Wallet 0x11B7…0A52 (fresh MetaMask account). Vault **v10**, position address `
 | S7 closed + Start over | pass | — | gas float 0.004994 ETH (0.005 − ~0.000006 for the whole open and close) |
 
 Surprises → fixes (tasks/todo.md Phase 7b): agent status trusted the agent's list over the chain; "Checking…" gave no reason or ETA; POST timeout too short for a slow relayer; internal Morpho transfer legs shown as separate rows; static verification rows tagged "Not checked"; duplicated disclaimer; amounts with six decimals; "no active corridor" copy after close; no "Show USDC in MetaMask"; registration_tx absent in the agent's list after it adopted the on-chain key.
+
+## Recorded results — second run, product owner, 10 Nov 2026 (live on testnet.cmdk.fi, preview deploy of d8d2fe6, agent compose db4f5085)
+
+Same wallet 0x11B7…0A52, same vault **v10** (it had approved the previous agent version, compose 216124c1). Times are local.
+
+| Step | Result | Time | Notes |
+|---|---|---|---|
+| S0 | pass | — | landed on S4, resumed at the setup step (empty vault whose approval is not the published one) |
+| S4 setup (re-approve) | pass | ~09:36 | one signature; approve only, no Base transaction |
+| Agent registration | pass | 09:37:20 | agent key registered on v10, expires 17 Nov (about a minute after setup: one-minute funding cron, agent NEAR RPC failover) |
+| S4 wrap + transfer | pass | 09:37:44 | |
+| S4 open | pass | 09:38:07 | 49.9 % LTV, 10.61 USDC |
+| S4 withdraw | pass | 09:38:29 | |
+| S5 | pass | — | Agent Active; backup "Approved for migration"; recent actions one row per transaction |
+
+Defect found live (fixed in Phase 8): after connecting, the wallet reported a chain other than Base Sepolia although
+MetaMask's network selector showed Base Sepolia (MetaMask keeps a network per site; the old app had left this site on
+another chain). Continue on S4 then did nothing and said nothing (the runner returns while the chain is wrong).

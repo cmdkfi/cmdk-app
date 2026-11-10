@@ -20,8 +20,8 @@ async function statuses(page: Page) {
 }
 
 async function openVerification(page: Page) {
-  await page.goto('/')
-  await page.getByRole('button', { name: 'Connect wallet', exact: true }).click()
+  await page.goto('/#connect') // Phase 8: no Connect button in the header; S3 lists the wallets
+  await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page).toHaveURL(/#position$/)
   await page.getByRole('button', { name: 'Verify the agent' }).click()
   await expect(panel(page)).toBeVisible()
@@ -70,7 +70,7 @@ test('§6 in the S4 rail: the registration row reads Registering while the agent
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Continue to wallet' }).click()
-  await page.getByRole('button', { name: 'Connect MetaMask' }).click()
+  await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await page.getByRole('button', { name: 'Create position' }).click()
   await expect(page).toHaveURL(/#progress$/)
   await expect(panel(page)).toBeVisible()

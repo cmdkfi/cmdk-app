@@ -74,3 +74,9 @@
 - **Rule:** a status that claims protection is derived from the full precondition the protocol uses to protect (PRD fact 5: approved = running measurement, corridor, registered key), with the agent's code cited, even when the task names only part of it. Run the live read-only pass before the commit, not after.
 - **Rule (product owner):** "Unavailable" is only for a read that failed. A known fact gets its own label (Outdated, Not approved), and a label never claims history the chain cannot show: "Revoked" needs evidence that a registration existed.
 - **Also:** check the local gitignored `deployments/testnet.json` against cmdkfi/app main before running checks. The local copy was older than main, so a local build would have baked a measurement the running agent no longer has.
+
+## 2026-11-10 — Phase 8a: a guard that stops a user action must say why and offer the way on
+- **What happened:** the runner returned without a word when the wallet reported another chain (`if (!ok) return`). The live run of 10 Nov hit it: MetaMask kept another network for the site, and Continue did nothing. Every fixture scenario set the chain explicitly, so no test reached that path.
+- **Rule:** no early return on a user action without visible state. A precondition the app can fix (chain, connection) is requested by the action itself; one it cannot fix is shown on the step with a button.
+- **Rule:** for every guard in a step runner, write one browser test where the guard fails after a reload, not only mid-flow.
+- **Also:** a wallet's network is per site. Never infer the chain from what the wallet shows elsewhere; ask for the switch right after connect and before each action.

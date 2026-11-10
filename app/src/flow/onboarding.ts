@@ -12,13 +12,14 @@ export type StepStatus = 'waiting' | 'prompting' | 'submitted' | 'confirming' | 
 
 /** What the user can do on a paused step. */
 export type RetryKind =
-  | 'prompt' // request the MetaMask prompt again (new signature or transaction)
+  | 'prompt' // request the wallet prompt again (new signature or transaction)
   | 'post' // create: a new /create-vault request (only after discovery found no vault)
   | 'resend' // owner call refused before sending: post the same signed message again (≥ 45 s valid)
   | 'resign' // owner call: sign a new message
   | 'topUp' // send the gas top-up, then re-post or re-sign
   | 'accept' // open: accept the lower LTV the market can lend now
   | 'check' // re-check (still waiting / reverted / unclear)
+  | 'switch' // the wallet is on another chain: request the switch to Base Sepolia, then continue (Phase 8a)
 
 export type Pause = {
   /** One plain-language line. */

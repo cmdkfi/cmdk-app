@@ -20,8 +20,8 @@ function active(fx: LiveFixture, idleUsdc = 0n, walletUsdc = 0n) {
 }
 
 async function openPosition(page: Page) {
-  await page.goto('/')
-  await page.getByRole('button', { name: 'Connect wallet', exact: true }).click()
+  await page.goto('/#connect') // Phase 8: no Connect button in the header; S3 lists the wallets
+  await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page).toHaveURL(/#position$/)
   await expect(page.getByRole('heading', { name: 'Your position' })).toBeVisible()
 }

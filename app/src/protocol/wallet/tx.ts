@@ -1,4 +1,4 @@
-// Wallet transactions the owner sends from MetaMask (PRD Appendix B). Calldata from ../base/abi.ts.
+// Wallet transactions the owner sends from the connected wallet (PRD Appendix B). Calldata from ../base/abi.ts.
 import { encodeFunctionData } from 'viem'
 import { erc20Abi, wethAbi } from '../base/abi.ts'
 

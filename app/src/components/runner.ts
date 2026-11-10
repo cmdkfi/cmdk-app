@@ -1,13 +1,15 @@
 // Step-chain runner shared by S4 onboarding (useOnboarding.ts) and S6 close (useClose.ts): PRD D11, FR-5/5a/6/8, R4.
 // Rules:
-// - one step at a time, one open MetaMask prompt at a time; after a reload nothing prompts until Continue (armed);
+// - one step at a time, one open wallet prompt at a time; after a reload nothing prompts until Continue (armed);
 // - every state change is written to the record before the next await, so a reload resumes where it stopped;
 // - a step is done only when its chain check holds; "submitted"/"confirming" never count as done;
-// - an account or chain change stops the run (the record is re-keyed to the new owner by the caller).
+// - an account or chain change stops the run (the record is re-keyed to the new owner by the caller);
+// - on another chain every user action requests the switch to Base Sepolia itself, and the active step says so with a
+//   Switch button; it never waits in silence (Phase 8a, 10 Nov live run).
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Address, Hex } from 'viem'
-import { useAdapters } from '../adapters/AdapterProvider.tsx'
+import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { ProtocolError, type JobView, type OwnerIntent, type ProtocolAdapter, type VaultView, type WalletAdapter } from '../adapters/types.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import { formatUnits } from '../flow/format.ts'
@@ -47,15 +49,24 @@ export function rejected(error: unknown): boolean {
 
 export const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-/** Run a MetaMask prompt; a rejection pauses the step with Retry and returns null. */
+/** The connected wallet's name for copy, or "your wallet" (Phase 8). */
+function who<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>): string {
+  const s = env.wallet.getState()
+  return s.status === 'connected' && s.walletName ? s.walletName : 'your wallet'
+}
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+export const SWITCH_LINE = 'Switch to Base Sepolia in your wallet.'
+
+/** Run a wallet prompt; a rejection pauses the step with Retry and returns null. */
 export async function prompted<Id extends string, R extends ChainRecord<Id>, T>(env: Env<Id, R>, id: Id, action: () => Promise<T>): Promise<T | null> {
   env.patch(id, { status: 'prompting', pause: undefined })
   try {
     return await action()
   } catch (error) {
     if (!env.live()) return null
-    if (rejected(error)) env.patch(id, { status: 'paused', pause: { line: 'You declined the request in MetaMask. Nothing was sent.', retry: 'prompt' } })
-    else env.patch(id, { status: 'paused', pause: { line: 'MetaMask returned an error. Nothing was confirmed.', text: message(error), retry: 'prompt' } })
+    if (rejected(error)) env.patch(id, { status: 'paused', pause: { line: `You declined the request in ${who(env)}. Nothing was sent.`, retry: 'prompt' } })
+    else env.patch(id, { status: 'paused', pause: { line: `${capital(who(env))} returned an error. Nothing was confirmed.`, text: message(error), retry: 'prompt' } })
     return null
   }
 }
@@ -269,7 +280,7 @@ export async function ownerStep<Id extends string, R extends ChainRecord<Id>>(en
     const signature = await prompted(env, spec.id, () => env.wallet.signMessage(text))
     if (!signature) return false
     if (!await env.protocol.checkOwnerSignature(text, signature, env.owner)) {
-      env.patch(spec.id, { status: 'paused', pause: { line: 'MetaMask signed with a different account than the vault owner. Nothing was sent.', retry: 'prompt' } })
+      env.patch(spec.id, { status: 'paused', pause: { line: `${capital(who(env))} signed with a different account than the vault owner. Nothing was sent.`, retry: 'prompt' } })
       return false
     }
     const after = await env.protocol.readVault(env.app, vault.accountId)
@@ -322,7 +333,10 @@ export type Chain<Id extends string, R extends ChainRecord<Id>> = {
 export function useStepChain<Id extends string, R extends ChainRecord<Id>>(o: ChainOptions<Id, R>): Chain<Id, R> {
   const { protocol, wallet } = useAdapters()
   const queryClient = useQueryClient()
+  const walletState = useWalletState()
   const { mode, app, owner, chainOk, key } = o
+  // connected, but to another chain than Base Sepolia (the caller's chainOk also covers "not connected")
+  const wrongChain = walletState.status === 'connected' && !chainOk
   const [record, setRecord] = useState<R | null>(null)
   const [running, setRunning] = useState(false)
   const ref = useRef<R | null>(null)
@@ -347,14 +361,31 @@ export function useStepChain<Id extends string, R extends ChainRecord<Id>>(o: Ch
     setRecord(r)
   }, [mode, key])
 
-  // A chain change stops the run; a step that was prompting is paused.
+  /** On another chain the active step says so, with a Switch button (Phase 8a.3). */
+  const showSwitch = useCallback(() => {
+    const r = ref.current, id = r && opts.current.active(r)
+    if (r && id && r.steps[id].pause?.retry !== 'switch') commit(patchStep(r, id, { status: 'paused', pause: { line: SWITCH_LINE, retry: 'switch' } }))
+  }, [commit])
+
+  /** Phase 8a.2: an action that needs Base Sepolia requests the switch (adding the chain when the wallet lacks it); once the wallet reports Base Sepolia the effects below continue the run. */
+  const requestSwitch = useCallback(async () => {
+    const a = opts.current.app
+    if (!a) return
+    try { await wallet.switchToBaseSepolia(a.guided.network) } catch { showSwitch() }
+  }, [wallet, showSwitch])
+
+  // A chain change stops the run and the active step shows the switch line; back on Base Sepolia the line gives way
+  // to the step's own state and the run continues (armed only if the user acted).
   useEffect(() => {
-    if (chainOk) return
+    if (chainOk) {
+      const r = ref.current, id = r && opts.current.active(r)
+      if (r && id && r.steps[id].pause?.retry === 'switch') commit(patchStep(r, id, { status: 'waiting', pause: undefined }))
+      return
+    }
     epoch.current++
     armed.current = false
-    const r = ref.current, id = r && opts.current.active(r)
-    if (r && id && r.steps[id].status === 'prompting') commit(patchStep(r, id, { status: 'paused', pause: { line: 'The wallet left Base Sepolia. Switch back, then continue.', retry: 'prompt' } }))
-  }, [chainOk, commit])
+    if (wrongChain) showSwitch()
+  }, [chainOk, wrongChain, commit, showSwitch])
 
   const run = useCallback(async () => {
     const { app: a, owner: w, chainOk: ok } = opts.current
@@ -404,12 +435,14 @@ export function useStepChain<Id extends string, R extends ChainRecord<Id>>(o: Ch
     void run()
   }, [record?.createdAt, record?.owner, app, owner, chainOk, run, commit])
 
+  // every user action: on another chain the switch is requested first, and the run continues when it lands
+  const go = () => { if (opts.current.chainOk) void run(); else void requestSwitch() }
   return {
     record, running,
-    start: () => { armed.current = true; void run() },
+    start: () => { armed.current = true; go() },
     act: (id, kind) => {
       armed.current = true
-      actions.current.set(id, kind)
+      if (kind !== 'switch') actions.current.set(id, kind)
       const r = ref.current
       if (r) {
         let next = patchStep(r, id, { status: 'waiting', pause: undefined })
@@ -417,8 +450,8 @@ export function useStepChain<Id extends string, R extends ChainRecord<Id>>(o: Ch
         if (kind === 'prompt') next = patchStep(next, id, { txHash: undefined })
         commit(next)
       }
-      void run()
+      go()
     },
-    begin: next => { armed.current = true; commit(next); void run() },
+    begin: next => { armed.current = true; commit(next); go() },
   }
 }

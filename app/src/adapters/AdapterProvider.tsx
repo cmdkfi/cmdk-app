@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
-import type { AdapterKind, Adapters, WalletState } from './types.ts'
+import type { AdapterKind, Adapters, WalletOption, WalletState } from './types.ts'
 import { createLiveAdapters } from './live/index.ts'
 import { createSandboxAdapters } from './sandbox/index.ts'
 import { SANDBOX } from '../flow/build.ts'
@@ -26,4 +26,16 @@ export function useAdapters(): Adapters {
 export function useWalletState(): WalletState {
   const { wallet } = useAdapters()
   return useSyncExternalStore(wallet.subscribe, wallet.getState)
+}
+
+/** The injected wallets in this browser for the S3 list (Phase 8). */
+export function useWallets(): WalletOption[] {
+  const { wallet } = useAdapters()
+  return useSyncExternalStore(wallet.subscribeWallets, wallet.getWallets)
+}
+
+/** The connected wallet's name for copy ("Waiting for Rabby Wallet…"), or "your wallet" when it has none. */
+export function useWalletLabel(): string {
+  const state = useWalletState()
+  return state.status === 'connected' && state.walletName ? state.walletName : 'your wallet'
 }

@@ -2,7 +2,7 @@
 
 Status: draft v2 for review, 9 Nov 2026 (v1 reviewed by the product owner the same day; D1 and D3 resolved, open-signature chaining added). Revised during Phase 2 (9 Nov): D5 reuses an empty vault and "closed" is never derived from chain state; EIP-7702 delegated accounts are allowed; the shell is not mounted below 960 px. Author: Claude Code with the product owner. Protocol facts checked against cmdkfi/app `47fd4fb` (= origin/main on 9 Nov 2026). Frontend facts checked against cmdk-app `61f71cc`.
 
-This document describes a new, deliberately narrow frontend that replaces the current cockpit on https://testnet.cmdk.fi. It keeps the current visual identity and tech stack, reuses the proven protocol client modules, and exposes one guided path: choose collateral and debt → accept fixed agent settings → connect MetaMask → sign and fund → watch progress → see one position → repay and close → start over.
+This document describes a new, deliberately narrow frontend that replaces the current cockpit on https://testnet.cmdk.fi. It keeps the current visual identity and tech stack, reuses the proven protocol client modules, and exposes one guided path: choose collateral and debt → accept fixed agent settings → connect a wallet → sign and fund → watch progress → see one position → repay and close → start over.
 
 Companion action plan: `tasks/todo.md`.
 
@@ -12,7 +12,7 @@ Companion action plan: `tasks/todo.md`.
 
 | Item | Decision |
 |---|---|
-| Audience | Desktop users with MetaMask on Base Sepolia. Testnet only, unaudited, no real funds. |
+| Audience | Desktop users with an injected browser wallet (MetaMask, Rabby, …) on Base Sepolia. Testnet only, unaudited, no real funds. |
 | Product | Deposit ETH (wrapped to WETH), borrow USDC on Base Morpho, agent protects the position (reduce / migrate to backup market / exit). |
 | What the user sees | Landing choice screen → read-only settings → wallet → guided progress → position screen with two actions → start over. |
 | What the user never sees | Rule editing, multi-vault tables, held-transaction cancellation panel, NEAR history viewer, demo market, raw cockpit. |
@@ -29,7 +29,7 @@ Companion action plan: `tasks/todo.md`.
 | **Vault** | The NEAR account `v<N>.factory.prime-measure-1792736012.testnet`. A contract with no keys. It stores the owner's wallet address, verifies the owner's signed messages, and signs Base transactions through NEAR chain signatures. | Verification panel, NearBlocks links, code. Never as a place the user "sends" anything to. |
 | **Position address** | The Base Sepolia address derived from the vault (`base_address` in the protocol). It holds WETH, USDC and gas ETH, and Morpho sees it as the borrower. Only the vault contract can sign for it: on the owner's signed messages for everything, and on the agent's restricted key for reduce, migrate and exit only. | All user-facing steps: "Send WETH to your position address", "Send USDC to your position address". |
 | **Agent** | The TEE-hosted program with a function-call key on the vault limited to `reduce`, `migrate`, `exit`. It does not control the position address; it can only ask the vault to perform those three actions within the corridor. | Settings, position screen, verification. |
-| **Owner / you** | The MetaMask wallet whose address is stored in the vault. | Everywhere. |
+| **Owner / you** | The connected wallet (any injected wallet, Phase 8) whose address is stored in the vault. | Everywhere. |
 
 The earlier phrase "address on Base controlled by the agent" is replaced by "position address" throughout.
 
@@ -66,7 +66,7 @@ Each decision has a recommended default. The PRD below assumes the recommended o
 | **D1** | How does ETH become WETH at the position address, given no auto-wrap exists? | — | **Resolved (product owner, 9 Nov):** the "Send WETH to your position address" step runs an inline **Wrap ETH → WETH** action from the user's wallet; the wrap is skipped when the wallet already holds enough WETH. WETH is mandatory (fact 6). |
 | **D2** | Does onboarding end with borrowed USDC in the user's wallet? | (a) Yes: the flow asks for one more signature (`withdraw USDC → wallet`) right after `open` confirms, chained automatically. (b) No: USDC stays at the position address and the position screen shows "Send USDC to wallet". | **Resolved (product owner, 9 Nov): (a).** The last chained prompt withdraws the borrowed USDC to the connected wallet. |
 | **D3** | What does "close without repay" mean? | — | **Resolved (product owner, 9 Nov):** one action only, **Close position**, which repays from the idle USDC at the position address and inserts a manual "Send USDC to your position address" transfer when it is short. No "close without repay" button. |
-| **D11** | Signatures are not separate user steps. | — | **Resolved (product owner, 9 Nov):** after the user confirms the deposit, the app chains every required MetaMask prompt automatically (setup → wrap/transfer → open → withdraw) as soon as its predecessor is confirmed. The progress list shows sub-states; the user only acts inside MetaMask. One explicit button exists at the start ("Create position") and one per retry after a rejection. |
+| **D11** | Signatures are not separate user steps. | — | **Resolved (product owner, 9 Nov):** after the user confirms the deposit, the app chains every required wallet prompt automatically (setup → wrap/transfer → open → withdraw) as soon as its predecessor is confirmed. The progress list shows sub-states; the user only acts inside the wallet. One explicit button exists at the start ("Create position") and one per retry after a rejection. |
 | **D4** | Which vault is "the position" for a wallet that owns several? | — | **Revised (product owner, 9 Nov, Phase 2):** only vaults numbered from `guided.firstVaultNumber` (10, in `config.app.json`) count; the **newest** of them is the position. Vaults below the cutoff were made by the previous app: they are not read, not shown and get no note, and a read failure on them does not fail discovery (R8). (Superseded: (b) newest vault with debt or collateral across all vaults, with a NearBlocks note for older ones.) |
 | **D5** | When does "Start over" appear, and what does it do? | — | **Revised (product owner, 9 Nov, Phase 2):** Start over appears only as the terminal state of a close chain run in this session (kept in the local record). It **reuses the empty vault** and goes to S4 at the deposit step; no new vault is created. A new vault is created only when the wallet owns none (from the D4 cutoff). "Position closed" is never derived for a vault that was merely discovered. (Superseded: (a) create a new vault when the active vault is empty, which wasted the 2/IP/hour creation quota and needed a history scan to tell "closed" from "never opened".) |
 | **D6** | Should "Close position" also revoke the agent on the old vault? | (a) Yes, one more signature. (b) No; an empty vault is harmless, the agent only acts where there is debt. | **(b), adopted.** |
@@ -82,7 +82,7 @@ All decisions are closed. Confirmed end-to-end flow (product owner, 9 Nov): user
 ## 3. Scope
 
 ### In scope
-- Desktop web app at testnet.cmdk.fi, MetaMask only (EIP-6963 announced provider or `window.ethereum` with `isMetaMask`).
+- Desktop web app at testnet.cmdk.fi, any injected wallet (EIP-6963 announced providers, plus `window.ethereum` when it is not announced; Phase 8, product owner 10 Nov).
 - Base Sepolia (84532) and NEAR testnet; markets `live` (selected) and `backup` (approved for migration); `demo` market never shown.
 - Full guided onboarding with live progress and verification information.
 - One position per wallet; repay and close; start over.
@@ -98,7 +98,7 @@ All decisions are closed. Confirmed end-to-end flow (product owner, 9 Nov): user
 ## 4. User flow
 
 ```
-S1 Choose ──► S2 Settings (read-only) ──► S3 Connect MetaMask ──► S4 Progress ──► S5 Position
+S1 Choose ──► S2 Settings (read-only) ──► S3 Connect wallet ──► S4 Progress ──► S5 Position
                                                                        ▲              │
                                             returning wallet with vault│              ├─► S6 Close position ─► S5 (closed) ─► S7 Start over ─► S4 (deposit, same vault)
                                                                        └──────────────┘
@@ -155,9 +155,9 @@ One picture, not a table (mockup review, 9 Nov 2026):
 - Checkbox: "I understand this is a testnet prototype; protection is risk management, not insurance." Required.
 - Primary action: **Continue to wallet**. Secondary: Back.
 
-### S3 — Connect MetaMask
+### S3 — Connect wallet
 - **Connect wallet** (product owner, 10 Nov; replaces MetaMask-only): the app lists every injected wallet announced through EIP-6963 (MetaMask, Rabby, Coinbase Wallet extension, Brave, OKX, …) plus a legacy `window.ethereum` entry when it is not announced, using wagmi's connectors, which the app already depends on; no third-party connect-modal library (they add WalletConnect, mobile and bundle weight the product does not use). Each entry shows the wallet's name and icon from its EIP-6963 announcement. No wallet detected → "Install a wallet" link (MetaMask by default) plus **Try in sandbox**. After connecting, the same checks as before: Base Sepolia switch or add, plain or EIP-7702 EOA only (contract wallets, including Coinbase Smart Wallet, are blocked with the reason because the vault verifies ERC-191 signatures with ecrecover). **Try in sandbox** stays as the secondary action (section 8a).
-- Wrong chain → **Switch to Base Sepolia** (`wallet_switchEthereumChain`). If MetaMask answers 4902 (network unknown), the app calls `wallet_addEthereumChain` with: chainId `0x14a34` (84532), chainName "Base Sepolia", rpcUrls `https://sepolia.base.org`, nativeCurrency ETH/18, blockExplorerUrls `https://sepolia.basescan.org`. MetaMask shows its own confirmation; the user approves inside MetaMask. A "Having trouble?" line links the Base docs page for connecting to Base and the manual values above for copy-paste.
+- Wrong chain → **Switch to Base Sepolia** (`wallet_switchEthereumChain`). If the wallet answers 4902 (network unknown), the app calls `wallet_addEthereumChain` with: chainId `0x14a34` (84532), chainName "Base Sepolia", rpcUrls `https://sepolia.base.org`, nativeCurrency ETH/18, blockExplorerUrls `https://sepolia.basescan.org`. The wallet shows its own confirmation; the user approves inside the wallet. **Wrong chain at any time (Phase 8a, product owner after the 10 Nov live run: a wallet keeps a network per site and can report another chain while its selector elsewhere shows Base Sepolia):** right after a connect or a silent reconnect the app requests the switch once (adding the chain from `config.network` when the wallet lacks it); every later action that needs Base Sepolia (Continue, Retry, Create position, Start closing, re-approval) requests the switch itself and proceeds once it lands; while the wallet stays on another chain the active step reads "Switch to Base Sepolia in your wallet." with a **Switch to Base Sepolia** button, never silence. A "Having trouble?" line links the Base docs page for connecting to Base and the manual values above for copy-paste.
 - **Testnet ETH check (section 4a).** After connecting, the app reads the wallet's Base Sepolia ETH balance and compares it with the chosen deposit plus a gas allowance for two transactions. If short, the **Get Base Sepolia ETH** panel opens (see S3a) and "Create position" stays disabled until the balance is enough. The balance is re-read every 10 s while the panel is open and the flow continues automatically when funds arrive.
 - Contract wallet → blocked with message (reuse `accountKind`). EIP-7702 delegated accounts are allowed: they sign with their own key, and the vault verifies owner messages with `env::ecrecover` (`vault/src/owner.rs` l.46), which they satisfy; only contract wallets cannot (product owner, 9 Nov, Phase 2).
 - Rejection keeps the entered amount. Disconnect returns to S1 with state retained in `sessionStorage`.
@@ -176,9 +176,9 @@ Inline panel on S3 (and reachable from S4 if the wrap step fails for insufficien
 ### S4 — Progress
 One screen, vertical step list, exactly one step active at a time. Each step shows: title, live status, transaction or job link when it exists, and an expandable "Why" line. A submitted item is "Submitted", never "Done", until confirmed with the stated evidence.
 
-**Chaining (D11).** The user presses **Create position** once. From then on the app requests each MetaMask prompt automatically the moment its predecessor is confirmed; the user does not click per step. The active step shows "Waiting for MetaMask…" while a prompt is open. A rejected prompt pauses the chain on that step with a **Retry** button and keeps all data. There is no mid-flow user choice: the app reads the wallet's WETH balance and wraps only the missing amount before sending ("most actions under the hood", the product owner, 9 Nov).
+**Chaining (D11).** The user presses **Create position** once. From then on the app requests each wallet prompt automatically the moment its predecessor is confirmed; the user does not click per step. The active step shows "Waiting for <wallet name>…" while a prompt is open. A rejected prompt pauses the chain on that step with a **Retry** button and keeps all data. There is no mid-flow user choice: the app reads the wallet's WETH balance and wraps only the missing amount before sending ("most actions under the hood", the product owner, 9 Nov).
 
-| # | Step | MetaMask prompts (automatic) | Evidence of completion |
+| # | Step | Wallet prompts (automatic) | Evidence of completion |
 |---|---|---|---|
 | 1 | Create your position | none | relayer job `done`; position address shown (vault id in the Why line); link to NearBlocks account. Creation is guarded by a fresh ownership read, never by a cached one (Phase 7): discovery is re-run immediately before **every** create POST (the first one and any repeat after an uncertain response or 404 job), and a vault the wallet already owns is adopted instead of creating another; this is the only way two vaults at or above the D4 cutoff could exist, and this step closes it. |
 | 2 | Approve agent and rules | 1 signature (`setup`). A resumed setup always sends `approve: true` and derives only `authorize` from Base (fact 3). Right before the prompt the measurement baked into `config.json` is compared with the published manifest; if they differ the step pauses with "This app's configuration is behind the published agent version; try again later." and Check again (Phase 7b item 1a: approving a stale measurement costs a signature and leaves the vault unwatched, as happened to v10 on 9 Nov) | job `done`, 5 Base receipts status 1 with 2 confirmations, then setup complete per fact 3: `morpho_authorized`, both allowances > 0, both corridors `set`, measurement approved |
@@ -207,11 +207,11 @@ Rules for S4:
 - Critical state: collateral 0 with debt > 0 (liquidated) is shown as "Position liquidated" with the remaining debt, no promise of recovery.
 
 ### S6 — Close position
-Guided steps on the position screen, same component and chaining rule as S4 (one click on **Close position**, then automatic MetaMask prompts):
+Guided steps on the position screen, same component and chaining rule as S4 (one click on **Close position**, then automatic wallet prompts):
 
 | # | Step | User action | Condition |
 |---|---|---|---|
-| 1 | Send USDC to your position address | 1 MetaMask tx `USDC.transfer(base_address, shortfall)` | only if idle USDC < debt × 1.01 (relayer headroom); shortfall computed from a fresh read and shown; if the wallet's USDC is also short, the chain pauses here and the **Get test USDC** panel (S6a) opens with the exact amount missing; no partial close is offered |
+| 1 | Send USDC to your position address | 1 wallet tx `USDC.transfer(base_address, shortfall)` | only if idle USDC < debt × 1.01 (relayer headroom); shortfall computed from a fresh read and shown; if the wallet's USDC is also short, the chain pauses here and the **Get test USDC** panel (S6a) opens with the exact amount missing; no partial close is offered |
 | 2 | Close position | 1 signature (`close`) | — |
 | 3 | Return WETH to your wallet | 1 signature (`withdraw` WETH) | idle WETH > 0 |
 | 4 | Return leftover USDC | 1 signature (`withdraw` USDC) | idle USDC > 0.01 |
@@ -241,9 +241,9 @@ Opens automatically when the wallet's USDC is below the shortfall during Close p
 
 **FR-3 Wallet.** Any injected EIP-1193 wallet announced via EIP-6963 (plus legacy `window.ethereum`), desktop; wagmi connectors, no connect-modal library; the header shows the wallet slot only once connected (no Connect button in the header); Base Sepolia enforced; externally owned keys only: plain EOAs and EIP-7702 delegated EOAs (both verify under the vault's `ecrecover`), never contract wallets; connection state is not stored beyond wagmi's own persistence.
 
-**FR-4 One position.** The app shows exactly one vault per connected wallet: the newest numbered from `firstVaultNumber` (D4). Discovery uses batch 2 and `Retry-After` handling; vaults below the cutoff and read failures on them are ignored. A failed scan is shown as "Could not read your vaults" with Retry; it never shows "no position" or offers creation. Creation is guarded by a fresh ownership read, never by a cached one: the create step re-runs discovery immediately before every `/create-vault` POST and adopts an owned vault (S4 step 1). The cached answer is refreshed as soon as a run creates or adopts a vault, the landing table runs again when MetaMask switches to another account, and S3 never overwrites an onboarding record that names a vault (it returns to S4). (Phase 7, 9 Nov.)
+**FR-4 One position.** The app shows exactly one vault per connected wallet: the newest numbered from `firstVaultNumber` (D4). Discovery uses batch 2 and `Retry-After` handling; vaults below the cutoff and read failures on them are ignored. A failed scan is shown as "Could not read your vaults" with Retry; it never shows "no position" or offers creation. Creation is guarded by a fresh ownership read, never by a cached one: the create step re-runs discovery immediately before every `/create-vault` POST and adopts an owned vault (S4 step 1). The cached answer is refreshed as soon as a run creates or adopts a vault, the landing table runs again when the wallet switches to another account, and S3 never overwrites an onboarding record that names a vault (it returns to S4). (Phase 7, 9 Nov.)
 
-**FR-5a Chaining.** MetaMask prompts are requested automatically in order (D11); at most one prompt is open at a time; a rejection pauses the chain on that step; a page reload resumes at the first unconfirmed step and re-requests its prompt only after the user clicks Continue (no surprise prompts on load).
+**FR-5a Chaining.** Wallet prompts are requested automatically in order (D11); at most one prompt is open at a time; a rejection pauses the chain on that step; a page reload resumes at the first unconfirmed step and re-requests its prompt only after the user clicks Continue (no surprise prompts on load).
 
 **FR-5 Progress truth.** Every step has an explicit completion predicate (section 4). "Submitted" and "Done" are distinct. Confirmations require 2 blocks for Base receipts. Job polling is 1 s for the first 30 s then 2 s, 180 s cap per job, then "Still waiting" with the job id.
 
@@ -267,7 +267,7 @@ Opens automatically when the wallet's USDC is below the shortfall during Close p
 
 **FR-15 Accessibility.** Keyboard-reachable steps and dialogs, focus trap in dialogs, 44px targets, `prefers-reduced-motion` respected, hover only on pointer devices.
 
-**FR-16 Desktop gate.** Below 960px: full-screen notice (D9). Decision (Phase 2): below 960 px the app shell is **not mounted** at all, so no adapters are created, MetaMask is not silently reconnected and no RPC, NEAR or relayer read runs on unsupported screens. Crossing 960 px mounts or unmounts the shell live; S1/S2 input survives in `sessionStorage`.
+**FR-16 Desktop gate.** Below 960px: full-screen notice (D9). Decision (Phase 2): below 960 px the app shell is **not mounted** at all, so no adapters are created, the wallet is not silently reconnected and no RPC, NEAR or relayer read runs on unsupported screens. Crossing 960 px mounts or unmounts the shell live; S1/S2 input survives in `sessionStorage`.
 
 **FR-17 Testnet funding help.** The app detects insufficient Base Sepolia ETH (S3) and insufficient test USDC (S6) itself, shows the exact missing amount and the wallet address, links the faucets named in S3a/S6a, polls the balance every 10 s while the panel is open, and resumes the chain automatically when funds arrive. Faucet links open in a new tab. No drip sizes or limits are quoted. The network-add dialog uses the exact Base Sepolia values in S3 and never a third-party RPC.
 
@@ -314,11 +314,11 @@ app/
     flow/                    routes + entry resolver (S0), onboarding state machine + persistence,
                              close-flow state machine, pure helpers (amount, quote, funding)
     components/              shell, wallet slot, DesktopGate, buttons/surfaces/token icons, LTV track
-    adapters/                WalletAdapter / ProtocolAdapter interfaces, live/ (wagmi MetaMask-only config,
+    adapters/                WalletAdapter / ProtocolAdapter interfaces, live/ (wagmi config with EIP-6963 discovery and `injected()`,
                              pass-through to protocol/*), sandbox/ (§8a), AdapterProvider
     protocol/                NEW, written from cmdkfi/app (§8b): near/, owner/, relayer/, base/, evidence/, wallet/
     styles/                  prototype-controls.css (tokens, font), base, shell, LTV track, screen CSS
-  e2e/                       live-fixture.ts (thin fake MetaMask + NEAR/Base/relayer RPC), specs; sandbox adapters
+  e2e/                       live-fixture.ts (thin fake EIP-6963 wallets + NEAR/Base/relayer RPC), specs; sandbox adapters
                              serve as the backend for UI scenarios
   scripts/                   generate-config.mjs (+ guided-values.mjs), copy-prototype.mjs, check-test-boundary.mjs
 ```
@@ -326,7 +326,7 @@ app/
 - **Nothing from the previous app's `src/` is imported.** Phase 1 moved twenty modules into `protocol/` unchanged; Phase 2b replaces them (§8b). Visual tokens and the font come from the same design source and are kept.
 - State: TanStack Query for polling reads, small hand-rolled reducers for the two step machines (a few explicit states each; a state-machine library would add more surface than it removes). No global store.
 - Config: `scripts/generate-config.mjs` reads `deployments/testnet.json` (fetched from cmdkfi/app main at build time) and `config.app.json`; the app never carries an address that is not in the manifest.
-- Wallet: `createConfig({ chains:[baseSepolia], connectors:[injected({ target:'metaMask' })] })`.
+- Wallet: `createConfig({ chains:[baseSepolia], connectors:[injected()], multiInjectedProviderDiscovery: true })`: one connector per EIP-6963 wallet plus the generic one for an unannounced `window.ethereum` (Phase 8).
 - Build/deploy: `pnpm build`, `pnpm test`, `pnpm test:bundle-boundary`, `pnpm test:browser`, `wrangler deploy`; workflows unchanged. Vite is pinned to an exact version.
 
 ### 8b. Protocol layer, written from cmdkfi/app
@@ -353,7 +353,7 @@ Rules: every exported function has a one-line comment with the cmdkfi/app path i
 
 **Test vectors to port** (copied as data, not as code): exact `setup` message text and field order; `open`/`withdraw`/`close` argument shapes; accrual and LTV rounding cases including zero collateral; nonce replay refusal; relayer fallback-on-GET-only and 429 handling; discovery owner filtering and partial-scan failure.
 
-**Browser fixture:** a new thin `e2e/live-fixture.ts` (fake MetaMask with `personal_sign`, `eth_sendTransaction`, `wallet_switchEthereumChain`/`wallet_addEthereumChain`, account and chain changes; NEAR, Base and relayer JSON fakes sized to the function list above). The previous `fixture.ts` is reference only and is deleted. Sandbox adapters back the UI-level scenarios.
+**Browser fixture:** a new thin `e2e/live-fixture.ts` (fake wallets, announced through EIP-6963, with `personal_sign`, `eth_sendTransaction`, `wallet_switchEthereumChain`/`wallet_addEthereumChain`, account and chain changes; NEAR, Base and relayer JSON fakes sized to the function list above). The previous `fixture.ts` is reference only and is deleted. Sandbox adapters back the UI-level scenarios.
 
 ### 8a. Sandbox mode (foundation)
 
@@ -363,7 +363,7 @@ Pattern observed in the Spark app on 9 Nov 2026: a "Try in Sandbox" button next 
 
 | Interface | Live implementation | Sandbox implementation |
 |---|---|---|
-| `WalletAdapter` — connect, account, chain, `signMessage`, `sendTransaction`, balances | wagmi + MetaMask | In-memory account `0xSandbox…`, generous ETH/WETH/USDC balances, instant "signatures" and "transactions" with fake hashes, optional simulated rejection |
+| `WalletAdapter` — connect, account, chain, `signMessage`, `sendTransaction`, balances | wagmi + any injected wallet | In-memory account `0xSandbox…`, generous ETH/WETH/USDC balances, instant "signatures" and "transactions" with fake hashes, optional simulated rejection |
 | `ProtocolAdapter` — relayer jobs, NEAR state reads, Morpho/Executor reads, activity logs, agent evidence | existing `protocol/*` modules | In-memory state machine: create → setup → open → agent actions → close, advancing on timers (1–3 s per stage) so the progress UI shows every state; deterministic scripted events (one price drop and one agent `Reduced`), simulated feeds and interest accrual |
 
 The same adapter interfaces are what the Playwright fixtures drive, so the sandbox implementation doubles as the browser-test backend for most scenarios; only the live adapter's wire formats need the existing protocol fixture.
@@ -375,17 +375,17 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 | S1 Choose | `#sandbox/start` | Wallet slot reads "Sandbox wallet"; balances 10 ETH, 5,000 USDC |
 | S2 Settings | `#sandbox/settings` | None |
 | S3 Connect | `#sandbox/connect` | Already "connected"; funding check always passes; no faucet panel; Create position enabled |
-| S4 Progress | `#sandbox/progress` | Each stage advances on a 1–3 s timer; "Waiting for MetaMask…" is replaced by "Simulated signature" / "Simulated transaction"; agent registration completes in ~5 s; verification rows read "Simulated (not checked)" |
+| S4 Progress | `#sandbox/progress` | Each stage advances on a 1–3 s timer; "Waiting for <wallet>…" is replaced by "Simulated signature" / "Simulated transaction"; agent registration completes in ~5 s; verification rows read "Simulated (not checked)" |
 | S5 Position | `#sandbox/position` | After ~20 s a scripted price drop (−30%) pushes LTV from 50% to about 71%; the simulated agent posts a `Reduced` action within the cooldown and LTV returns to 50%; interest accrues visibly; hash links disabled and tagged "simulated" |
 | S6 Close | `#sandbox/position` (close state; `#sandbox/close` redirects here) | Shortfall exists (interest), wallet has enough USDC, so the transfer step runs without a faucet panel; all steps instant |
 | S7 Closed | `#sandbox/position` (closed state; `#sandbox/closed` redirects here) | Start over reuses the simulated vault at the deposit step |
 
-**Entering.** "Try in sandbox" appears in three places: beside Connect MetaMask on S3, in the no-MetaMask state, and in the wallet-slot menu when not connected. It opens the explainer sheet (S8). **Activate sandbox** switches the adapters, sets the banner, and lands on `#sandbox/start` with the amount field prefilled (0.5 ETH in the sandbox, where liquidity is simulated) so the user can go straight to Continue.
+**Entering.** "Try in sandbox" appears in three places: beside the wallet list on S3, in the no-wallet state, and in the wallet-slot menu when not connected. It opens the explainer sheet (S8). **Activate sandbox** switches the adapters, sets the banner, and lands on `#sandbox/start` with the amount field prefilled (0.5 ETH in the sandbox, where liquidity is simulated) so the user can go straight to Continue.
 
 **Exiting.** **Leave sandbox** sits in the banner and in the wallet-slot menu. It asks once ("Leave the sandbox? Simulated data is discarded.") with Leave and Stay, then clears `sessionStorage` sandbox keys, disposes the simulated adapters, and lands on `#start` with no wallet connected. Closing the tab also discards the sandbox.
 
 **UI rules.**
-- Entry: **Try in sandbox** beside Connect on S3 and in the no-MetaMask state. Explainer sheet with one **Activate sandbox** button and the sentences: "Simulated wallet and simulated protocol. Nothing touches Base Sepolia or NEAR. Numbers are illustrative." Route prefix `#sandbox/…` so a reload stays in the sandbox and a shared link is honest.
+- Entry: **Try in sandbox** beside Connect on S3 and in the no-wallet state. Explainer sheet with one **Activate sandbox** button and the sentences: "Simulated wallet and simulated protocol. Nothing touches Base Sepolia or NEAR. Numbers are illustrative." Route prefix `#sandbox/…` so a reload stays in the sandbox and a shared link is honest.
 - While active: a persistent banner "Sandbox · simulated data" above the header, the wallet slot reads "Sandbox wallet", every hash and address link is disabled and tagged "simulated", verification rows read "Simulated (not checked)" and never "Checked".
 - Exit: **Leave sandbox** in the banner and the wallet slot; clears all sandbox state (`sessionStorage` only) and returns to `#start`. Sandbox state is never written to the `localStorage` keys the live flow uses.
 - Never mix: the live adapter is never instantiated while the sandbox is active, and vice versa. No live read is shown inside the sandbox, including prices.
@@ -434,17 +434,17 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 
 ## 10. Acceptance criteria
 
-1. A fresh MetaMask wallet with ≥0.015 Base Sepolia ETH completes S1→S5 with the default deposit of 0.01 ETH, 2 transactions and 3 signatures (plus wrap skip when WETH exists), ending with about 10 USDC in the wallet and a Morpho position at ≈50% LTV on the live market. The rehearsal amount is 0.01 ETH (product owner, 9 Nov): at today's price that is about $21 of collateral and 10–11 USDC of debt, so the live market's current liquidity (66 USDC on 9 Nov) carries several positions and one faucet claim covers the close.
+1. A fresh wallet account with ≥0.015 Base Sepolia ETH completes S1→S5 with the default deposit of 0.01 ETH, 2 transactions and 3 signatures (plus wrap skip when WETH exists), ending with about 10 USDC in the wallet and a Morpho position at ≈50% LTV on the live market. The rehearsal amount is 0.01 ETH (product owner, 9 Nov): at today's price that is about $21 of collateral and 10–11 USDC of debt, so the live market's current liquidity (66 USDC on 9 Nov) carries several positions and one faucet claim covers the close.
 2. Reloading at any step of S4 or S6 resumes at the correct step without resubmitting any owner call.
 3. A wallet that owns only vaults below the `firstVaultNumber` cutoff is treated as owning none and can create a position; nothing about the older vaults is read or shown.
 4. Rejecting a signature or transaction leaves the step retryable and the data intact.
 5. Relayer 400 refusals show the relayer message; a simulated lost job (404) shows "Checking…" and reconciles from chain.
 6. "Close position" with insufficient idle USDC inserts the transfer step with the exact shortfall; after completion debt = 0, WETH is back in the wallet, and "Start over" appears and leads to the deposit step on the same vault.
-11. After clicking "Create position" once, a fresh wallet reaches S5 without clicking anything else in the page; all interaction is inside MetaMask (D11).
+11. After clicking "Create position" once, a fresh wallet reaches S5 without clicking anything else in the page; all interaction is inside the wallet (D11).
 13. Sandbox: activating it from S3 runs S1→S5 and Close position end to end with no network request to Base, NEAR, GitHub or the relayer (verified by the fixture's "unexpected request" guard), every screen shows the sandbox banner, and Leave sandbox returns to `#start` with no sandbox state left in `localStorage`.
-12. A MetaMask profile without Base Sepolia receives the add-network prompt with chain 84532 and `https://sepolia.base.org`; a wallet with zero Base Sepolia ETH sees the Get Base Sepolia ETH panel and the flow continues by itself once the fixture credits the balance; a wallet short of USDC during close sees the Get test USDC panel with the exact missing amount and resumes once credited.
+12. A wallet without Base Sepolia receives the add-network prompt with chain 84532 and `https://sepolia.base.org`; a wallet with zero Base Sepolia ETH sees the Get Base Sepolia ETH panel and the flow continues by itself once the fixture credits the balance; a wallet short of USDC during close sees the Get test USDC panel with the exact missing amount and resumes once credited.
 7. Verification panel rows show `Checked` against the live relayer and GitHub manifest; a deliberately altered manifest in the fixture shows `Mismatch`.
-8. Under 960px the gate renders; no MetaMask → install link only.
+8. Under 960px the gate renders; no wallet → "Install a wallet" link only.
 9. CI passes: typecheck, unit, bundle boundary (no fixture markers), Playwright desktop project.
 10. Deployed preview from the branch via `workflow_dispatch` serves on testnet.cmdk.fi; CORS from the relayer works.
 
@@ -469,7 +469,7 @@ C = {"target":"500000000000000000","act":"700000000000000000","floor":"300000000
 | Item | Value |
 |---|---|
 | Base Sepolia chain id | 84532 (`0x14a34`) |
-| Public RPC for the MetaMask network entry | `https://sepolia.base.org` (Base docs, Network Information) |
+| Public RPC for the wallet's network entry | `https://sepolia.base.org` (Base docs, Network Information) |
 | Explorer | `https://sepolia.basescan.org` |
 | Faucet list | Base docs → Network Faucets (`https://docs.base.org/base-chain/tools/network-faucets`) |
 | Coinbase Developer Platform faucet | `https://portal.cdp.coinbase.com/products/faucet` (ETH and USDC on Base Sepolia) |

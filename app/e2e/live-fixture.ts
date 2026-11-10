@@ -124,6 +124,15 @@ const appValues = JSON.parse(readFileSync(new URL('../config.app.json', import.m
 export class LiveFixture {
   // wallet knobs
   chain = '0x14a34'; switchUnknown = false; rejectConnect = false; rejectSign = false
+  /** Phase 8: refuse wallet_switchEthereumChain (4001) while true. */
+  rejectSwitch = false
+  /**
+   * Phase 8: the wallets this browser has. Each announced one is an EIP-6963 provider over the same fake account;
+   * 'legacy' makes window.ethereum a separate provider that does not announce itself; [] is a browser without a wallet.
+   */
+  walletSet: ('metamask' | 'rabby' | 'legacy')[] = ['metamask']
+  /** Which provider each wallet request came through (EIP-6963 rdns, or 'legacy'). */
+  walletVia: { via: string; method: string }[] = []
   code: 'plain' | 'delegated' | 'contract' = 'plain'
   wallet = { eth: 10n ** 18n, weth: 0n, usdc: 0n }
   // protocol knobs
@@ -238,6 +247,7 @@ export class LiveFixture {
       case 'wallet_requestPermissions': return { error: { code: 4200, message: 'Unsupported in the fixture.' } }
       case 'wallet_revokePermissions': this.connected = false; return { result: null, emit: [['accountsChanged', []]] }
       case 'wallet_switchEthereumChain': {
+        if (this.rejectSwitch) return { error: { code: 4001, message: 'User rejected the request.' } }
         const chainId = (params[0] as { chainId: string }).chainId
         if (this.switchUnknown && !this.added) return { error: { code: 4902, message: 'Unrecognized chain ID.' } }
         this.chain = chainId
@@ -480,30 +490,37 @@ export class LiveFixture {
   async install(context: BrowserContext) {
     context.on('page', page => page.on('pageerror', error => this.runtimeErrors.push(error.message)))
     context.on('request', request => this.hosts.add(new URL(request.url()).host))
-    await context.exposeBinding('__liveFixtureWallet', async (_source, method: string, params: unknown[]) => {
+    await context.exposeBinding('__liveFixtureWallet', async (_source, method: string, params: unknown[], via: string) => {
+      this.walletVia.push({ via, method })
       const answer = this.wallet_(method, params ?? [])
       if (answer.result === 'async-sign') return { result: await owner.signMessage({ message: { raw: (params as Hex[])[0] } }) }
       return answer
     })
-    await context.addInitScript(() => {
+    await context.addInitScript((set: string[]) => {
+      // one listener set for every provider: they all front the same fake account and chain
       const listeners = new Map<string, Set<(value: unknown) => void>>()
       const emit = (name: string, value: unknown) => listeners.get(name)?.forEach(fn => fn(value))
-      const call = (window as unknown as { __liveFixtureWallet: (m: string, p: unknown[]) => Promise<{ result?: unknown; error?: { code: number; message: string }; emit?: [string, unknown][] }> }).__liveFixtureWallet
-      const provider = {
-        isMetaMask: true,
+      const call = (window as unknown as { __liveFixtureWallet: (m: string, p: unknown[], via: string) => Promise<{ result?: unknown; error?: { code: number; message: string }; emit?: [string, unknown][] }> }).__liveFixtureWallet
+      const make = (via: string, flags: Record<string, boolean>) => ({
+        ...flags,
         on(name: string, fn: (value: unknown) => void) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name)!.add(fn) },
         removeListener(name: string, fn: (value: unknown) => void) { listeners.get(name)?.delete(fn) },
         async request({ method, params = [] }: { method: string; params?: unknown[] }) {
-          const answer = await call(method, params)
+          const answer = await call(method, params, via)
           if (answer.error) throw Object.assign(new Error(answer.error.message), { code: answer.error.code })
           answer.emit?.forEach(([name, value]) => emit(name, value))
           return answer.result
         },
-      }
-      Object.defineProperty(window, 'ethereum', { value: provider, configurable: true })
+      })
+      const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>'
+      const announced: { info: { uuid: string; name: string; icon: string; rdns: string }; provider: unknown }[] = []
+      if (set.includes('metamask')) announced.push({ info: { uuid: '4d2224fe-9aae-4a71-8d77-555555555555', name: 'MetaMask', icon, rdns: 'io.metamask' }, provider: make('io.metamask', { isMetaMask: true }) })
+      if (set.includes('rabby')) announced.push({ info: { uuid: '4d2224fe-9aae-4a71-8d77-666666666666', name: 'Rabby Wallet', icon, rdns: 'io.rabby' }, provider: make('io.rabby', { isRabby: true }) })
+      const legacy = set.includes('legacy') ? make('legacy', {}) : announced[0]?.provider
+      if (legacy) Object.defineProperty(window, 'ethereum', { value: legacy, configurable: true })
       Object.assign(window, { fixtureEmit: emit })
-      window.addEventListener('eip6963:requestProvider', () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: { info: { uuid: '4d2224fe-9aae-4a71-8d77-555555555555', name: 'MetaMask (fixture)', icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>', rdns: 'io.metamask' }, provider } })))
-    })
+      window.addEventListener('eip6963:requestProvider', () => { for (const detail of announced) window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze(detail) })) })
+    }, this.walletSet)
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url())
       try {

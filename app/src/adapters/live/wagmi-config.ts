@@ -2,12 +2,14 @@ import { createConfig, http } from 'wagmi'
 import { baseSepolia } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 
-// MetaMask only (PRD §3, §8). EIP-6963 discovery stays on so MetaMask's announced
-// provider (rdns io.metamask) is preferred over window.ethereum when both exist.
+// Any injected wallet (PRD S3, FR-3; Phase 8): wagmi's EIP-6963 discovery (multiInjectedProviderDiscovery, on by
+// default) adds one connector per announced wallet with its name and icon; the generic `injected()` connector covers a
+// `window.ethereum` that does not announce itself. No connect-modal library (no WalletConnect, no mobile).
 export function createWagmiConfig() {
   return createConfig({
     chains: [baseSepolia],
-    connectors: [injected({ target: 'metaMask' })],
+    connectors: [injected()],
+    multiInjectedProviderDiscovery: true,
     transports: { [baseSepolia.id]: http() },
   })
 }

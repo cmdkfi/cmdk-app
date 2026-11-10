@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
+import { useAdapters, useWalletLabel, useWallets, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { useAccountKind, useAppConfig, useDiscovery, useMarketQuote, useRelayerReadiness, useWalletFunding } from '../components/data.ts'
 import { newRecord, resumeStep } from '../flow/onboarding.ts'
 import { loadRecord, saveRecord } from '../flow/onboarding-record.ts'
@@ -53,6 +53,8 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
   const { wallet, protocol } = useAdapters()
   const quote = useMarketQuote()
   const state = useWalletState()
+  const wallets = useWallets()
+  const label = useWalletLabel()
   const app = useAppConfig()
   const guided = app.data?.guided
   const [error, setError] = useState<string | null>(null)
@@ -78,20 +80,25 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
   let body
   if (!guided) {
     body = <p className="notice" role={app.isError ? 'alert' : 'status'}>{app.isError ? 'The app configuration could not be loaded.' : 'Loading…'}</p>
-  } else if (state.status === 'disconnected' && !wallet.hasMetaMask()) {
+  } else if (state.status === 'disconnected' && wallets.length === 0) {
     body = <div className="connect-state">
-      <p>MetaMask is not installed in this browser. This testnet app works with the MetaMask extension on desktop only.</p>
-      <a className="prototype-button is-primary" href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install MetaMask</a>
+      <p>No browser wallet was found. This testnet app works with a wallet extension on desktop, such as MetaMask, Rabby, Coinbase Wallet, Brave or OKX.</p>
+      <a className="prototype-button is-primary" href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
     </div>
   } else if (state.status === 'disconnected') {
+    // PRD S3 (10 Nov): every injected wallet announced through EIP-6963, plus window.ethereum when not announced
     body = <div className="connect-state">
-      <button type="button" className="prototype-button is-primary" disabled={busy} onClick={act(() => wallet.connect())}>Connect MetaMask</button>
+      <ul className="wallet-list" aria-label="Wallets in this browser">
+        {wallets.map(option => <li key={option.id}><button type="button" className="prototype-button wallet-option" disabled={busy} onClick={act(() => wallet.connect(option.id))}>
+          {option.icon && <img src={option.icon} alt="" width={24} height={24} />}<span>{option.name}</span>
+        </button></li>)}
+      </ul>
     </div>
   } else if (state.status === 'connecting') {
-    body = <p className="notice" role="status">Waiting for MetaMask…</p>
+    body = <p className="notice" role="status">Waiting for your wallet…</p>
   } else if (!onBase) {
     body = <div className="connect-state">
-      <p>MetaMask is on another network. Switch to Base Sepolia; if MetaMask does not know it yet, it asks you to add it with the values below.</p>
+      <p>Your wallet is on another network. Switch to Base Sepolia; if the wallet does not know it yet, it asks you to add it with the values below.</p>
       <button type="button" className="prototype-button is-primary" disabled={busy} onClick={act(() => wallet.switchToBaseSepolia(guided.network))}>Switch to Base Sepolia</button>
       <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
     </div>
@@ -137,10 +144,10 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
 
     body = <>
       <dl className="facts prototype-surface">
-        <div><dt>Wallet</dt><dd>MetaMask · {shortAddress(address)}</dd></div>
+        <div><dt>Wallet</dt><dd>{state.walletName ?? 'Browser wallet'} · {shortAddress(address)}</dd></div>
         <div><dt>Network</dt><dd>Base Sepolia</dd></div>
         <div><dt>Account type</dt><dd>{kindText ?? <Unavailable />}</dd></div>
-        {blocked && <div className="facts__alert" role="alert"><dt>Not supported</dt><dd>This address is a contract wallet. Vault owner messages are verified with ecrecover, which only an externally owned key can satisfy. Connect a regular MetaMask account.</dd></div>}
+        {blocked && <div className="facts__alert" role="alert"><dt>Not supported</dt><dd>This address is a contract wallet. Vault owner messages are verified with ecrecover, which only an externally owned key can satisfy. Connect a regular account (an externally owned key).</dd></div>}
         {!blocked && <>
           <div><dt>Base Sepolia ETH</dt><dd>{funding.data ? eth(funding.data.eth) : amount === null ? '—' : funding.isError ? <Unavailable /> : 'reading…'}</dd></div>
           {funding.data && funding.data.weth > 0n && <div><dt>WETH in wallet</dt><dd>{eth(funding.data.weth).replace('ETH', 'WETH')}</dd></div>}
@@ -158,7 +165,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
       <div className="create-action">
         <button type="button" className="prototype-button is-primary" disabled={!resume && createReason !== null} aria-describedby="create-reason" onClick={create}>{resume ? 'Continue where you left off' : status === 'ready' ? 'Deposit' : 'Create position'}</button>
         {resume ? <p id="create-reason">Your position is being set up on vault {paused!.vault!.accountId}; continue on the progress screen.</p> : createReason && <p id="create-reason">{createReason}</p>}
-        <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside MetaMask.</p>
+        <p className="create-action__small">This is the only click: every signature and transaction after it is requested automatically, and you only act inside {label}.</p>
       </div>
       <NetworkHelp network={guided.network} docs={guided.help.connectingToBase} />
     </>
@@ -166,8 +173,8 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
 
   return <section className="screen screen--wide" aria-labelledby="screen-title">
     <DiscoveryBanner banner={banner} />
-    <h1 id="screen-title">Connect MetaMask</h1>
-    <p className="screen__lead">Desktop MetaMask on Base Sepolia. The app switches the network for you, or adds it, with MetaMask's own confirmation.</p>
+    <h1 id="screen-title">Connect wallet</h1>
+    <p className="screen__lead">A desktop browser wallet on Base Sepolia. The app switches the network for you, or adds it, with your wallet's own confirmation.</p>
     {body}
     {error && <p className="notice notice--warning" role="alert">{error}</p>}
     <div className="screen__actions"><a className="prototype-button" href={href('settings')}>Back</a></div>

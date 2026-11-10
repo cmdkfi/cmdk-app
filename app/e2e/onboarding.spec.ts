@@ -13,7 +13,7 @@ async function createPosition(page: Page, amount = '0.1') {
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Continue to wallet' }).click()
-  await page.getByRole('button', { name: 'Connect MetaMask' }).click()
+  await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page.getByText('None for this wallet')).toBeVisible()
   await page.getByRole('button', { name: 'Create position' }).click()
   await expect(page).toHaveURL(/#progress$/)
@@ -44,6 +44,9 @@ test('happy path: one click on Create position reaches the position screen; five
 })
 
 test('reload at each prompt step: nothing is requested until Continue (FR-5a)', async ({ page, context, fx }) => {
+  // five full reloads plus 5 s of fixed waits: 11-18 s alone, and past the default 30 s in the full suite when the
+  // machine is loaded (load average 22; d8d2fe6 and Phase 8 measured back to back at the same times, Phase 8 note)
+  test.setTimeout(60_000)
   fresh(fx)
   for (const kind of ['setup', 'wrap', 'transfer', 'open', 'withdraw'] as const) fx.rejectOnce.add(kind)
   await fx.install(context)
@@ -210,7 +213,7 @@ test('creation is guarded by a fresh ownership read: with a stale "none" and a v
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Continue to wallet' }).click()
-  await page.getByRole('button', { name: 'Connect MetaMask' }).click()
+  await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page.getByText('None for this wallet')).toBeVisible()
   // meanwhile the wallet's vault appears (another tab, or a create whose answer was lost); this page's check is stale
   fx.factoryCount = 10
@@ -258,6 +261,53 @@ test('Phase 7b item 1a: when the published agent version differs from the app\'s
   expect(ownerCalls(fx)).toHaveLength(0)
   fx.publishedMeasurement = { ...MEASUREMENT }
   await setup.getByRole('button', { name: 'Check again' }).click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
+})
+
+test('Phase 8a: connecting on another chain requests the switch at once; the chain then runs to the position screen', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.chain = '0x1' // the wallet kept another network for this site (10 Nov live run)
+  await fx.install(context)
+  await createPosition(page)
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(fx.walletCalls.filter(m => m === 'wallet_switchEthereumChain')).toHaveLength(1)
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
+})
+
+test('Phase 8a: after a reload on another chain with the switch refused, the step says "Switch to Base Sepolia in your wallet" with a button; switching continues the chain', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.rejectOnce.add('setup')
+  await fx.install(context)
+  await createPosition(page)
+  const setup = step(page, 'Approve agent and rules')
+  await expect(setup).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
+  // the live defect: the wallet reports another chain for this site and refuses (or ignores) the switch
+  fx.chain = '0x1'; fx.rejectSwitch = true
+  await page.reload()
+  await expect(setup).toContainText('Switch to Base Sepolia in your wallet.', { timeout: 20_000 })
+  const button = setup.getByRole('button', { name: 'Switch to Base Sepolia' })
+  await expect(button).toBeVisible()
+  await button.click() // refused again: the line stays, never silence
+  await expect(setup).toContainText('Switch to Base Sepolia in your wallet.')
+  expect(signed(fx)).toEqual([])
+  fx.rejectSwitch = false
+  await button.click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
+})
+
+test('Phase 8a: the wallet leaving Base Sepolia mid-flow pauses the step with the switch line; Continue requests the switch itself', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.rejectOnce.add('setup')
+  await fx.install(context)
+  await createPosition(page)
+  const setup = step(page, 'Approve agent and rules')
+  await expect(setup).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
+  fx.chain = '0x1'
+  await page.evaluate(() => (window as unknown as { fixtureEmit: (n: string, v: unknown) => void }).fixtureEmit('chainChanged', '0x1'))
+  await expect(setup).toContainText('Switch to Base Sepolia in your wallet.', { timeout: 20_000 })
+  await setup.getByRole('button', { name: 'Switch to Base Sepolia' }).click()
   await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
   expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
 })

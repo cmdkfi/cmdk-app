@@ -159,11 +159,17 @@ Order: fixes first, deploy, then the phases below.
 - [x] Fixture scenario + browser test: Outdated → button → setup signed once → Active; reload during the call resumes checking. Unit test for the visibility rule.
 
 ## Phase 8 — Wallet: any injected wallet, header slot only when connected (PRD S0, S3, FR-3 as revised 10 Nov)
-- [ ] Remove the header Connect button; the wallet slot renders only when connected (menu: Copy address, BaseScan, Disconnect). S1/S2 work without a wallet; S3 is the only place to connect.
-- [ ] Connect wallet on S3: wagmi `injected()` with EIP-6963 discovery; list every announced provider with its name and icon, plus legacy `window.ethereum` when not announced; no connect-modal library (decision recorded in PRD S3). "Install a wallet" link when none is detected.
-- [ ] Keep the account check (plain / EIP-7702 EOA allowed; contract wallets blocked with the ecrecover reason), the network switch/add, and silent reconnect for returning users through wagmi's reconnect.
-- [ ] Fixture: announce two EIP-6963 wallets (MetaMask and a second one) and a legacy provider; browser tests for the list, connecting with the second wallet, the contract-wallet block, and the header slot absent before connecting.
-- [ ] README and PRD wording: "MetaMask" → "an injected wallet" wherever it is not about the MetaMask-specific network values.
+Added by the product owner after the 10 Nov live run (first in this phase): the wallet can report another chain than Base Sepolia although MetaMask's selector shows Base Sepolia (MetaMask keeps a network per site), and Continue on S4 then did nothing and said nothing (runner.ts returned while the chain was wrong).
+- [x] 8a.1 Right after connect or reconnect, when the reported chain is not Base Sepolia, request `wallet_switchEthereumChain`, adding the chain from `config.network` when the wallet lacks it (PRD S3).
+- [x] 8a.2 Every action that needs Base Sepolia (Continue, Retry, Create position, Start closing, the re-approval) requests the switch itself and proceeds once it succeeds.
+- [x] 8a.3 While the wallet stays on another chain, the active step shows "Switch to Base Sepolia in your wallet." with a Switch button, never silence.
+- [x] 8a.4 Browser tests: connect on the wrong chain → switch requested → the chain runs; switch refused → the step shows the line and the button.
+- [x] Timing (before coding, product owner): "reload at each prompt step" alone, three runs at d8d2fe6: 11.9 s, 11.0 s, 11.2 s (7b: 12.8 s) with load average about 5 on 8 cores (a VM at about 160 % CPU). Not slower; the 7c failure was the 30 s test timeout under load average 35–45.
+- [x] Remove the header Connect button; the wallet slot renders only when connected (menu: Copy address, BaseScan, Disconnect). S1/S2 work without a wallet; S3 is the only place to connect.
+- [x] Connect wallet on S3: wagmi `injected()` with EIP-6963 discovery; list every announced provider with its name and icon, plus legacy `window.ethereum` when not announced; no connect-modal library (decision recorded in PRD S3). "Install a wallet" link when none is detected.
+- [x] Keep the account check (plain / EIP-7702 EOA allowed; contract wallets blocked with the ecrecover reason), the network switch/add, and silent reconnect for returning users through wagmi's reconnect.
+- [x] Fixture: announce two EIP-6963 wallets (MetaMask and a second one) and a legacy provider; browser tests for the list, connecting with the second wallet, the contract-wallet block, and the header slot absent before connecting.
+- [x] README and PRD wording: "MetaMask" → "an injected wallet" wherever it is not about the MetaMask-specific network values.
 
 ## Phase 9 — Visual pass to the mockups (PRD §7 as revised 10 Nov)
 - [ ] Port `docs/mockups/cmdk.css` as the app's stylesheet (tokens, type scale, spacing, 960/1120 columns, tiles, rows, steps, checks, LTV track, help panels, sheets); keep the CmdkReference font.
@@ -362,3 +368,30 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - The first full run had 1 failure: "reload at each prompt step". Its snapshot shows "Checking your vaults…" after the 4th reload when the 30 s test timeout hit.
   - The machine's load average was 35–45, with a VM at 160 % CPU. 12 repeats on 4 workers failed 2× the same way. Alone it passes in 16.2 s; in 7b it took 12.8 s.
   - 7c adds no code to S4's reload path. The second full run passed 59/59. The test's 30 s budget for five reloads is tight under load; not changed.
+
+**Phase 8 (10 Nov 2026, cmdkfi/app `22a5191`, unchanged; `git diff HEAD -- docs tasks` empty at start; before this note only this phase's own edits).**
+- *Timing first (product owner):* "reload at each prompt step" alone at d8d2fe6: 11.9 s, 11.0 s, 11.2 s (load average about 5; 7b had 12.8 s), so 7c did not slow the S4 reload path. During this phase the full suite failed it twice more at the 30 s test timeout with load averages up to 22. Back to back alone, with the same tree stashed and restored: d8d2fe6 17.9 s and 15.9 s, Phase 8 14.0 s and 14.9 s. The time tracks the machine's load, not the code. That one test now has a 60 s budget, with a comment: it does five full reloads plus 5 s of fixed waits.
+- *8a (live defect of 10 Nov):*
+  - Right after a connect or a silent reconnect, the shell requests the switch to Base Sepolia once per connection. wagmi's `switchChain` adds the chain from `config.network` on a 4902. A later chain change is left to the action that needs the chain.
+  - The runner never returns silently on the wrong chain. Continue, every Retry kind and a new chain (Create position via S4, Start closing, the S5 re-approval) request the switch themselves, and the run continues once the wallet reports Base Sepolia.
+  - While the wallet stays connected to another chain, the active step is paused with "Switch to Base Sepolia in your wallet." and a **Switch to Base Sepolia** button (new retry kind `switch`). Back on the chain, the line gives way to the step's own state; it continues by itself only if the user acted, otherwise it waits for Continue (FR-5a).
+  - Close position and the re-approval button are no longer disabled on another chain; their chains request the switch.
+- *Wallets (PRD S3, FR-3):*
+  - The wagmi config is `injected()` plus EIP-6963 discovery (one connector per announced wallet, with its name and icon); no connect-modal library.
+  - `walletOptions` (adapters/live/wallet-options.ts, pure, unit-tested) lists the announced wallets plus `window.ethereum` only when no announced provider is that object (compared by identity).
+  - S3 "Connect wallet" shows the list, or "Install a wallet" (`help.metamaskInstall`, MetaMask by default) when there is none.
+  - The header has no Connect button; the slot appears from "Connecting…" on.
+  - `WalletState.walletName` carries the connector's name, and every "MetaMask" in copy now names the connected wallet ("Waiting for Rabby Wallet…", "Show USDC in Rabby Wallet"), or "your wallet" for an unnamed provider.
+  - The contract-wallet block (ecrecover) is unchanged.
+- *Fixture:* `walletSet` announces MetaMask and/or Rabby over the same fake account, with `'legacy'` for an unannounced `window.ethereum` and `[]` for no wallet. `walletVia` records which provider each request came through. `rejectSwitch` refuses the switch.
+- *Tests, unit:* the wallet list rule and the name fallback.
+- *Tests, browser:*
+  - no header button or slot before connecting
+  - three wallets listed, connecting with the second one (its provider and name)
+  - an announced `window.ethereum` listed once; no wallet → Install a wallet
+  - connect on the wrong chain → switch requested once (refused → the slot offers it); 4902 → add-network values right after connect
+  - connect on the wrong chain → the chain runs to S5
+  - reload on the wrong chain with the switch refused → the line and button, a refused click keeps them, then the chain runs
+  - a chain change mid-flow → the line, and Switch continues
+- *Results:* typecheck, 145/145 unit tests, build, bundle boundary, 65/65 Playwright desktop (load average 29 during the run); the Phase 8 scenarios and the wallet-slot tests passed 3× repeated (27/27).
+- *Docs:* PRD S3, scope, FR-5a, §8 and acceptance wording say "wallet"; the S3 heading is "Connect wallet". The README says any injected wallet. The rehearsal file has the second recorded run and the S3 step for Phase 8.

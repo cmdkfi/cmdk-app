@@ -1,4 +1,4 @@
-import { useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
+import { useAdapters, useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import { useAppConfig, useDiscovery, useMarketQuote } from '../components/data.ts'
 import { useNow } from '../components/use-now.ts'
 import { useOnboarding } from '../components/useOnboarding.ts'
@@ -34,6 +34,7 @@ const WHY: Record<StepId, string> = {
 export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'banner'> & { discovery: ReturnType<typeof useDiscovery>; resume?: ProgressStep }) {
   const { protocol } = useAdapters()
   const state = useWalletState()
+  const walletLabel = useWalletLabel()
   const app = useAppConfig().data
   const quote = useMarketQuote()
   const now = useNow()
@@ -76,7 +77,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
     <h1 id="screen-title">Opening your position</h1>
     <p className="screen__lead">
       {r.amountWei ? `Deposit ${formatUnits(BigInt(r.amountWei), 18, 6)} ETH, borrow USDC at ${app ? `${app.guided.corridor.target}%` : 'the target'} LTV.` : 'Resuming your position.'}
-      {' '}Every signature and transaction is requested in order; you only act inside MetaMask.
+      {' '}Every signature and transaction is requested in order; you only act inside {walletLabel}.
     </p>
     <div className="progress__grid">
       <ol className="steps">

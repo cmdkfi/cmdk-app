@@ -10,8 +10,12 @@ cites the file and line it comes from. Check that repository before changing tra
 requirements are in [`docs/prd-guided-flow.md`](docs/prd-guided-flow.md); the build plan and review notes per phase are
 in [`tasks/todo.md`](tasks/todo.md).
 
-Desktop only: below 960 px wide the app is not mounted (a notice is shown, no wallet or network call is made). MetaMask
-is the only supported wallet; plain accounts and EIP-7702 delegated accounts are supported, contract wallets are not.
+Desktop only: below 960 px wide the app is not mounted (a notice is shown, no wallet or network call is made). Any
+injected browser wallet works (every wallet announced through EIP-6963, plus `window.ethereum` when it is not
+announced; no connect-modal library); plain accounts and EIP-7702 delegated accounts are supported, contract wallets are
+not (the vault verifies owner messages with ecrecover). The header shows the wallet slot only once connected; connecting
+happens on S3. A wallet that reports another chain is asked to switch to Base Sepolia right after connecting, and every
+action that needs the chain asks again; the step says "Switch to Base Sepolia in your wallet." until it does.
 
 ## Navigation
 
@@ -23,7 +27,7 @@ does not apply (for example `#position` without a position goes to `#start`).
 |---|---|---|
 | `#start` | **S1 Choose** — collateral, borrow asset and venue (only ETH → USDC on Morpho Base is selectable), the deposit amount (0.01 ETH by default), the estimate | The live market every 30 s: Morpho market params and the Executor's market config (once per session), market totals, oracle price and IRM borrow rate (each poll). Value, borrow at the 50 % target, simple APR, and a liquidity warning with the largest deposit that still opens at 50 % |
 | `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, at most 20 % of collateral sold per rolling day, migration and exit allowed) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
-| `#connect` | **S3 Connect** — MetaMask, Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
+| `#connect` | **S3 Connect** — the wallets in this browser (EIP-6963), Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
 | `#progress` | **S4 Opening your position** — the onboarding steps with their status, and the agent verification panel in the right rail | The vault (NEAR `get_state` plus one Base snapshot) before every step, relayer jobs, Base receipts (two confirmations), NEAR time for message expiry, the open plan (feeds and liquidity) right before the open signature |
 | `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
 
@@ -45,7 +49,7 @@ belongs to the owner.
 Signatures are owner messages for the vault (ERC-191 JSON in the field order of cmdkfi/app `scripts/p2_owner.py`), signed
 with nonce `owner_nonce + 1` and an expiry of NEAR time + 600 s ("each signature expires in 10 minutes"). The relayer
 posts them to the vault, which checks the owner's signature and builds every Base transaction itself. Wallet
-transactions are sent by MetaMask from the owner's wallet. After one click (Create position, Start closing) the prompts
+transactions are sent by the owner's connected wallet. After one click (Create position, Start closing) the prompts
 are requested in order, one at a time; a rejection pauses the step with an explicit Retry; after a reload nothing is
 requested until Continue.
 
@@ -105,7 +109,7 @@ starts at the wrap step. No vault is created.
 
 | Service | URL (`app/config.app.json`) | Notes |
 |---|---|---|
-| Base Sepolia RPC | `https://base-sepolia-rpc.publicnode.com` | Reads go through viem's Multicall3 batching and JSON-RPC batching; every read of one refresh is pinned to one block. MetaMask's network entry uses `https://sepolia.base.org` |
+| Base Sepolia RPC | `https://base-sepolia-rpc.publicnode.com` | Reads go through viem's Multicall3 batching and JSON-RPC batching; every read of one refresh is pinned to one block. The wallet's network entry uses `https://sepolia.base.org` |
 | NEAR testnet RPC | `https://test.rpc.fastnear.com`, fallback `https://near-testnet.drpc.org` | Every NEAR call is a read; the fallback is asked only after a retryable failure of the primary (no answer or timeout, HTTP 5xx, 429), never after a NEAR error answer |
 | Relayer | `https://relayer.cmdk.fi`, fallback `https://cmdk-relayer.fffilimonov.workers.dev` | POSTs go to the primary only, wait up to 60 s for the answer and are never repeated; GETs (12 s) fall back when the primary does not answer |
 | Published manifest | `https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json` | Read by the verification panel, the agent card (approved vs published measurement) and right before the setup signature (the app's baked measurement must equal it) |
@@ -136,14 +140,14 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 143 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 145 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 59 browser scenarios, desktop Chromium
+pnpm test:browser           # 65 browser scenarios, desktop Chromium
 ```
 
-The browser scenarios run the real app against `app/e2e/live-fixture.ts`: a fake MetaMask (EIP-1193 and EIP-6963) and
+The browser scenarios run the real app against `app/e2e/live-fixture.ts`: fake wallets (EIP-1193, announced through EIP-6963, plus an optional unannounced `window.ethereum`) and
 fakes of the Base RPC (including Multicall3), the NEAR RPC, the relayer and the published manifest. The fixture keeps
 its own copies of the ABI fragments from cmdkfi/app, so an app ABI mistake cannot pass by agreeing with itself; any
 request to an unknown host or an unknown method fails the test. They cover the one-click open and close chains, reloads

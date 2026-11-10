@@ -73,11 +73,26 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     if (previous.current !== 'connected' && state.status === 'connected' && BEFORE_WALLET.includes(route)) setPending(current => current ?? 'connect')
     previous.current = state.status
   }, [state.status, route])
-  // Another account in MetaMask is a new owner: the landing table runs again for it, as after a connect (Phase 7).
+  // Another account in the wallet is a new owner: the landing table runs again for it, as after a connect (Phase 7).
   useEffect(() => {
     if (previousOwner.current && owner && previousOwner.current.toLowerCase() !== owner.toLowerCase()) setPending('connect')
     previousOwner.current = owner
   }, [owner])
+
+  // Phase 8a.1 (10 Nov live run): a wallet keeps a network per site, so it can report another chain right after a connect
+  // or a silent reconnect even when its selector elsewhere shows Base Sepolia. Once per connection the switch is
+  // requested (the wallet adds the chain from config.network when it lacks it, PRD S3); if refused, the wallet slot,
+  // S3 and the active step offer it again.
+  const network = app.data?.guided.network
+  const connectionKey = state.status === 'connected' ? `${state.address}:${state.walletName ?? ''}` : null
+  const switchAsked = useRef<string | null>(null)
+  useEffect(() => {
+    if (!connectionKey) { switchAsked.current = null; return }
+    // only at the first sight of a connection: a later chain change is handled by the action that needs the chain
+    if (state.status !== 'connected' || !network || switchAsked.current === connectionKey) return
+    switchAsked.current = connectionKey
+    if (state.chainId !== BASE_SEPOLIA) void wallet.switchToBaseSepolia(network).catch(() => undefined)
+  }, [connectionKey, state, network, wallet])
 
   let resolution: Resolution
   if (SANDBOX && mode === 'sandbox') resolution = { kind: 'route', route }
@@ -115,7 +130,6 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
           state={state}
           checkingVaults={state.status === 'connected' && discovery.entry.kind === 'checking'}
           explorer={explorer}
-          onConnect={run(() => wallet.connect())}
           onSwitch={run(async () => { if (app.data) await wallet.switchToBaseSepolia(app.data.guided.network) })}
           onDisconnect={run(async () => { await wallet.disconnect(); window.location.hash = '#start' })}
           onLeave={() => { window.location.hash = '#start' }}

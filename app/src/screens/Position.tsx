@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Address } from 'viem'
-import { useWalletState } from '../adapters/AdapterProvider.tsx'
+import { useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
 import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
 import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
@@ -220,6 +220,7 @@ function ReviewSheet({ app, plan, owner, onStart, onCancel }: { app: LoadedConfi
 }
 
 function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; close: Close; owner: Address; explorer: string; now: number }) {
+  const walletLabel = useWalletLabel()
   const r = close.record!
   const ids = visibleCloseSteps(r)
   const active = ids.find(id => r.steps[id].status !== 'done' && r.steps[id].status !== 'skipped')
@@ -227,7 +228,7 @@ function CloseSteps({ app, close, owner, explorer, now }: { app: LoadedConfig; c
   const funding = active && r.steps[active].status === 'funding' ? r.steps[active].funding : undefined
   return <section className="card-s5 card-s5--wide prototype-surface" aria-labelledby="closing-title">
     <h2 id="closing-title">Closing your position</h2>
-    <p className="screen__note">Every signature and transaction is requested in order; you only act inside MetaMask.</p>
+    <p className="screen__note">Every signature and transaction is requested in order; you only act inside {walletLabel}.</p>
     <ol className="steps">
       {ids.map((id, index) => <StepRow key={id} title={CLOSE_TITLE[id]} why={CLOSE_WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => close.act(id, kind)} />)}
     </ol>
@@ -283,7 +284,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
 
   // Close position (PRD S5 action, S6): enabled only with a fresh snapshot, the owner on Base Sepolia and a plan read.
   let closeReason: string | null = null
-  if (!owner || !chainOk) closeReason = 'Connect the vault owner on Base Sepolia to close.'
+  // on another chain, Start closing requests the switch itself (Phase 8a.2)
+  if (!owner) closeReason = 'Connect the vault owner to close.'
   else if (stale) closeReason = 'The latest read failed; closing waits for a fresh one.'
   else if (restored) closeReason = 'Refreshing your position…'
   // one owner call at a time per vault (the shared lock): closing waits for a re-approval in progress (Phase 7c)
@@ -329,7 +331,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     <div className="cards-s5">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}
         variant={variant} closing={closing} approve={approve} explorer={explorer}
-        onApprove={owner && closeVault && chainOk && !restored && !stale ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null} />
+        onApprove={owner && closeVault && !restored && !stale ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </div>
     {verifying && <div id="verify-panel"><VerificationPanel vaultId={vaultId} poll={false} /></div>}

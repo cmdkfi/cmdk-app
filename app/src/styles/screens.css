@@ -50,6 +50,9 @@
 .acknowledge input{width:20px;height:20px;margin-top:2px;accent-color:var(--ink);flex:none}
 
 .connect-state{display:grid;gap:14px;justify-items:start;max-width:640px}
+.wallet-list{list-style:none;margin:0;padding:0;display:grid;gap:8px;min-width:280px}
+.wallet-option{display:flex;align-items:center;gap:10px;width:100%;justify-content:flex-start}
+.wallet-option img{border-radius:6px}
 .facts{display:grid;margin:0;max-width:720px}
 .facts>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
 .facts>div:first-child{border-top:0}

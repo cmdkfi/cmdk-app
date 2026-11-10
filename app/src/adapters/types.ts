@@ -9,18 +9,23 @@ export type AdapterKind = 'live' | 'sandbox'
 export type WalletState =
   | { status: 'disconnected' }
   | { status: 'connecting' }
-  | { status: 'connected'; address: Address; chainId: number }
+  /** `walletName`: the connected wallet's announced name (EIP-6963), or null for an unnamed injected provider. */
+  | { status: 'connected'; address: Address; chainId: number; walletName: string | null }
+
+/** One entry of the S3 wallet list (Phase 8): an EIP-6963 announcement, or the unannounced `window.ethereum`. */
+export type WalletOption = { id: string; name: string; icon?: string }
 
 export interface WalletAdapter {
   readonly kind: AdapterKind
   /** Stable snapshot for useSyncExternalStore. */
   getState(): WalletState
   subscribe(listener: () => void): () => void
-  /** MetaMask is present: an EIP-6963 provider announced as io.metamask, or window.ethereum.isMetaMask. */
-  hasMetaMask(): boolean
-  connect(): Promise<void>
+  /** The injected wallets in this browser (stable snapshot; changes when a wallet announces itself). */
+  getWallets(): WalletOption[]
+  subscribeWallets(listener: () => void): () => void
+  connect(walletId: string): Promise<void>
   disconnect(): Promise<void>
-  /** Switches to Base Sepolia; MetaMask's 4902 answer adds the network with exactly these values. */
+  /** Switches to Base Sepolia; a wallet's 4902 answer (unknown chain) adds the network with exactly these values. */
   switchToBaseSepolia(network: AddChainParams): Promise<void>
   signMessage(message: string): Promise<Hex>
   sendTransaction(tx: { to: Address; data?: Hex; value?: bigint }): Promise<Hex>

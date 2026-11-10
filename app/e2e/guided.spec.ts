@@ -9,7 +9,7 @@ async function chooseAndAcknowledge(page: Page, amount = '0.1') {
   await page.getByRole('button', { name: 'Continue to wallet' }).click()
   await expect(page).toHaveURL(/#connect$/)
 }
-const connect = (page: Page) => page.getByRole('button', { name: 'Connect MetaMask' }).click()
+const connect = (page: Page) => page.getByRole('button', { name: 'MetaMask', exact: true }).click()
 
 test('S1: estimates come from the live market read', async ({ page, context, fx }) => {
   await fx.install(context); await page.goto('/')
@@ -147,7 +147,7 @@ test('Q4: a used USDC allowance below max still counts as setup complete; a zero
 test('active vault with idle USDC and no local onboarding record lands on S5, not S4', async ({ page, context, fx }) => {
   fx.factoryCount = 10; fx.vaults.set(10, vault({ borrowShares: 1_000n, idle: { eth: 0n, weth: 0n, usdc: 50n * 10n ** 6n } }))
   await fx.install(context)
-  await page.goto('/'); await page.getByRole('button', { name: 'Connect wallet', exact: true }).click()
+  await page.goto('/#connect'); await page.getByRole('button', { name: 'MetaMask', exact: true }).click()
   await expect(page).toHaveURL(/#position$/)
 })
 

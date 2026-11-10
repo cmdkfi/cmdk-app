@@ -2,7 +2,7 @@ import { SANDBOX } from '../flow/build.ts'
 import { useEffect, useRef, useState } from 'react'
 import type { AdapterKind, WalletState } from '../adapters/types.ts'
 import { shortAddress } from '../flow/format.ts'
-import { SHOW_USDC, useShowUsdc } from './ShowUsdc.tsx'
+import { showUsdcLabel, useShowUsdc } from './ShowUsdc.tsx'
 
 const BASE_SEPOLIA = 84532
 
@@ -37,16 +37,15 @@ function SlotMenu({ label, items }: { label: string; items: MenuItem[] }) {
 }
 
 /**
- * Header wallet slot (PRD S0), the only navigation control. Five states:
- * not connected, connecting / checking vaults, connected, wrong network, sandbox active.
+ * Header wallet slot (PRD S0), the only navigation control. Not connected: nothing (connecting happens on S3 only,
+ * product owner 10 Nov). Then connecting / checking vaults, connected, wrong network, sandbox active.
  */
-export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, onSwitch, onDisconnect, onLeave }: {
+export function WalletSlot({ kind, state, checkingVaults, explorer, onSwitch, onDisconnect, onLeave }: {
   kind: AdapterKind
   state: WalletState
   checkingVaults: boolean
   /** Explorer base URL from config.json; the BaseScan item is omitted until config is loaded. */
   explorer?: string
-  onConnect: () => void
   onSwitch: () => void
   onDisconnect: () => void
   /** Leave the simulated mode (a sandbox build only, Phase 6b). */
@@ -61,7 +60,7 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
   }, [copied])
 
   if (SANDBOX && kind === 'sandbox') return <SlotMenu label="Sandbox wallet · simulated" items={[{ label: 'Leave sandbox', onSelect: onLeave }]} />
-  if (state.status === 'disconnected') return <button type="button" className="prototype-button is-primary wallet-slot wallet-slot--connect" onClick={onConnect}>Connect wallet</button>
+  if (state.status === 'disconnected') return null
   if (state.status === 'connecting' || checkingVaults) {
     return <span className="wallet-slot wallet-slot--busy" role="status"><span className="wallet-slot__pulse" aria-hidden="true" />{state.status === 'connecting' ? 'Connecting…' : 'Checking your vaults…'}</span>
   }
@@ -70,7 +69,7 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
   return <SlotMenu label={`${short} · Base Sepolia`} items={[
     { label: copied ? 'Copied' : 'Copy address', onSelect: () => { void navigator.clipboard?.writeText(state.address).then(() => setCopied(true), () => undefined) } },
     ...(explorer ? [{ label: 'View on BaseScan', href: `${explorer.replace(/\/$/, '')}/address/${state.address}` }] : []),
-    { label: SHOW_USDC, onSelect: usdc.ask },
+    { label: showUsdcLabel(state.walletName), onSelect: usdc.ask },
     { label: 'Disconnect', danger: true, onSelect: onDisconnect },
   ]} />
 }
