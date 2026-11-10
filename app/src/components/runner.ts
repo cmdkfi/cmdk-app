@@ -38,7 +38,7 @@ export type Env<Id extends string, R extends ChainRecord<Id>> = {
 
 const now = () => Date.now()
 
-function rejected(error: unknown): boolean {
+export function rejected(error: unknown): boolean {
   for (let e = error as { code?: number; name?: string; message?: string; cause?: unknown } | undefined, depth = 0; e && depth < 6; e = e.cause as typeof e, depth++) {
     if (e.code === 4001 || /UserRejected/.test(e.name ?? '') || /rejected|denied/i.test(e.message ?? '')) return true
   }
@@ -124,18 +124,22 @@ async function finishOwnerCall<Id extends string, R extends ChainRecord<Id>>(env
   return false
 }
 
-/** Lost job or uncertain POST: resolve from owner_nonce and NEAR time only (FR-6, R4). */
-async function checkLock<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, spec: OwnerSpec<Id, R>, lock: OwnerLock): Promise<Outcome> {
-  env.patch(spec.id, { status: 'checking', pause: undefined })
+/**
+ * Lost job or uncertain POST: resolve from owner_nonce and NEAR time only (FR-6, R4). `reason` says why the outcome is
+ * unknown; the step shows it with the message's expiry and a countdown (Phase 7b).
+ */
+async function checkLock<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, spec: OwnerSpec<Id, R>, lock: OwnerLock, reason: string): Promise<Outcome> {
+  env.patch(spec.id, { status: 'checking', pause: undefined, check: { reason, expiry: lock.expiry } })
   for (;;) {
     if (!env.live()) return false
     const [v, nearNow] = await Promise.all([env.protocol.readVault(env.app, lock.vault), env.protocol.readNearTime(env.app)]).catch(() => [null, null] as const)
     if (v && nearNow !== null) {
       const verdict = reconcileLock(lock, { ownerNonce: v.ownerNonce, nearNow, job: 'lost' })
-      if (verdict === 'executed') return finishOwnerCall(env, spec, lock)
+      if (verdict === 'executed') { env.patch(spec.id, { check: undefined }); return finishOwnerCall(env, spec, lock) }
+      if (verdict === 'pending') env.patch(spec.id, { check: { reason, expiry: lock.expiry, nearNow, readAt: now() } })
       if (verdict === 'expired') {
         clearLock(env.mode, lock.vault, env.owner)
-        env.patch(spec.id, { status: 'paused', job: undefined, pause: { line: 'The signed message expired without being used. Sign again.', retry: 'resign' } })
+        env.patch(spec.id, { status: 'paused', job: undefined, check: undefined, pause: { line: 'The signed message expired without being used. Sign again.', retry: 'resign' } })
         return false
       }
     }
@@ -152,7 +156,7 @@ async function post<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R
     env.patch(spec.id, { job, status: 'confirming' })
     return follow(env, spec, next)
   } catch (error) {
-    if (error instanceof ProtocolError && error.kind === 'uncertain') return checkLock(env, spec, lock)
+    if (error instanceof ProtocolError && error.kind === 'uncertain') return checkLock(env, spec, lock, message(error))
     env.patch(spec.id, { status: 'paused', pause: { line: 'The relayer refused the request before sending anything.', text: message(error), retry: 'resign' } })
     clearLock(env.mode, lock.vault, env.owner)
     return false
@@ -163,7 +167,7 @@ async function post<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R
 async function follow<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, spec: OwnerSpec<Id, R>, lock: OwnerLock): Promise<Outcome> {
   const job = await pollJob(env, spec.id, lock.job!)
   if (job === null) return false
-  if (job === 'lost') return checkLock(env, spec, lock)
+  if (job === 'lost') return checkLock(env, spec, lock, `The relayer no longer knows job ${lock.job} (it may have restarted).`)
   if (job.stage === 'done') {
     if (!await confirmed(env, spec.id, job.receipts.map(r => r.hash))) return false
     return finishOwnerCall(env, spec, lock)
@@ -171,11 +175,11 @@ async function follow<Id extends string, R extends ChainRecord<Id>>(env: Env<Id,
   if (job.httpStatus === 400) return refused(env, spec, lock, job)
   if (/StaleFeed/.test(job.error ?? '')) {
     env.patch(spec.id, { status: 'paused', pause: { line: 'Price feed is stale on testnet; open is retried when it updates.', text: job.error, retry: 'resign' } })
-    return checkLock(env, spec, lock).then(() => false)
+    return checkLock(env, spec, lock, `The relayer reported: ${job.error ?? 'stale price feed'}.`).then(() => false)
   }
   // Failed after the relayer may have reached NEAR: owner_nonce decides (FR-6).
   env.patch(spec.id, { note: job.error })
-  return checkLock(env, spec, lock)
+  return checkLock(env, spec, lock, `The relayer reported a failure after the request may have reached the vault${job.error ? ` (${job.error})` : ''}.`)
 }
 
 /** Refused before sending (job failed, http_status 400): the lock stays; the user re-sends or re-signs. */
@@ -231,11 +235,11 @@ export async function ownerStep<Id extends string, R extends ChainRecord<Id>>(en
     }
     const lock = loadLock(env.mode, vault.accountId, env.owner)
     if (lock && lock.method !== spec.id) {
-      env.patch(spec.id, { status: 'checking', note: `Waiting for an earlier ${lock.method} request to settle.` })
+      env.patch(spec.id, { status: 'checking', check: undefined, note: `Waiting for an earlier ${lock.method} request to settle.` })
       return false
     }
     if (lock) {
-      const outcome = lock.job ? await follow(env, spec, lock) : await checkLock(env, spec, lock)
+      const outcome = lock.job ? await follow(env, spec, lock) : await checkLock(env, spec, lock, 'The relayer\'s answer to the signed request was not received.')
       if (outcome !== 'resign') return outcome
       v = await env.protocol.readVault(env.app, vault.accountId)
     } else {

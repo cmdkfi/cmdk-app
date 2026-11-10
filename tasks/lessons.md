@@ -68,3 +68,9 @@
 - **Rule:** a cache of "what the user owns" is refreshed the moment the app itself changes ownership (vault created or adopted), and an account switch is treated as a new connect.
 - **Also:** a flaky browser test is a finding until its screenshot is explained; here the timing flake hid a product defect.
 
+
+## 2026-11-10 — Phase 7b: "chain first" means every protocol precondition of protection, not only the key
+- **What happened:** I built the todo's rule (recorded key, future expiry, limited key list = registered) and it passed every fixture scenario. The read-only live run then showed v10 as "Active" while the running agent did not watch it: v10 approved the previous agent image's compose hash, and its still-valid key came from the previous boot. The product owner added the approval as the first check (agent/src/vaults.rs l.8-9, l.82-87) and a setup guard against a stale baked measurement.
+- **Rule:** a status that claims protection is derived from the full precondition the protocol uses to protect (PRD fact 5: approved = running measurement, corridor, registered key), with the agent's code cited, even when the task names only part of it. Run the live read-only pass before the commit, not after.
+- **Rule (product owner):** "Unavailable" is only for a read that failed. A known fact gets its own label (Outdated, Not approved), and a label never claims history the chain cannot show: "Revoked" needs evidence that a registration existed.
+- **Also:** check the local gitignored `deployments/testnet.json` against cmdkfi/app main before running checks. The local copy was older than main, so a local build would have baked a measurement the running agent no longer has.

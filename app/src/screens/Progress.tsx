@@ -6,6 +6,7 @@ import { checkDeposit, defaultDeposit } from '../flow/amount.ts'
 import type { ProgressStep } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { newRecord, resumeStep, STEPS, type StepId } from '../flow/onboarding.ts'
+import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
 import { StepRow } from '../components/StepRow.tsx'
 import { VerificationPanel } from './VerificationPanel.tsx'
 import { go, useSessionValue, type ScreenProps } from './common.tsx'
@@ -79,12 +80,13 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
     </p>
     <div className="progress__grid">
       <ol className="steps">
-        {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} />)}
+        {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)}
+          extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk ? <p className="step__note"><ShowUsdcButton /></p> : undefined} />)}
       </ol>
       <aside className="progress__rail" aria-label="Agent">
         {r.vault && <p className="screen__note">Vault {vaultLink(r.vault.accountId)}<br />Position address <code>{r.vault.baseAddress}</code></p>}
         <VerificationPanel vaultId={r.vault?.accountId} poll compact />
-        <p className="screen__note">Agent registration usually takes a few minutes; the steps continue meanwhile.</p>
+        <p className="screen__note">Agent registration usually completes within a few minutes; the steps continue meanwhile.</p>
       </aside>
     </div>
     {canContinue && <div className="screen__actions"><button type="button" className="prototype-button is-primary" onClick={ob.start}>Continue</button></div>}

@@ -107,6 +107,8 @@
 .hero-s5__figure>small{font-size:12px;color:var(--muted)}
 .vault-ltv-legend--four{grid-template-columns:repeat(4,1fr)}
 .idle-line{font-size:13px;color:var(--muted)}
+.wallet-line{font-size:13px;color:var(--muted)}
+.show-usdc__result{margin-left:8px;color:var(--muted)}
 .cards-s5{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .card-s5{display:grid;gap:12px;align-content:start}
 .card-s5 h2{font-size:16px;margin:0}
@@ -136,6 +138,7 @@
 .verify__row--checked{box-shadow:inset 3px 0 0 #73c7a2}
 .verify__row--mismatch{box-shadow:inset 3px 0 0 #ee858e}
 .verify__row--unavailable{box-shadow:inset 3px 0 0 #e4ba69}
+.verify__row--statement .verify__status{color:var(--muted)}
 .verify__line{display:flex;justify-content:space-between;gap:12px;font-size:13px}
 .verify__status{font-size:12px;white-space:nowrap}
 .verify__result,.verify__how{font-size:12px;color:var(--muted);margin:0;overflow-wrap:anywhere}

@@ -3,23 +3,64 @@ import type { Address } from 'viem'
 import type { ActivityItem, AgentFacts, PositionMarket, PositionView } from '../adapters/types.ts'
 import { formatUnits, formatWadPercent } from './format.ts'
 
-export type AgentState = 'Active' | 'Registering' | 'Expired' | 'Revoked' | 'Unavailable'
+/**
+ * Phase 7b: 'Outdated' — the vault approved another agent version than the published one, so the running agent does
+ * not watch it; 'Not approved' — the vault approves none (never set up, or revoked: the chain cannot tell them apart).
+ */
+export type AgentState = 'Active' | 'Registering' | 'Expired' | 'Revoked' | 'Outdated' | 'Not approved' | 'Unavailable'
+
+export const REGISTERING = 'Registering (usually within a few minutes).'
+/** agent/src/logic.rs l.653-660 AgentStatus::Replaced: the vault lists another key than the running agent's. */
+export const REPLACED = 'revoked (another key registered)'
 
 /**
- * Agent status from the /agent/vaults row only (registration, agent_status, expires_at; labels of agent/src/vaults.rs
- * l.120-127 and agent/src/logic.rs l.653-669) plus the NEAR key check. `facts` null means the reads failed.
+ * The agent's row is behind the chain when it shows no registration yet: no row, Phase::Pending ("registering",
+ * agent/src/vaults.rs l.120-127), or a vault read from before the key was added or extended ("revoked",
+ * "revoked (registration expired)", agent/src/logic.rs l.663-669). Other labels (gave up, no TEE, another key) are
+ * the agent's own statements, not lag.
+ */
+export function listBehind(row: { registration?: string; agent_status?: string } | null): boolean {
+  if (!row || row.registration === 'registering') return true
+  return row.registration === 'registered' && (row.agent_status === 'revoked' || row.agent_status === 'revoked (registration expired)')
+}
+
+/**
+ * Agent status, chain first (Phase 7b). The approval comes first: the agent watches a vault only while its `approved`
+ * equals the agent's own measurement (agent/src/vaults.rs l.8-9, l.82-87), and a joining vault's key from a previous
+ * boot is replaced (l.307), so an old key under a stale approval protects nothing; the published manifest stands for
+ * the running agent's measurement (PRD fact 5, §6 row 1). Then the vault's recorded agent (vault/src/lib.rs l.555, set by register_agent
+ * l.490 with expires_at in seconds, removed by revoke_agent l.419-423) and the NEAR key check decide whether the
+ * agent is registered. The agent's /agent/vaults row (labels of agent/src/vaults.rs l.120-127, agent/src/logic.rs
+ * l.653-669, computed from the agent's own last read of the vault) adds liveness and may lag behind the chain: its
+ * "revoked" counts only when the chain shows no key, or when it reports that the vault holds another key than its own.
+ * `facts` null means the chain reads failed.
  */
 export function agentState(facts: AgentFacts | null, nowSecs: number): { state: AgentState; detail?: string } {
-  if (!facts) return { state: 'Unavailable', detail: 'The agent list or the vault keys could not be read.' }
-  const row = facts.row
-  if (!row) return { state: 'Registering', detail: 'The agent has not picked up this vault yet (usually a few minutes).' }
-  const status = row.agent_status ?? ''
-  if (status === 'revoked (registration expired)' || (typeof row.expires_at === 'number' && row.expires_at <= nowSecs)) return { state: 'Expired', detail: 'The registration expired; the agent re-registers on its own.' }
-  if (status.startsWith('revoked')) return { state: 'Revoked', detail: status }
-  if (row.registration === 'registering') return { state: 'Registering', detail: 'Registering (usually a few minutes).' }
-  if (row.registration !== 'registered') return { state: 'Unavailable', detail: row.registration ?? 'No registration state.' }
-  if (status !== 'active') return { state: 'Unavailable', detail: status || 'No agent status.' }
+  if (!facts) return { state: 'Unavailable', detail: 'The vault keys on NEAR could not be read.' }
+  if (!facts.approval.ok) return { state: 'Unavailable', detail: 'The agent manifest could not be read.' }
+  const row = facts.list.ok ? facts.list.row : null
+  if (facts.approval.matches === null) {
+    // never set up, or revoke_agent (vault/src/lib.rs l.419-424 clears approved and the key): Revoked only when the
+    // agent's list shows it registered here and the chain holds no key
+    if (row?.registration === 'registered' && !facts.vaultAgent) return { state: 'Revoked', detail: 'Your vault holds no agent key and approves no agent version.' }
+    return { state: 'Not approved', detail: 'Your vault approves no agent version, so no agent watches it.' }
+  }
+  if (!facts.approval.matches) return { state: 'Outdated', detail: 'Your vault approved an earlier agent version; the running agent does not watch it.' }
+  const listStatus = row?.agent_status ?? ''
+  const key = facts.vaultAgent
+  if (!key) {
+    if (!facts.list.ok) return { state: 'Unavailable', detail: 'Your vault holds no agent key, and the agent\'s list could not be read.' }
+    if (!row || row.registration === 'registering') return { state: 'Registering', detail: REGISTERING }
+    // the agent registered here once and the vault no longer holds a key: revoked (revoke_agent), whatever the list's status
+    if (row.registration === 'registered') return { state: 'Revoked', detail: 'Your vault holds no agent key.' }
+    return { state: 'Unavailable', detail: row.registration ?? 'No registration state.' }
+  }
+  if (key.expires_at <= nowSecs) return { state: 'Expired', detail: 'The registration expired; the agent re-registers on its own.' }
+  if (listStatus === REPLACED) return { state: 'Revoked', detail: 'The agent reports that your vault holds another agent key than its own.' }
   if (!facts.keyLimited) return { state: 'Unavailable', detail: 'The vault keys on NEAR do not show exactly the restricted agent key.' }
+  if (!facts.list.ok) return { state: 'Active', detail: 'Your vault shows the registration; the agent\'s list could not be read.' }
+  if (listBehind(row)) return { state: 'Active', detail: 'Your vault shows the registration; the agent\'s list has not caught up yet.' }
+  if (row!.registration !== 'registered' || listStatus !== 'active') return { state: 'Active', detail: `Your vault shows the registration; the agent's list says: ${[row!.registration, listStatus].filter(Boolean).join(' · ')}.` }
   return { state: 'Active' }
 }
 
@@ -90,4 +131,28 @@ export function describe(item: ActivityItem, ctx: Ctx): Described {
     }
     default: return { who: 'Transfer', text: item.name }
   }
+}
+
+export type ActionRow = Described & { transactionHash: string; blockNumber: bigint; time: bigint | null }
+
+/**
+ * Recent actions, one row per transaction (Phase 7b): token transfers that share a transaction with an Executor event
+ * of this position are that event's internal legs (the Executor pulling from and Morpho paying the position address
+ * inside open, close, reduce, migrate and exit: executor/src/Executor.sol l.172-376, `_pull`/`_transfer` l.612-618) and are folded into
+ * the event's row. A transaction with only
+ * transfers keeps them as one row. Order is kept (first appearance of each transaction).
+ */
+export function actionRows(items: ActivityItem[], ctx: Ctx): ActionRow[] {
+  const groups = new Map<string, ActivityItem[]>()
+  for (const item of items) {
+    const key = item.transactionHash.toLowerCase()
+    groups.set(key, [...(groups.get(key) ?? []), item])
+  }
+  return [...groups.values()].map(group => {
+    const events = group.filter(i => i.name !== 'Transfer')
+    const shown = (events.length > 0 ? events : group).map(i => describe(i, ctx))
+    const who = shown.some(d => d.who === 'Agent') ? 'Agent' : shown.some(d => d.who === 'You') ? 'You' : 'Transfer'
+    const first = group[0]
+    return { who, text: shown.map(d => d.text).join(' · '), transactionHash: first.transactionHash, blockNumber: first.blockNumber, time: first.time }
+  })
 }

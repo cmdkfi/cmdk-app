@@ -19,6 +19,7 @@ export function createSandboxWallet(): WalletAdapter {
     signMessage: notImplemented,
     sendTransaction: notImplemented,
     waitForTransaction: notImplemented,
+    watchAsset: notImplemented,
     dispose: () => undefined,
   }
 }
@@ -32,6 +33,8 @@ export function createSandboxProtocol(): ProtocolAdapter {
     estimateDeposit: () => { throw new Error(MESSAGE) },
     readWalletFunding: notImplemented,
     readAccountKind: notImplemented,
+    readUsdcAsset: notImplemented,
+    configMatchesPublished: notImplemented,
     discoverPosition: notImplemented,
     relayerReadiness: notImplemented,
     readVault: notImplemented,

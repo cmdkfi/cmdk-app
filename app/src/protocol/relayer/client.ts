@@ -23,6 +23,11 @@ export class RelayerError extends Error {
 }
 
 const TIMEOUT_MS = 12_000
+/**
+ * A POST is never repeated, so its answer is worth waiting for: a slow relayer (one answered after more than 12 s
+ * during the 9 Nov rehearsal) would otherwise turn an accepted request into an uncertain one (Phase 7b).
+ */
+export const POST_TIMEOUT_MS = 60_000
 
 async function body(response: Response): Promise<Record<string, unknown>> {
   try { return await response.json() as Record<string, unknown> } catch { return {} }
@@ -53,9 +58,10 @@ async function read<T>(urls: RelayerUrls, path: string, fetcher: Fetch): Promise
 async function post(urls: RelayerUrls, path: string, payload: unknown, fetcher: Fetch): Promise<string> {
   let response: Response
   try {
-    response = await fetcher(`${urls.primary}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(TIMEOUT_MS) })
-  } catch {
-    throw new RelayerError('The relayer did not confirm the request; it may have been accepted.', { uncertain: true })
+    response = await fetcher(`${urls.primary}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(POST_TIMEOUT_MS) })
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+    throw new RelayerError(timedOut ? `The relayer did not answer within ${POST_TIMEOUT_MS / 1000} s; the request may have been accepted.` : 'The relayer did not confirm the request; it may have been accepted.', { uncertain: true })
   }
   const value = await body(response)
   if (response.status === 429) {
@@ -64,7 +70,10 @@ async function post(urls: RelayerUrls, path: string, payload: unknown, fetcher: 
   }
   if (response.status === 400) throw new RelayerError(String(value.error ?? 'Refused.'), { status: 400, refused: true })
   if (response.status !== 202 || value.ok !== true || typeof value.job !== 'string') {
-    throw new RelayerError(String(value.error ?? `Relayer answered HTTP ${response.status}.`), { status: response.status, uncertain: response.status >= 500 })
+    const text = typeof value.error === 'string' && value.error ? value.error : null
+    // 5xx: the request may still have reached the vault; the status is part of the message the step shows (Phase 7b)
+    if (response.status >= 500) throw new RelayerError(`The relayer answered HTTP ${response.status}${text ? ` (${text})` : ''}; the request may have been accepted.`, { status: response.status, uncertain: true })
+    throw new RelayerError(text ?? `Relayer answered HTTP ${response.status}.`, { status: response.status })
   }
   return value.job
 }

@@ -73,7 +73,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   await expect(page.getByRole('button', { name: 'Load earlier' })).toHaveCount(0)
   // the only action: Close position, with what it will do (no USDC idle, wallet has none: a transfer comes first)
   await expect(page.getByRole('button', { name: 'Close position' })).toBeEnabled()
-  await expect(page.locator('#close-reason')).toHaveText(/^You will first send 161\.6\d+ USDC to your position address, then the debt is repaid and your WETH returns to your wallet\.$/)
+  await expect(page.locator('#close-reason')).toHaveText(/^You will first send 161\.6\d? USDC to your position address, then the debt is repaid and your WETH returns to your wallet\.$/)
   expect(fx.ethCalls).toEqual(expect.arrayContaining(['soldInWindow', 'closedForAgent']))
   expect(fx.signs).toEqual([]); expect(fx.posts).toEqual([]); expect(fx.txs).toEqual([])
 })
@@ -132,3 +132,40 @@ test('recent actions: Load earlier extends by 10,000 blocks until the Executor d
   // every eth_getLogs stayed within 10,000 blocks (the fixture refuses wider ones), in three windows
   expect([...new Set(fx.logWindows.map(([from, to]) => `${from}-${to}`))]).toEqual([`${DEPLOY + 15_000n}-${DEPLOY + 24_999n}`, `${DEPLOY + 5_000n}-${DEPLOY + 14_999n}`, `${DEPLOY}-${DEPLOY + 4_999n}`])
 })
+
+test('Phase 7b: token legs of an Executor call fold into its row; one disclaimer (the footer); recent actions end at the position\'s block', async ({ page, context, fx }) => {
+  activeVault(fx)
+  const { MORPHO } = ADDRESSES
+  fx.logs = [
+    fixtureLog(WETH, 'Transfer', { from: OWNER, to: BASE, value: E / 10n }, HEAD - 11n),
+    // Executor.open: the WETH leg to Morpho, Opened, the USDC leg from Morpho, all in one transaction
+    fixtureLog(WETH, 'Transfer', { from: BASE, to: MORPHO, value: E / 10n }, HEAD - 10n, 1, 'open'),
+    fixtureLog(EXECUTOR, 'Opened', { caller: BASE, market: LIVE, collateralIn: E / 10n, borrowed: 160_000_000n, ltv: 5n * 10n ** 17n }, HEAD - 10n, 2, 'open'),
+    fixtureLog(USDC, 'Transfer', { from: MORPHO, to: BASE, value: 160_000_000n }, HEAD - 10n, 3, 'open'),
+  ]
+  await fx.install(context); await openPosition(page)
+  const rows = card(page, 'Recent actions').locator('.actions__row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toHaveText(/^YouOpened: supplied 0\.1 WETH, borrowed 160 USDC at 50% LTV/)
+  await expect(rows.nth(1)).toContainText('YouSent 0.1 WETH from your wallet to your position address')
+  await expect(page.getByText(/not insurance/)).toHaveCount(1)
+  await expect(page.locator('footer').getByText('Agent protection is risk management, not insurance.', { exact: false })).toHaveCount(1)
+  await expect(card(page, 'Recent actions').getByText(`Blocks ${DEPLOY}–${HEAD} (since the Executor was deployed)`)).toBeVisible()
+  await expect(page.getByText(new RegExp(`^Read at block ${HEAD}, `))).toBeVisible()
+})
+
+test('Phase 7b: Show USDC in MetaMask asks the wallet to watch the config USDC (symbol and decimals from the token), on S5 and in the wallet menu', async ({ page, context, fx }) => {
+  activeVault(fx)
+  await fx.install(context); await openPosition(page)
+  const line = page.locator('.wallet-line')
+  await expect(line).toContainText(`Your wallet ${OWNER.slice(0, 6)}…${OWNER.slice(-4)}`)
+  await line.getByRole('button', { name: 'Show USDC in MetaMask' }).click()
+  await expect(line.getByRole('status')).toHaveText('MetaMask accepted USDC.')
+  const expected = { type: 'ERC20', options: { address: USDC, symbol: 'USDC', decimals: 6, image: expect.stringMatching(/\/tokens\/usdc\.png$/) } }
+  expect(fx.watchAssets).toEqual([expected])
+  await page.getByRole('button', { name: /· Base Sepolia/ }).click()
+  await page.getByRole('menuitem', { name: 'Show USDC in MetaMask' }).click()
+  await expect.poll(() => fx.watchAssets.length).toBe(2)
+  expect(fx.watchAssets[1]).toEqual(expected)
+})
+

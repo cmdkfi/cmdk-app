@@ -1,26 +1,54 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from './position.ts'
+import { actionRows, agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from './position.ts'
 
 const NOW = 2_000_000_000
 const row = (extra = {}) => ({ registration: 'registered', agent_status: 'active', expires_at: NOW + 3600, last_tick_unix: NOW - 30, ...extra })
-const facts = (r, keyLimited = true) => ({ row: r, keyLimited, vaultAgent: { public_key: 'ed25519:k', expires_at: NOW + 3600 } })
+const KEY = { public_key: 'ed25519:k', expires_at: NOW + 3600 }
+/** Chain facts (the vault's recorded agent and the key check) plus the agent's list (a row, null, or a failed read). */
+const facts = (r, { key = KEY, keyLimited = true, listFailed = false, approval = { ok: true, matches: true } } = {}) => ({ approval, keyLimited, vaultAgent: key, list: listFailed ? { ok: false, error: 'HTTP 503' } : { ok: true, row: r } })
 
-test('agent status: Active only when registered, active, unexpired and the NEAR key check holds', () => {
-  assert.equal(agentState(facts(row()), NOW).state, 'Active')
-  assert.equal(agentState(facts(row(), false), NOW).state, 'Unavailable')
+test('agent status, chain first: a recorded, unexpired, restricted vault key is Active; the list adds liveness only', () => {
+  assert.deepEqual(agentState(facts(row()), NOW), { state: 'Active' })
+  assert.deepEqual(agentState(facts(null, { listFailed: true }), NOW), { state: 'Active', detail: "Your vault shows the registration; the agent's list could not be read." })
+  assert.equal(agentState(facts(row(), { keyLimited: false }), NOW).state, 'Unavailable')
+  assert.equal(agentState(facts(row(), { key: { ...KEY, expires_at: NOW } }), NOW).state, 'Expired')
+  assert.equal(agentState(null, NOW).state, 'Unavailable')
 })
 
-test('agent status: labels of agent/src/vaults.rs and logic.rs map to Registering, Expired, Revoked, Unavailable', () => {
-  assert.equal(agentState(null, NOW).state, 'Unavailable')
-  assert.equal(agentState(facts(null), NOW).state, 'Registering')
-  assert.equal(agentState(facts(row({ registration: 'registering' })), NOW).state, 'Registering')
-  assert.equal(agentState(facts(row({ agent_status: 'revoked (registration expired)' })), NOW).state, 'Expired')
-  assert.equal(agentState(facts(row({ expires_at: NOW })), NOW).state, 'Expired')
-  assert.equal(agentState(facts(row({ agent_status: 'revoked' })), NOW).state, 'Revoked')
+test('agent status: the live 9 Nov rows that lagged the chain read Active, "the agent\'s list has not caught up yet" (Phase 7b)', () => {
+  // tasks/rehearsal-2026-11-10.md: v10 registered on chain 22:01:42 UTC, the agent's list caught up about 22:05
+  const lag = "Your vault shows the registration; the agent's list has not caught up yet."
+  assert.deepEqual(agentState(facts(row({ registration: 'registering', agent_status: 'revoked' })), NOW), { state: 'Active', detail: lag })
+  assert.deepEqual(agentState(facts(row({ agent_status: 'revoked' })), NOW), { state: 'Active', detail: lag })
+  assert.deepEqual(agentState(facts(row({ agent_status: 'revoked (registration expired)' })), NOW), { state: 'Active', detail: lag })
+  assert.deepEqual(agentState(facts(null), NOW), { state: 'Active', detail: lag })
+  // the agent's own statements are shown, not taken for lag
+  assert.deepEqual(agentState(facts(row({ registration: 'registration failed (gave up for this boot)', agent_status: 'active' })), NOW), { state: 'Active', detail: "Your vault shows the registration; the agent's list says: registration failed (gave up for this boot) · active." })
+})
+
+test('agent status: the approval comes first; a stale approval under a valid-looking key is Outdated (live v10, 9 Nov; Phase 7b)', () => {
+  // v10 kept the previous boot's restricted key (unexpired) but approved compose 216124c1; the running agent is db4f5085
+  const stale = { ok: true, matches: false }
+  assert.deepEqual(agentState(facts(null, { approval: stale }), NOW), { state: 'Outdated', detail: 'Your vault approved an earlier agent version; the running agent does not watch it.' })
+  assert.equal(agentState(facts(row(), { approval: stale }), NOW).state, 'Outdated')
+  assert.equal(agentState(facts(row(), { approval: stale, key: { ...KEY, expires_at: NOW } }), NOW).state, 'Outdated')
+  assert.deepEqual(agentState(facts(row(), { approval: { ok: false, error: 'HTTP 404' } }), NOW), { state: 'Unavailable', detail: 'The agent manifest could not be read.' })
+  // approved null: never set up (v9 of the live factory, below firstVaultNumber, used here as a test input only) or revoked
+  const none = { approval: { ok: true, matches: null }, key: null, keyLimited: false }
+  assert.deepEqual(agentState(facts(null, none), NOW), { state: 'Not approved', detail: 'Your vault approves no agent version, so no agent watches it.' })
+  assert.deepEqual(agentState(facts(row({ agent_status: 'revoked' }), none), NOW), { state: 'Revoked', detail: 'Your vault holds no agent key and approves no agent version.' })
+})
+
+test('agent status: "revoked" counts only when the chain shows no key, or the agent reports another key on the vault', () => {
+  const none = { key: null, keyLimited: false }
+  assert.deepEqual(agentState(facts(row({ agent_status: 'revoked' }), none), NOW), { state: 'Revoked', detail: 'Your vault holds no agent key.' })
+  assert.equal(agentState(facts(row(), none), NOW).state, 'Revoked') // the list still shows a registration the owner revoked
   assert.equal(agentState(facts(row({ agent_status: 'revoked (another key registered)' })), NOW).state, 'Revoked')
-  const gaveUp = agentState(facts(row({ registration: 'registration failed (gave up for this boot)' })), NOW)
-  assert.deepEqual(gaveUp, { state: 'Unavailable', detail: 'registration failed (gave up for this boot)' })
+  assert.deepEqual(agentState(facts(null, none), NOW), { state: 'Registering', detail: 'Registering (usually within a few minutes).' })
+  assert.equal(agentState(facts(row({ registration: 'registering', agent_status: 'revoked' }), none), NOW).state, 'Registering')
+  assert.equal(agentState(facts(null, { ...none, listFailed: true }), NOW).state, 'Unavailable')
+  assert.deepEqual(agentState(facts(row({ registration: 'registration failed (gave up for this boot)', agent_status: 'revoked' }), none), NOW), { state: 'Unavailable', detail: 'registration failed (gave up for this boot)' })
 })
 
 const LIVE = '0x' + 'aa'.repeat(32), BACKUP = '0x' + 'bb'.repeat(32)
@@ -82,4 +110,42 @@ test('event labelling: transfers between the wallet and the position address are
   assert.deepEqual(describe(item('Transfer', { from: OWNER, to: POSITION, value: 10n ** 17n }, WETH), ctx), { who: 'You', text: 'Sent 0.1 WETH from your wallet to your position address' })
   assert.deepEqual(describe(item('Transfer', { from: POSITION, to: OWNER, value: 160_000_000n }, USDC), ctx), { who: 'You', text: '160 USDC from your position address to your wallet' })
   assert.equal(describe(item('Transfer', { from: '0x' + '99'.repeat(20), to: POSITION, value: 1n }, USDC), ctx).who, 'Transfer')
+})
+
+const tx = n => '0x' + n.repeat(64)
+const at = (name, args, hash, logIndex, token) => ({ name, actor: name === 'Transfer' ? 'transfer' : 'you', blockNumber: 7n, time: 100n, transactionHash: hash, logIndex, args, token })
+
+test('recent actions: one row per transaction; transfer legs of an Executor event fold into its row (Phase 7b)', () => {
+  const MORPHO = '0x' + '55'.repeat(20)
+  // Executor.open as the rehearsal showed it: Opened plus the WETH pull and the USDC payout, newest log first
+  const open = [
+    at('Transfer', { from: MORPHO, to: POSITION, value: 10_616_729n }, tx('a'), 3, USDC),
+    at('Opened', { collateralIn: 10n ** 16n, borrowed: 10_616_729n, ltv: 499n * 10n ** 15n }, tx('a'), 2),
+    at('Transfer', { from: POSITION, to: MORPHO, value: 10n ** 16n }, tx('a'), 1, WETH),
+  ]
+  const send = [at('Transfer', { from: OWNER, to: POSITION, value: 10n ** 16n }, tx('b'), 0, WETH)]
+  const rows = actionRows([...open, ...send], ctx)
+  assert.equal(rows.length, 2)
+  assert.deepEqual([rows[0].who, rows[0].text, rows[0].transactionHash], ['You', 'Opened: supplied 0.01 WETH, borrowed 10.61 USDC at 49.9% LTV', tx('a')])
+  assert.deepEqual([rows[1].who, rows[1].text], ['You', 'Sent 0.01 WETH from your wallet to your position address'])
+  // two Executor events in one transaction share its row; the agent's label wins
+  const reduce = actionRows([at('Reduced', { repaid: 1n, collateralSold: 1n, ltvBefore: 0n, ltvAfter: 0n }, tx('c'), 1), at('SessionEnded', { ltv: 0n }, tx('c'), 0)], ctx)
+  assert.equal(reduce.length, 1); assert.equal(reduce[0].who, 'Agent'); assert.match(reduce[0].text, /^Reduced: .* · Ended a protective session/)
+})
+
+test('recent actions: every USDC amount has at most two decimals (Phase 7b)', () => {
+  const amount = 10_722_897n // the 9 Nov close transfer
+  const texts = [
+    describe(item('Transfer', { from: OWNER, to: POSITION, value: amount }, USDC), ctx).text,
+    describe(item('Opened', { collateralIn: 1n, borrowed: amount, ltv: 0n }), ctx).text,
+    describe(item('Repaid', { repaid: amount }), ctx).text,
+    describe(item('Closed', { repaid: amount, collateralOut: 1n }), ctx).text,
+    describe(item('Reduced', { repaid: amount, collateralSold: 1n, ltvBefore: 0n, ltvAfter: 0n }), ctx).text,
+    describe(item('Migrated', { from: LIVE, to: BACKUP, debtMoved: amount, collateralMoved: 1n }), ctx).text,
+    describe(item('Exited', { repaid: amount, collateralSold: 1n }), ctx).text,
+  ]
+  for (const text of texts) {
+    assert.match(text, /10\.72 USDC/, text)
+    assert.doesNotMatch(text, /\d\.\d{3,} USDC/, text)
+  }
 })

@@ -26,7 +26,7 @@ async function openPosition(page: Page) {
 
 const readLine = (page: Page, block: bigint, suffix = '') => page.getByText(new RegExp(`^Read at block ${block}, \\d+ (s|min) ago${suffix}$`))
 
-test('§9 1, 2, 6: one S5 refresh is at most 6 HTTP requests: block pin + two Multicall3 rounds, one shared get_state, the key list, the agent list', async ({ page, context, fx }) => {
+test('§9 1, 2, 6 and Phase 7b: one S5 refresh is at most 8 HTTP requests: block pin + two Multicall3 rounds, recent actions up to the same block, one shared get_state, the key list, the agent list, the published manifest', async ({ page, context, fx }) => {
   activeVault(fx)
   await page.clock.install()
   await fx.install(context); await openPosition(page)
@@ -38,9 +38,11 @@ test('§9 1, 2, 6: one S5 refresh is at most 6 HTTP requests: block pin + two Mu
   await expect(page.locator('section.card-s5').filter({ hasText: 'Agent' }).first().getByRole('status')).toHaveText('Active')
   await page.waitForTimeout(1_000)
   const refresh = fx.requests
-  expect(refresh.length, JSON.stringify(refresh)).toBeLessThanOrEqual(6)
+  expect(refresh.length, JSON.stringify(refresh)).toBeLessThanOrEqual(8)
   const base = refresh.filter(r => r.host === 'base.fixture.test')
-  expect(base.map(r => r.calls)).toEqual([['eth_getBlockByNumber'], ['eth_call'], ['eth_call']])
+  // recent actions follow the position's block (Phase 7b): one batch of the two filtered log queries, new blocks only
+  expect(base.map(r => r.calls)).toEqual([['eth_getBlockByNumber'], ['eth_call'], ['eth_call'], ['eth_getLogs', 'eth_getLogs']])
+  await expect(page.getByText(new RegExp(`^Blocks \\d+–${HEAD + 1n}`))).toBeVisible()
   // both rounds went through Multicall3 aggregate3 at viem's baseSepolia address; no static read was repeated
   expect(fx.ethCalls.filter(name => name === 'aggregate3')).toHaveLength(2)
   for (const name of ['idToMarketParams', 'config', 'decimals']) expect(fx.ethCalls).not.toContain(name)

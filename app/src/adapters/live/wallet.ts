@@ -1,7 +1,7 @@
 import { baseSepolia } from 'wagmi/chains'
 import {
   connect, disconnect, getAccount, reconnect, sendTransaction, signMessage, switchChain,
-  waitForTransactionReceipt, watchAccount,
+  waitForTransactionReceipt, watchAccount, watchAsset,
 } from 'wagmi/actions'
 import type { WalletAdapter, WalletState } from '../types.ts'
 import { createWagmiConfig } from './wagmi-config.ts'
@@ -71,6 +71,7 @@ export function createLiveWallet(): WalletAdapter {
     signMessage: message => signMessage(config, { message }),
     sendTransaction: tx => sendTransaction(config, { chainId: baseSepolia.id, to: tx.to, data: tx.data, value: tx.value }),
     waitForTransaction: (hash, confirmations) => waitForTransactionReceipt(config, { chainId: baseSepolia.id, hash, confirmations }),
+    watchAsset: asset => watchAsset(config, { type: 'ERC20', options: { address: asset.address, symbol: asset.symbol, decimals: asset.decimals, image: asset.image } }),
     dispose() {
       unwatch()
       listeners.clear()

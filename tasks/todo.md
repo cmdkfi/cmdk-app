@@ -141,13 +141,14 @@ Items 1 and 2 are small and may be folded into Phase 5 or 6; 3–6 are a short d
 
 ## Phase 7b — Rehearsal fixes (live rehearsal 9–10 Nov; product owner's findings)
 Order: fixes first, deploy, then the phases below.
-- [ ] 1. Agent status: trust the chain first (vault key with future expiry + limited-key check = registered); the agent's list adds liveness or "the agent's list has not caught up yet"; its "revoked" means Revoked only when the chain shows no key or another key. Unit test with the live rows seen on 9 Nov ({registration:"registering", agent_status:"revoked"} while the chain already had the key).
-- [ ] 2. Activity grouping: fold token transfers that share a transaction hash with an Executor event into that event's row (one row per transaction).
-- [ ] 3. Verification: static rows tagged "Statement", not "Not checked"; "Last tried at" for rows with nothing to compare; when the agent's list has no registration_tx, say so and point to the vault's Access keys on NearBlocks.
-- [ ] 4. S5: one disclaimer (footer only); close sub-line rounded to two decimals; "Sell budget left today" reads "no position" when collateral is zero; two decimals on every USDC amount in recent actions; refresh recent actions together with the position so both block numbers agree.
-- [ ] 5. "Checking…" says why and until when ("relayer answered 503; waiting for the message to expire at HH:MM:SS unless the vault shows it ran") with a countdown; relayer POST timeout 60 s (posts are never retried).
-- [ ] 6. "Show USDC in MetaMask" (`wallet_watchAsset`, ERC20 from config) after the withdraw step and on S5 next to the wallet; browser test that the wallet receives the request with the config address.
-- [ ] 7. Registration copy: "usually within a few minutes" (cron now every minute); rehearsal file updated with the recorded values; commit, push, product owner deploys.
+- [x] 1. Agent status: trust the chain first (vault key with future expiry + limited-key check = registered); the agent's list adds liveness or "the agent's list has not caught up yet"; its "revoked" means Revoked only when the chain shows no key or another key. Unit test with the live rows seen on 9 Nov ({registration:"registering", agent_status:"revoked"} while the chain already had the key). Amended by the product owner during the phase (live run, v10): the approval comes first — `approved` ≠ published manifest is **Outdated**, none is **Not approved** (Revoked only when the agent's list shows a registration and the chain holds no key), a failed manifest read is Unavailable; the same condition guards the panel's "not caught up" wording.
+- [x] 1a. (product owner, during the phase) Before the setup signature, compare the baked `config.agent.measurement` with the runtime manifest; if they differ, pause the setup step with retry 'check' and "This app's configuration is behind the published agent version; try again later." 
+- [x] 2. Activity grouping: fold token transfers that share a transaction hash with an Executor event into that event's row (one row per transaction).
+- [x] 3. Verification: static rows tagged "Statement", not "Not checked"; "Last tried at" for rows with nothing to compare; when the agent's list has no registration_tx, say so and point to the vault's Access keys on NearBlocks.
+- [x] 4. S5: one disclaimer (footer only); close sub-line rounded to two decimals; "Sell budget left today" reads "no position" when collateral is zero; two decimals on every USDC amount in recent actions; refresh recent actions together with the position so both block numbers agree.
+- [x] 5. "Checking…" says why and until when ("relayer answered 503; waiting for the message to expire at HH:MM:SS unless the vault shows it ran") with a countdown; relayer POST timeout 60 s (posts are never retried).
+- [x] 6. "Show USDC in MetaMask" (`wallet_watchAsset`, ERC20 from config) after the withdraw step and on S5 next to the wallet; browser test that the wallet receives the request with the config address.
+- [x] 7. Registration copy: "usually within a few minutes" (cron now every minute); rehearsal file updated with the recorded values; commit, push, product owner deploys.
 
 ## Phase 8 — Wallet: any injected wallet, header slot only when connected (PRD S0, S3, FR-3 as revised 10 Nov)
 - [ ] Remove the header Connect button; the wallet slot renders only when connected (menu: Copy address, BaseScan, Disconnect). S1/S2 work without a wallet; S3 is the only place to connect.
@@ -296,3 +297,36 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
 - *PRD §6 "Implementation" line* still names the previous app's modules (`agent-evidence.ts`, `near-security.ts`); the panel uses `evidence/verify.ts`. Not edited.
 - *Results:* typecheck, 133/133 unit tests, build, bundle boundary, 45/45 Playwright desktop; verification, performance and onboarding specs 3× repeated (48/48).
 
+
+**Phase 7b (10 Nov 2026, cmdkfi/app `d4e22f1`; `git diff HEAD -- docs tasks` empty at start and, apart from this phase's own edits, before this note).**
+- *Protocol re-check:* origin/main moved one commit past `47fd4fb`: `d4e22f1` (cloud/ only). The Worker now funds the agent key every minute, and `/agent/evidence/<file>` is cached for an hour. A failed agent read is tried twice with a 20 s limit, then answered with the last good copy and its `Age`. `Age` is not in `Access-Control-Expose-Headers`, so the browser cannot see that a copy is stale. The agent list's own `last_tick_unix` is what dates it. No change to ABIs, `scripts/relayer.py` or `agent/`.
+- *Live finding:* during the phase the agent moved to image `4171c10` (boot 2286af92, compose `db4f5085`), as main's manifest says. The local `deployments/testnet.json` (gitignored) still had `216124c1` and was refreshed from main. The rehearsal vault v10 approved `216124c1`, so the running agent does not watch it; it still holds the previous boot's key, valid until 16 Nov.
+- *1 Agent status:* chain first. Order of checks:
+  1. The vault's `approved` against the published manifest (agent/src/vaults.rs l.8-9, l.82-87).
+  2. The recorded key and its expiry (vault/src/lib.rs l.490, l.555).
+  3. The NEAR key list.
+  4. The agent's list, read on its own, which adds liveness or "has not caught up yet".
+
+  Its "revoked" counts only when the chain has no key, or when the agent reports another key (logic.rs l.653-669). New states, per the product owner during the phase: **Outdated** (stale approval) and **Not approved** (none). Unavailable is kept for failed reads only. The panel's registration row uses the same rules.
+
+  A read-only live run (fastnear + relayer.cmdk.fi) gave: v1 and v4 Active; v10 Outdated; v9 Not approved (used as test input only; it is below the cutoff and never shown).
+- *1a Setup guard:* right before the setup prompt, `config.agent.measurement` is compared with the runtime manifest. If they differ, the step pauses with retry `check`.
+- *Entry, read-only (asked by the product owner):* an empty vault with a stale approval is `setup` (`setupComplete` needs approved = config measurement, adapters/live/protocol.ts l.94), so S4 re-approves it. A vault with a **position** and a stale approval is classified `active` first (flow/active-vault.ts l.23-24) and lands on S5, which now shows Outdated but offers no re-approve action. A fix would touch `classifyVault`, the S0 table and S5 (a setup-only chain on the shared runner). Not changed; for the product owner to decide.
+- *2 Recent actions:* one row per transaction. Token legs that share a transaction with an Executor event fold into its row (`actionRows`, Executor.sol l.172-376, l.612-618).
+- *3 Verification:*
+  - Static rows read **Statement**.
+  - "Checked at" appears only for Checked and Mismatch; Not checked and Unavailable rows read "Last tried at".
+  - A registered row without `registration_tx` says so and points to the vault's access keys on NearBlocks.
+- *4 S5:*
+  - One disclaimer (the footer).
+  - The close sub-line uses two decimals.
+  - The sell budget reads "no position" with zero collateral.
+  - Recent-action USDC amounts already had two decimals; a unit test now covers every event.
+  - Recent actions end at the position read's block and are extended on every position refresh: only blocks after the confirmed part are read, and older windows are reused. One refresh is now 8 requests: + 1 log batch (logs follow the position block) + 1 manifest read (the agent card's approval check).
+- *5 Checking…:* the step shows the reason (relayer status and text, lost job, lost answer), the expiry and an m:ss countdown on NEAR's clock. The POST timeout is 60 s; GET stays at 12 s. A fixture `answer-503` mode replays the rehearsal's close attempt.
+- *6 Show USDC in MetaMask:* `wallet_watchAsset` with the config USDC address and the token's own `symbol()`/`decimals()`. Placement (product owner): a wallet line on S5, the wallet-slot menu, and the S4 withdraw row while S4 is still shown.
+- *7 Copy:*
+  - "Registering (usually within a few minutes)."
+  - The rehearsal file's expectations follow the 7b wording, and its results table and recorded values come from the recorded run (blanks kept where nothing was recorded).
+  - PRD S4 step 2 and 3 and S5 agent card text are aligned with the decisions above.
+- *Results:* typecheck, 142/142 unit tests, build, bundle boundary, 56/56 Playwright desktop. The onboarding, position, verification, performance and close specs passed 3× repeated (105/105, before the Outdated, Not approved and 1a tests were added).

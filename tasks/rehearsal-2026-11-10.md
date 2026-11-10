@@ -106,8 +106,10 @@ BaseScan page of each receipt hash.
 - The verification rows are never **Checked** before their result: before setup they read **Not checked** with "Your
   vault has not approved an agent version yet; the setup step does that." and "Waits for the setup step: the agent
   registers once your vault approves its version."
-- After setup, the registration row reads **Not checked — "Registering (usually a few minutes)."** until the agent has
-  registered; only then **Checked — "Registered and active on your vault until …"**.
+- After setup, the registration row reads **Not checked — "Registering (usually within a few minutes)."** until the
+  agent has registered; only then **Checked — "Registered and active on your vault until …"**. While the agent's list
+  lags behind a key the vault already holds, it reads **Not checked — "The agent's list has not caught up yet; …"**
+  (Phase 7b), never Mismatch.
 - Reload the page once during S4 (between two steps): nothing may be requested until you click **Continue**.
   Did any prompt appear on its own after the reload? ____
 
@@ -129,7 +131,8 @@ When step 6 is Done the app moves to `#position` by itself.
 - **Close position** with the sub-line "You will first send … USDC to your position address, then …" (or "Repays …").
 
 **Do:** click **Verify the agent**. All five live rows should read **Checked** once registration is done; the last two
-rows are statements (**Not checked**, "Static").
+rows are statements (**Statement**, no time). A row with nothing to compare yet shows "Last tried at …", never
+"Checked at …" (Phase 7b).
 
 **Record:** block ____, debt ____ USDC, LTV ____ %, agent status ____, verification rows (Checked / other) ____;
 compare debt and LTV with BaseScan/Morpho if you can: ____
@@ -199,9 +202,10 @@ the wrap prompt appears (reject it) or run the open again — note which: ____
   and asks for the signature once the feed updates. Record how long it lasted.
 - **"The market can lend less than before: your position would open at X % LTV instead of Y %."** Liquidity dropped
   since S1. Choose **Open at the lower LTV**, or wait. Record X and Y.
-- **"Checking…" on a step after a relayer job was lost.** The app resolves it from the vault's nonce and NEAR time only;
-  it never posts the same message twice on its own. Wait up to 10 minutes (the message lifetime). If it ends with "The
-  signed message expired without being used. Sign again.", sign again.
+- **"Checking…" on a step after a relayer job was lost or the relayer answered 5xx.** The step says why (for example
+  "The relayer answered HTTP 503 …") and "Waiting for the signed message to expire at HH:MM:SS (m:ss left) unless the
+  vault shows it ran" (Phase 7b). The app resolves it from the vault's nonce and NEAR time only; it never posts the same
+  message twice on its own. If it ends with "The signed message expired without being used. Sign again.", sign again.
 - **"Still waiting for the relayer. The job keeps running on its side."** (after 3 minutes) Note the job id, open
   `https://relayer.cmdk.fi/job/<id>` in a tab, then **Check again**.
 - **You switch accounts in MetaMask mid-flow.** The run stops at once and nothing is asked of the other account (you
@@ -219,7 +223,9 @@ the wrap prompt appears (reject it) or run the open again — note which: ____
 - Wrap and transfer: each about 2–10 seconds after MetaMask confirms (two Base confirmations).
 - Open position (open job): about 1 minute.
 - Send USDC to your wallet: under a minute.
-- Agent registration: from a few minutes up to about 15 minutes after setup; the open does not wait for it.
+- Agent registration: usually within a few minutes after setup (the Worker's funding cron runs every minute since 10
+  Nov); the open does not wait for it. Recorded 9 Nov with the old 10-minute cron: setup 21:47, agent noticed about
+  21:55, registered on chain 22:01:42 UTC, the agent's list caught up about 22:05.
 - Close chain: USDC transfer seconds; close, return WETH, return USDC each about 1 minute.
 - The position screen refreshes every 30 s; a refresh normally completes in under a second.
 
@@ -231,27 +237,27 @@ Anything far outside these, write it down with the time.
 
 | Screen | Pass / Fail | Notes |
 |---|---|---|
-| S1 Choose | ____ | ____ |
-| S2 Settings | ____ | ____ |
-| S3 Connect | ____ | ____ |
-| S4 Opening (6 steps) | ____ | ____ |
-| S4 reload: nothing prompted until Continue | ____ | ____ |
-| S5 Position | ____ | ____ |
-| Verification panel (5 Checked after registration) | ____ | ____ |
-| S6 Close (review sheet + steps) | ____ | ____ |
-| S7 Closed + Start over (same vault, no create) | ____ | ____ |
+| S1 Choose | pass | 0.01 ETH default (9 Nov, recorded below) |
+| S2 Settings | pass | |
+| S3 Connect | pass | Create position enabled once funded |
+| S4 Opening (6 steps) | pass | 10.61 USDC borrowed at 49.9 % LTV; USDC visible in MetaMask only after importing the token |
+| S4 reload: nothing prompted until Continue | not recorded | |
+| S5 Position | pass with copy defects | "Revoked · revoked" while the agent's list lagged the chain (fixed in Phase 7b) |
+| Verification panel (5 Checked after registration) | pass | all rows Checked after registration |
+| S6 Close (review sheet + steps) | pass | first close attempt hit a relayer 503 during a redeploy; "Checking…" gave no reason (fixed in Phase 7b); second attempt done in 18 s |
+| S7 Closed + Start over (same vault, no create) | pass | |
 
 **Recorded values**
 
-- Wallet address: `0x____`
-- Vault id: `v____.factory.prime-measure-1792736012.testnet` Position address: `0x____`
-- Relayer job ids: create ____ · setup ____ · open ____ · withdraw ____ · close ____ · withdraw WETH ____ · withdraw USDC ____
+- Wallet address: `0x11B7…0A52`
+- Vault id: `v10.factory.prime-measure-1792736012.testnet` Position address: `0xf09ceca0825211b1863f14708ac71f336d42a9fa`
+- Relayer job ids: create ____ · setup ____ · open ____ · withdraw ____ · close `87fe4d6b9182472b` (second attempt) · withdraw WETH ____ · withdraw USDC ____
 - Wallet tx hashes: wrap ____ · WETH transfer ____ · USDC transfer ____ · second USDC transfer (if any) ____ · gas top-up (if any) ____
 - Base tx hashes from jobs: setup ____ · open ____ · withdraw ____ · close ____ · withdraw WETH ____ · withdraw USDC ____
 - Gas used (BaseScan "Gas Used"): wrap ____ · transfer ____ · setup ____ · open ____ · close ____ · USDC transfer ____
 - Times: Create position click ____ → position screen ____ (total ____ min); Start closing ____ → Position closed ____ (total ____ min)
-- Agent registration: setup Done ____ → registration Checked ____ (____ min)
-- Opened LTV ____ %; debt at open ____ USDC; debt at close ____ USDC; leftover USDC returned ____
+- Agent registration: setup Done 21:47:35 → registered on chain 22:01:42 UTC (14 min; the agent's list caught up about 22:05)
+- Opened LTV 49.9 %; debt at open 10.61 USDC; USDC sent for the close 10.722897 USDC; leftover USDC returned 0.106167
 
 **Surprises** (anything unexpected, confusing, slow, or worded wrongly — one line each, with the screen and the time;
 these go back to the agent as the fix list):

@@ -94,7 +94,12 @@ starts at the wrap step. No vault is created.
   "Read at block N, X min ago · refreshing" until a live read lands; Close position, Start over and every step of the
   onboarding and close chains wait for live reads.
 - "Position closed" is shown only after a close finished in this session; it is never derived from an empty vault.
-- The agent card's last check comes from the agent's own listing; it is not a heartbeat or a guarantee of execution.
+- The agent card's status is read from the chain first: the vault's approved measurement against the published
+  manifest (a stale approval is "Outdated": the running agent does not watch the vault), then the recorded agent key,
+  its expiry and the NEAR key list. The agent's own listing adds its last check and may lag behind the chain ("the
+  agent's list has not caught up yet"); it is not a heartbeat or a guarantee of execution.
+- A step whose owner call has an unknown outcome ("Checking…") says why and when the signed message expires, with a
+  countdown; until then only the vault's `owner_nonce` can show that it ran.
 
 ## Network reads
 
@@ -102,8 +107,8 @@ starts at the wrap step. No vault is created.
 |---|---|---|
 | Base Sepolia RPC | `https://base-sepolia-rpc.publicnode.com` | Reads go through viem's Multicall3 batching and JSON-RPC batching; every read of one refresh is pinned to one block. MetaMask's network entry uses `https://sepolia.base.org` |
 | NEAR testnet RPC | `https://test.rpc.fastnear.com`, fallback `https://near-testnet.drpc.org` | Every NEAR call is a read; the fallback is asked only after a retryable failure of the primary (no answer or timeout, HTTP 5xx, 429), never after a NEAR error answer |
-| Relayer | `https://relayer.cmdk.fi`, fallback `https://cmdk-relayer.fffilimonov.workers.dev` | POSTs go to the primary only; GETs fall back when the primary does not answer |
-| Published manifest | `https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json` | Read by the verification panel only |
+| Relayer | `https://relayer.cmdk.fi`, fallback `https://cmdk-relayer.fffilimonov.workers.dev` | POSTs go to the primary only, wait up to 60 s for the answer and are never repeated; GETs (12 s) fall back when the primary does not answer |
+| Published manifest | `https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json` | Read by the verification panel, the agent card (approved vs published measurement) and right before the setup signature (the app's baked measurement must equal it) |
 
 Measured live on 9 Nov 2026 (vault v9, two markets, the app's own adapter):
 
@@ -131,11 +136,11 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 135 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 142 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 49 browser scenarios, desktop Chromium
+pnpm test:browser           # 56 browser scenarios, desktop Chromium
 ```
 
 The browser scenarios run the real app against `app/e2e/live-fixture.ts`: a fake MetaMask (EIP-1193 and EIP-6963) and
@@ -144,7 +149,8 @@ its own copies of the ABI fragments from cmdkfi/app, so an app ABI mistake canno
 request to an unknown host or an unknown method fails the test. They cover the one-click open and close chains, reloads
 at every prompt, rejections, gas refusals, lost jobs, a stale feed, low liquidity, the shortfall and faucet paths, the
 second close transfer, an account switch mid-flow, the creation guard, the verification rows, the request budget of one
-refresh, the browser caches and the NEAR fallback. They do not use a real extension, a live RPC or an on-chain
+refresh, the browser caches, the NEAR fallback, a relayer 503 on an owner call, an agent list that lags the chain, a
+stale vault approval, a setup guard against a stale app configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
 transaction, and they do not replace a live signed rehearsal.
 
 Pull requests to `main` run `frontend quality` (build, unit tests, bundle boundary, browser scenarios); pushes to `main`

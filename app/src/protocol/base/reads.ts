@@ -97,6 +97,17 @@ export async function readMarketStatic(client: PublicClient, m: { morpho: Hex; e
   return { id: m.id, morpho: m.morpho, executor: m.executor, params, loanDecimals, collateralDecimals, feeds }
 }
 
+export type TokenInfo = { address: `0x${string}`; symbol: string; decimals: number }
+
+/** ERC-20 metadata (viem's erc20Abi: symbol, decimals) for the wallet's watch-asset request (EIP-747), read from the token itself. */
+export async function readTokenInfo(client: PublicClient, token: `0x${string}`): Promise<TokenInfo> {
+  const [symbol, decimals] = await Promise.all([
+    client.readContract({ address: token, abi: erc20Abi, functionName: 'symbol' }),
+    client.readContract({ address: token, abi: erc20Abi, functionName: 'decimals' }),
+  ])
+  return { address: token, symbol, decimals }
+}
+
 /** Round 1 of a market's moving data at a block: totals, oracle price, each feed's latest round. Issued in one tick. */
 function movingReads(client: PublicClient, s: MarketStatic, blockNumber: bigint) {
   return Promise.allSettled([

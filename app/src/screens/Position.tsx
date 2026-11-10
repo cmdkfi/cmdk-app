@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import { useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
 import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
+import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
 import { useNow } from '../components/use-now.ts'
@@ -12,7 +13,7 @@ import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
-import { agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from '../flow/position.ts'
+import { actionRows, agentState, backupStatus, budgetFor, currentMarket, positionVariant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 import { VerificationPanel } from './VerificationPanel.tsx'
 
@@ -76,17 +77,20 @@ function LtvTrack({ m }: { m: PositionMarket }) {
 function AgentCard({ vaultId, market, view, now, verifying, onVerify }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void }) {
   const agent = useAgent(vaultId)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
-  const row = agent.data?.row
+  const row = agent.data?.list.ok ? agent.data.list.row : null
   const budget = market ? budgetFor(view, market) : null
+  const collateral = view.markets.reduce((sum, m) => sum + m.collateral, 0n)
   return <section className="card-s5 prototype-surface" aria-labelledby="agent-title">
     <h2 id="agent-title">Agent</h2>
     <p className="card-s5__status" role="status"><strong>{status ? status.state : 'Reading…'}</strong>{status?.detail && <span> · {status.detail}</span>}</p>
     <dl className="card-s5__facts">
       <div><dt>Last check</dt><dd>{row?.last_tick_unix ? `${date(row.last_tick_unix)} (${ago(now - row.last_tick_unix)})` : <Unavailable>none reported</Unavailable>}</dd></div>
-      <div><dt>Key expires</dt><dd>{row?.expires_at ? date(row.expires_at) : agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : <Unavailable>no key</Unavailable>}</dd></div>
-      <div><dt>Sell budget left today</dt><dd>{budget && budget.budgetWad > 0n
-        ? <>{weth(budget.remaining)} <small>of {weth((budget.activeCollateral + budget.sold) * budget.budgetWad / 10n ** 18n)} ({formatWadPercent(budget.budgetWad)} per rolling 24 h)</small></>
-        : <Unavailable>no active corridor</Unavailable>}</dd></div>
+      <div><dt>Key expires</dt><dd>{agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : agent.data ? <Unavailable>no key on your vault</Unavailable> : <Unavailable />}</dd></div>
+      <div><dt>Sell budget left today</dt><dd>{collateral === 0n
+        ? <Unavailable>no position</Unavailable>
+        : budget && budget.budgetWad > 0n
+          ? <>{weth(budget.remaining)} <small>of {weth((budget.activeCollateral + budget.sold) * budget.budgetWad / 10n ** 18n)} ({formatWadPercent(budget.budgetWad)} per rolling 24 h)</small></>
+          : <Unavailable>no active corridor</Unavailable>}</dd></div>
     </dl>
     {agent.isError && agent.data && <p className="screen__note" role="alert">The last agent read failed; showing the previous one.</p>}
     <button type="button" className="link-button" aria-expanded={verifying} aria-controls="verify-panel" onClick={onVerify}>Verify the agent</button>
@@ -114,27 +118,28 @@ function MarketCard({ app, view, market, chainNow }: { app: LoadedConfig; view: 
   </section>
 }
 
-function RecentActions({ app, view, owner }: { app: LoadedConfig; view: PositionView; owner: `0x${string}` }) {
-  const activity = useActivity(view.vault.baseAddress)
+/** `live`: the snapshot is a live read of this session; the list then follows its block (Phase 7b). */
+function RecentActions({ app, view, owner, live }: { app: LoadedConfig; view: PositionView; owner: `0x${string}`; live: boolean }) {
+  const activity = useActivity(view.vault.baseAddress, live ? view.blockNumber : undefined)
   const explorer = app.guided.network.blockExplorerUrls[0].replace(/\/$/, '')
   // On return, the confirmed cached part is shown at once while the newest blocks are read (PRD §9 3).
   const pages = activity.data?.pages ?? (activity.cached ? [{ ...activity.cached, head: activity.cached.to }] : [])
   const fromCache = !activity.data && !!activity.cached
-  const items = pages.flatMap(p => p.items)
   const ctx = { owner, positionAddress: view.vault.baseAddress, weth: app.guided.base.weth, usdc: app.guided.base.usdc, marketLabels: app.config.marketLabels }
+  const rows = actionRows(pages.flatMap(p => p.items), ctx)
   const range = pages.length ? `Blocks ${pages[pages.length - 1].from.toString()}–${pages[0].to.toString()}` : null
   return <section className="card-s5 card-s5--wide prototype-surface" aria-labelledby="actions-title">
     <h2 id="actions-title">Recent actions</h2>
     {range && <p className="screen__note">{range}{pages[pages.length - 1].reachedStart ? ' (since the Executor was deployed)' : ''}{fromCache ? ' · saved list, reading newer blocks…' : ''}</p>}
-    {activity.isPending && !fromCache && <p className="screen__note" role="status">Reading recent actions…</p>}
+    {activity.isPending && !fromCache && pages.length === 0 && <p className="screen__note" role="status">Reading recent actions…</p>}
     {activity.isError && <p className="notice notice--warning" role="alert">{pages.length ? 'Could not load recent actions. The list below is the previous one.' : 'Could not load recent actions.'}<button type="button" className="prototype-button" onClick={() => { void (pages.length ? activity.fetchNextPage() : activity.refetch()) }}>Retry</button></p>}
-    {pages.length > 0 && items.length === 0 && <p className="screen__note">No actions in this range.</p>}
+    {pages.length > 0 && rows.length === 0 && <p className="screen__note">No actions in this range.</p>}
     <ul className="actions">
-      {items.map(item => { const d = describe(item, ctx); return <li key={`${item.transactionHash}:${item.logIndex}`} className="actions__row">
-        <span className={`actions__who actions__who--${d.who.toLowerCase()}`}>{d.who}</span>
-        <span className="actions__text">{d.text}</span>
-        <span className="actions__meta">{item.time !== null ? date(item.time) : `block ${item.blockNumber.toString()}`} · <a href={`${explorer}/tx/${item.transactionHash}`} target="_blank" rel="noreferrer">BaseScan</a></span>
-      </li> })}
+      {rows.map(row => <li key={row.transactionHash} className="actions__row">
+        <span className={`actions__who actions__who--${row.who.toLowerCase()}`}>{row.who}</span>
+        <span className="actions__text">{row.text}</span>
+        <span className="actions__meta">{row.time !== null ? date(row.time) : `block ${row.blockNumber.toString()}`} · <a href={`${explorer}/tx/${row.transactionHash}`} target="_blank" rel="noreferrer">BaseScan</a></span>
+      </li>)}
     </ul>
     {activity.hasNextPage && !activity.isError && !fromCache && <button type="button" className="prototype-button" disabled={activity.isFetchingNextPage} onClick={() => { void activity.fetchNextPage() }}>{activity.isFetchingNextPage ? 'Loading…' : 'Load earlier'}</button>}
   </section>
@@ -266,7 +271,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const closeLine = plan.data && shortfall !== null
     ? shortfall === 0n
       ? `Repays ${usdc(plan.data.debtNow)} held at your position address, returns your WETH to your wallet.`
-      : `You will first send ${usdcExact(shortfall)} to your position address, then the debt is repaid and your WETH returns to your wallet.`
+      : `You will first send ${usdc(shortfall)} to your position address, then the debt is repaid and your WETH returns to your wallet.`
     : null
   const startClosing = () => {
     if (!app || !owner || !closeVault) return
@@ -294,6 +299,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
       <div className="hero-s5__figure prototype-surface"><span>LTV</span><strong>{market?.ltv != null ? formatWadPercent(market.ltv) : debt > 0n && collateral === 0n ? 'unbounded' : <Unavailable />}</strong>{market && <LtvTrack m={market} />}</div>
     </div>
 
+    {owner && chainOk && <p className="wallet-line">Your wallet <code title={owner}>{shortAddress(owner)}</code> · <ShowUsdcButton /></p>}
+
     {showIdle && <p className="idle-line">At your position address, outside Morpho: {[idle.weth > 0n && weth(idle.weth), idle.usdc > app.guided.usdcDust && usdc(idle.usdc), idle.eth > 0n && `${formatUnits(idle.eth, 18, 6)} ETH for gas`].filter(Boolean).join(' · ')}</p>}
 
     <div className="cards-s5">
@@ -302,7 +309,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     </div>
     {verifying && <div id="verify-panel"><VerificationPanel vaultId={vaultId} poll={false} /></div>}
     {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} />}
-    {owner && <RecentActions app={app} view={view} owner={owner} />}
+    {owner && <RecentActions app={app} view={view} owner={owner} live={!restored} />}
 
     {variant === 'active' && !closing && <div className="create-action">
       <button type="button" className="prototype-button is-primary" disabled={closeReason !== null && closeReason !== PLAN_FAILED} aria-describedby="close-reason" onClick={() => { void plan.refetch(); setReview(true) }}>Close position</button>
@@ -317,6 +324,5 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
         : <p>Start over appears once your position address holds no WETH and no more than 0.01 USDC.</p>}
       <p className="create-action__small">Start over reuses this vault: no new vault is created.</p>
     </div>}
-    <p className="screen__note">Testnet prototype, unaudited. Protection is risk management, not insurance.</p>
   </section>
 }

@@ -2,6 +2,7 @@ import { SANDBOX } from '../flow/build.ts'
 import { useEffect, useRef, useState } from 'react'
 import type { AdapterKind, WalletState } from '../adapters/types.ts'
 import { shortAddress } from '../flow/format.ts'
+import { SHOW_USDC, useShowUsdc } from './ShowUsdc.tsx'
 
 const BASE_SEPOLIA = 84532
 
@@ -52,6 +53,7 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
   onLeave: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const usdc = useShowUsdc()
   useEffect(() => {
     if (!copied) return
     const timer = window.setTimeout(() => setCopied(false), 1500)
@@ -68,6 +70,7 @@ export function WalletSlot({ kind, state, checkingVaults, explorer, onConnect, o
   return <SlotMenu label={`${short} · Base Sepolia`} items={[
     { label: copied ? 'Copied' : 'Copy address', onSelect: () => { void navigator.clipboard?.writeText(state.address).then(() => setCopied(true), () => undefined) } },
     ...(explorer ? [{ label: 'View on BaseScan', href: `${explorer.replace(/\/$/, '')}/address/${state.address}` }] : []),
+    { label: SHOW_USDC, onSelect: usdc.ask },
     { label: 'Disconnect', danger: true, onSelect: onDisconnect },
   ]} />
 }

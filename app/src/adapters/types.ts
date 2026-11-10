@@ -25,8 +25,13 @@ export interface WalletAdapter {
   signMessage(message: string): Promise<Hex>
   sendTransaction(tx: { to: Address; data?: Hex; value?: bigint }): Promise<Hex>
   waitForTransaction(hash: Hex, confirmations: number): Promise<TransactionReceipt>
+  /** wallet_watchAsset (EIP-747) for an ERC-20: asks the wallet to list the token; true when the wallet accepted. */
+  watchAsset(asset: TokenAsset): Promise<boolean>
   dispose(): void
 }
+
+/** An ERC-20 as the wallet lists it (EIP-747 options): the address from config.json, symbol and decimals read from the token. */
+export type TokenAsset = { address: Address; symbol: string; decimals: number; image?: string }
 
 /** S1/S2 market read at one block; any field that could not be read is null. */
 export type MarketQuote = {
@@ -190,11 +195,24 @@ export type PositionView = {
   sellBudgets: { executor: Address; token: Address; activeCollateral: bigint; sold: bigint; budgetWad: bigint; remaining: bigint }[]
 }
 
-/** The facts the agent card derives its status from (PRD S5): the /agent/vaults row, the NEAR key check, the vault's agent. */
+export type AgentListRow = { registration?: string; agent_status?: string; expires_at?: number; last_tick_unix?: number | null }
+
+/**
+ * The facts the agent card derives its status from (PRD S5, Phase 7b): the chain first (the vault's recorded agent,
+ * vault/src/lib.rs l.555, and the NEAR key check), then the agent's own /agent/vaults list, which may lag behind the
+ * chain and is read on its own, so a failed list read does not hide what the chain shows.
+ */
 export type AgentFacts = {
-  row: { registration?: string; agent_status?: string; expires_at?: number; last_tick_unix?: number | null } | null
+  /**
+   * The vault's approved measurement against the published manifest (help.manifest, read each time): true/false, null
+   * when the vault approves none; a failed manifest read is ok: false. The agent watches a vault only while `approved`
+   * equals its own measurement (agent/src/vaults.rs l.8-9, l.82-87), so a stale approval protects nothing.
+   */
+  approval: { ok: true; matches: boolean | null } | { ok: false; error: string }
   keyLimited: boolean
   vaultAgent: { public_key: string; expires_at: number } | null
+  /** The agent's row for this vault (null: no row yet), or the list could not be read. */
+  list: { ok: true; row: AgentListRow | null } | { ok: false; error: string }
 }
 
 export type ActivityItem = {
@@ -229,6 +247,13 @@ export interface ProtocolAdapter {
   estimateDeposit(app: LoadedConfig, quote: MarketQuote, amountWei: bigint): DepositEstimate
   readWalletFunding(app: LoadedConfig, owner: Address, amountWei: bigint): Promise<WalletFunding>
   readAccountKind(app: LoadedConfig, address: Address): Promise<AccountKind>
+  /** The USDC of config.json (deployments/testnet.json base.tokens.usdc) with its ERC-20 symbol and decimals, for watchAsset (Phase 7b). */
+  readUsdcAsset(app: LoadedConfig): Promise<TokenAsset>
+  /**
+   * Whether the measurement baked into config.json (the one a setup message approves) equals the published manifest's
+   * agent.measurement at run time (Phase 7b item 1a); throws when the manifest cannot be read.
+   */
+  configMatchesPublished(app: LoadedConfig): Promise<boolean>
   /** D4: the owner's newest vault numbered from firstVaultNumber, or null; throws when that cannot be known. `hint`: the vault last found for this owner, verified with one get_state (PRD §9 5). */
   discoverPosition(app: LoadedConfig, owner: Address, hint?: string | null): Promise<PositionSummary | null>
   relayerReadiness(app: LoadedConfig): Promise<Readiness>

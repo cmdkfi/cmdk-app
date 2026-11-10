@@ -13,7 +13,9 @@ const TITLE: Record<RowId, string> = {
   unchecked: 'What is not checked here',
 }
 
-const time = (ms: number | null) => (ms === null ? 'static' : new Date(ms).toLocaleTimeString())
+const time = (ms: number) => new Date(ms).toLocaleTimeString()
+/** "Checked at" only where the check ran to a result; a read that failed or had nothing to compare was only tried (Phase 7b). */
+const when = (row: VerificationRow) => (row.checkedAt === null ? null : row.status === 'Checked' || row.status === 'Mismatch' ? `Checked at ${time(row.checkedAt)}` : `Last tried at ${time(row.checkedAt)}`)
 
 export function VerificationPanel({ vaultId, poll, compact }: { vaultId: string | undefined; poll: boolean; compact?: boolean }) {
   const app = useAppConfig().data
@@ -28,7 +30,7 @@ export function VerificationPanel({ vaultId, poll, compact }: { vaultId: string 
     switch (row.id) {
       case 'measurement': return <>Open the <a href={app.guided.help.manifest} target="_blank" rel="noreferrer">published manifest</a>{row.sourceCommit ? <> (source commit <code>{row.sourceCommit}</code>)</> : null} and compare its six hex values with your vault's state{vaultPage ? <> on <a href={vaultPage} target="_blank" rel="noreferrer">NearBlocks</a></> : null}.</>
       case 'compose': return <>Download <code>app-compose.json</code> from the agent's evidence and hash it locally with <code>sha256sum</code>; see <a href={app.guided.help.measurementDoc} target="_blank" rel="noreferrer">agent/MEASUREMENT.md</a>.</>
-      case 'registration': return row.registrationTx ? <>Open the <a href={`${nearblocks}/txns/${row.registrationTx}`} target="_blank" rel="noreferrer">registration transaction</a> on NearBlocks.</> : <>Your vault on {vaultPage ? <a href={vaultPage} target="_blank" rel="noreferrer">NearBlocks</a> : 'NearBlocks'} shows the agent once it is registered.</>
+      case 'registration': return row.registrationTx ? <>Open the <a href={`${nearblocks}/txns/${row.registrationTx}`} target="_blank" rel="noreferrer">registration transaction</a> on NearBlocks.</> : <>NearBlocks → {vaultPage ? <a href={vaultPage} target="_blank" rel="noreferrer">your vault</a> : 'your vault'} → Access keys shows the agent key once it is registered.</>
       case 'keys': return <>NearBlocks → {vaultPage ? <a href={vaultPage} target="_blank" rel="noreferrer">your vault</a> : 'your vault'} → Access keys.</>
       case 'code': return <>Compare the vault's code hash with the factory's on {vaultPage ? <a href={vaultPage} target="_blank" rel="noreferrer">NearBlocks</a> : 'NearBlocks'}.</>
       case 'relayer': return <>Read <a href={app.guided.help.relayerDoc} target="_blank" rel="noreferrer">scripts/RELAYER.md</a>.</>
@@ -45,7 +47,7 @@ export function VerificationPanel({ vaultId, poll, compact }: { vaultId: string 
       {rows.map(row => <li key={row.id} className={`verify__row verify__row--${row.status.replace(' ', '-').toLowerCase()}`} aria-label={TITLE[row.id]}>
         <div className="verify__line"><strong>{TITLE[row.id]}</strong><span className="verify__status" role="status">{row.status}</span></div>
         <p className="verify__result">{row.result}</p>
-        <p className="verify__how"><span className="verify__time">{row.checkedAt === null ? 'Static' : `Checked at ${time(row.checkedAt)}`}</span> · How to check yourself: {how(row)}</p>
+        <p className="verify__how">{when(row) && <><span className="verify__time">{when(row)}</span> · </>}How to check yourself: {how(row)}</p>
       </li>)}
     </ol>
   </section>

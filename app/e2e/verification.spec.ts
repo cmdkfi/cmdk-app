@@ -31,7 +31,7 @@ async function openVerification(page: Page) {
 test('§6: every live row is Checked against the fixture, with its time and how to check it; the static rows are never Checked', async ({ page, context, fx }) => {
   activeVault(fx)
   await fx.install(context); await openVerification(page)
-  expect(await statuses(page)).toEqual(['Checked', 'Checked', 'Checked', 'Checked', 'Checked', 'Not checked', 'Not checked'])
+  expect(await statuses(page)).toEqual(['Checked', 'Checked', 'Checked', 'Checked', 'Checked', 'Statement', 'Statement'])
   for (const title of ROWS.slice(0, 5)) await expect(row(page, title)).toContainText(/Checked at \d/)
   await expect(row(page, ROWS[0])).toContainText('source commit f1x7ure')
   await expect(row(page, ROWS[0]).getByRole('link', { name: 'published manifest' })).toHaveAttribute('href', 'https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json')
@@ -40,7 +40,7 @@ test('§6: every live row is Checked against the fixture, with its time and how 
   await expect(row(page, ROWS[3]).getByRole('link', { name: 'your vault' })).toHaveAttribute('href', `https://testnet.nearblocks.io/address/${VAULT}`)
   await expect(row(page, ROWS[5]).getByRole('link', { name: 'scripts/RELAYER.md' })).toHaveAttribute('href', 'https://github.com/cmdkfi/app/blob/main/scripts/RELAYER.md')
   await expect(row(page, ROWS[6]).getByRole('link', { name: 'agent/MEASUREMENT.md' })).toHaveAttribute('href', 'https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md')
-  await expect(row(page, ROWS[6])).toContainText('Static')
+  for (const title of ROWS.slice(5)) await expect(row(page, title)).not.toContainText(/Checked at|Last tried at/)
   expect(fx.requests.some(r => r.host === 'raw.githubusercontent.com')).toBe(true)
 })
 
@@ -48,7 +48,7 @@ test('§6: an altered published manifest shows Mismatch on the first row only', 
   activeVault(fx)
   fx.publishedMeasurement = { ...MEASUREMENT, rtmr2: '00'.repeat(48) }
   await fx.install(context); await openVerification(page)
-  expect(await statuses(page)).toEqual(['Mismatch', 'Checked', 'Checked', 'Checked', 'Checked', 'Not checked', 'Not checked'])
+  expect(await statuses(page)).toEqual(['Mismatch', 'Checked', 'Checked', 'Checked', 'Checked', 'Statement', 'Statement'])
   await expect(row(page, ROWS[0])).toContainText('The values your vault approved differ from the published manifest.')
 })
 
@@ -56,7 +56,7 @@ test('§6: a failing evidence fetch shows Unavailable on that row only', async (
   activeVault(fx)
   fx.evidenceDown = true
   await fx.install(context); await openVerification(page)
-  expect(await statuses(page)).toEqual(['Checked', 'Unavailable', 'Checked', 'Checked', 'Checked', 'Not checked', 'Not checked'])
+  expect(await statuses(page)).toEqual(['Checked', 'Unavailable', 'Checked', 'Checked', 'Checked', 'Statement', 'Statement'])
   await expect(row(page, ROWS[1])).toContainText('Could not be read: Evidence file app-compose.json is unavailable.')
 })
 
@@ -75,10 +75,43 @@ test('§6 in the S4 rail: the registration row reads Registering while the agent
   await expect(page).toHaveURL(/#progress$/)
   await expect(panel(page)).toBeVisible()
   await expect(page.getByRole('listitem', { name: 'Approve agent and rules' })).toContainText('You declined the request in MetaMask', { timeout: 20_000 })
-  await expect(row(page, ROWS[2])).toContainText('Registering (usually a few minutes).')
+  await expect(row(page, ROWS[2])).toContainText('Registering (usually within a few minutes).')
   await expect(row(page, ROWS[2]).getByRole('status')).toHaveText('Not checked')
+  await expect(row(page, ROWS[2])).toContainText(/Last tried at \d/)
+  await expect(row(page, ROWS[2])).not.toContainText('Checked at')
   // the vault exists but approved nothing yet: no claim either way
   await expect(row(page, ROWS[0])).toContainText('Your vault has not approved an agent version yet; the setup step does that.')
   await expect(row(page, ROWS[0]).getByRole('status')).toHaveText('Not checked')
   await expect(row(page, ROWS[1]).getByRole('status')).toHaveText('Not checked')
+})
+
+test('Phase 7b: the agent list lagging the chain (live 9 Nov row) reads Active on the card and "not caught up" in the panel, never Revoked or Mismatch', async ({ page, context, fx }) => {
+  activeVault(fx)
+  // tasks/rehearsal-2026-11-10.md: v10 held the agent key on NEAR while the agent's list still said registering · revoked
+  fx.agentRows = [{ slot: 0, vault: VAULT, base_address: BASE, registration: 'registering', registration_tx: null, agent_status: 'revoked', expires_at: null, last_tick_unix: null }]
+  await fx.install(context); await openVerification(page)
+  const card = page.locator('section.card-s5').filter({ hasText: 'Agent' }).first()
+  await expect(card.getByRole('status')).toHaveText("Active · Your vault shows the registration; the agent's list has not caught up yet.")
+  expect(await statuses(page)).toEqual(['Checked', 'Checked', 'Not checked', 'Checked', 'Checked', 'Statement', 'Statement'])
+  await expect(row(page, ROWS[2])).toContainText("The agent's list has not caught up yet; your vault already holds the restricted agent key")
+})
+
+test('Phase 7b: a registered row without registration_tx says so and points to the vault\'s access keys on NearBlocks', async ({ page, context, fx }) => {
+  activeVault(fx)
+  fx.agentRows = [{ slot: 0, vault: VAULT, base_address: BASE, registration: 'registered', registration_tx: null, agent_status: 'active', expires_at: NOW + 86_400, last_tick_unix: null }]
+  await fx.install(context); await openVerification(page)
+  await expect(row(page, ROWS[2]).getByRole('status')).toHaveText('Checked')
+  await expect(row(page, ROWS[2])).toContainText("The agent's list gives no registration transaction for it; your vault's access keys on NearBlocks show the agent key.")
+  await expect(row(page, ROWS[2]).getByRole('link', { name: 'your vault' })).toHaveAttribute('href', `https://testnet.nearblocks.io/address/${VAULT}`)
+})
+
+test('Phase 7b: a vault that approved an earlier agent version reads Outdated on the card, even with a valid key; the panel says why', async ({ page, context, fx }) => {
+  activeVault(fx)
+  fx.agentRows = []
+  fx.publishedMeasurement = { ...MEASUREMENT, compose_hash: 'db4f5085'.padEnd(64, '0') }
+  await fx.install(context); await openVerification(page)
+  const card = page.locator('section.card-s5').filter({ hasText: 'Agent' }).first()
+  await expect(card.getByRole('status')).toHaveText('Outdated · Your vault approved an earlier agent version; the running agent does not watch it.')
+  await expect(row(page, ROWS[0]).getByRole('status')).toHaveText('Mismatch')
+  await expect(row(page, ROWS[2])).toContainText('The running agent does not watch your vault: it approved an earlier agent version (see the first row).')
 })

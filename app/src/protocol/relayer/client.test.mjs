@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { V } from '../vectors.mjs'
-import { assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from './client.ts'
+import { assessHealth, createVault, fundsShortfall, health, job, ownerCall, POST_TIMEOUT_MS, RelayerError } from './client.ts'
 
 const urls = { primary: 'https://primary', fallback: 'https://fallback' }
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
@@ -67,3 +67,15 @@ test('gas refusal text of relayer.py check_funds parses to have/need; anything e
   assert.equal(fundsShortfall(undefined), null)
 })
 
+
+test('Phase 7b: a POST waits 60 s for its answer; a timeout and a 5xx are uncertain and say what happened', async () => {
+  assert.equal(POST_TIMEOUT_MS, 60_000)
+  let signal
+  await assert.rejects(ownerCall(urls, { vault: 'v10.factory.testnet', message: '{}', signature: '0x' }, async (_url, init) => { signal = init.signal; throw new DOMException('timed out', 'TimeoutError') }),
+    e => e instanceof RelayerError && e.uncertain && e.message === 'The relayer did not answer within 60 s; the request may have been accepted.')
+  assert.ok(signal instanceof AbortSignal)
+  await assert.rejects(ownerCall(urls, { vault: 'v10.factory.testnet', message: '{}', signature: '0x' }, async () => json(503, { ok: false, error: 'container restarting' })),
+    e => e instanceof RelayerError && e.uncertain && e.status === 503 && e.message === 'The relayer answered HTTP 503 (container restarting); the request may have been accepted.')
+  await assert.rejects(ownerCall(urls, { vault: 'v10.factory.testnet', message: '{}', signature: '0x' }, async () => new Response('Service Unavailable', { status: 503 })),
+    e => e instanceof RelayerError && e.uncertain && e.message === 'The relayer answered HTTP 503; the request may have been accepted.')
+})

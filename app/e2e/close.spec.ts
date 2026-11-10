@@ -37,12 +37,14 @@ async function expectClosed(page: Page) {
   await expect(page.locator('.hero-s5__figure').filter({ hasText: 'Debt' }).locator('strong')).toHaveText('0 USDC')
   await expect(page.locator('.hero-s5__figure').filter({ hasText: 'Collateral' }).locator('strong')).toHaveText('0 WETH')
   await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
+  // Phase 7b: no collateral, so no budget to report (was "no active corridor")
+  await expect(page.locator('section.card-s5').filter({ hasText: 'Sell budget left today' }).locator('.card-s5__facts > div').filter({ hasText: 'Sell budget left today' }).locator('dd')).toHaveText('no position')
 }
 
 test('review sheet: debt, interest, headroom, amount sent, collateral returned, destination, expiry and no close without repaying', async ({ page, context, fx }) => {
   active(fx, 0n, 500_000_000n)
   await fx.install(context); await openPosition(page)
-  await expect(page.getByText('You will first send 161.600154 USDC to your position address, then the debt is repaid and your WETH returns to your wallet.')).toBeVisible()
+  await expect(page.getByText('You will first send 161.6 USDC to your position address, then the debt is repaid and your WETH returns to your wallet.')).toBeVisible()
   await page.getByRole('button', { name: 'Close position' }).click()
   const s = sheet(page)
   const row = (label: string) => s.locator('.card-s5__facts > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')

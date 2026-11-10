@@ -4,7 +4,7 @@ import type { Address, Hex } from 'viem'
 import { accountKind } from '../../flow/account.ts'
 import { parseConfig, type LoadedConfig } from '../../flow/config.ts'
 import { borrowApr, collateralValue, debtAt, depositEstimate, lendable, openTargetLtv, repayNeed } from '../../protocol/base/math.ts'
-import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readMarketStatic, readPositionSnapshot, readReceipts, readTokenBalances, readVaultSnapshot, readWalletFunding, type MarketStatic } from '../../protocol/base/reads.ts'
+import { baseClient, feedsFresh, readBlockTimes, readCode, readHead, readMarket, readMarketStatic, readPositionSnapshot, readReceipts, readTokenBalances, readTokenInfo, readVaultSnapshot, readWalletFunding, type MarketStatic } from '../../protocol/base/reads.ts'
 import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRow, codeMatchesFactory, composeHashMatches, fetchPublishedManifest, measurementMatches, sha256Hex } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList, viewAccount, type NearRpc } from '../../protocol/near/rpc.ts'
@@ -76,6 +76,8 @@ export function createLiveProtocol(): ProtocolAdapter {
     readWalletFunding({ config, guided }, owner, amountWei) {
       return readWalletFunding(baseClient(config.baseRpcUrl), { owner, weth: guided.base.weth, gasPriceOracle: guided.base.gasPriceOracle, gasLimit: guided.walletTxGasLimit, amount: amountWei })
     },
+    readUsdcAsset: ({ config, guided }) => readTokenInfo(baseClient(config.baseRpcUrl), guided.base.usdc),
+    configMatchesPublished: async ({ config, guided }) => measurementMatches(config.agent.measurement, (await fetchPublishedManifest(guided.help.manifest)).measurement),
     async readAccountKind({ config }, address) {
       return accountKind(await readCode(baseClient(config.baseRpcUrl), address))
     },
@@ -171,12 +173,19 @@ export function createLiveProtocol(): ProtocolAdapter {
       }
     },
     async readAgent(app, vaultId) {
-      const [state, rows, keys] = await Promise.all([sharedState(nearRpc(app.config), vaultId), agentVaults(relayer(app)), viewAccessKeyList(nearRpc(app.config), vaultId)])
-      const row = agentRow(rows, vaultId)
+      // the chain reads decide; the agent's list is settled on its own (Phase 7b: it lagged the chain on 9 Nov)
+      const failed = (error: unknown) => ({ ok: false as const, error: error instanceof Error ? error.message : String(error) })
+      const [state, keys, list, manifest] = await Promise.all([
+        sharedState(nearRpc(app.config), vaultId), viewAccessKeyList(nearRpc(app.config), vaultId),
+        agentVaults(relayer(app)).then(rows => ({ ok: true as const, rows }), failed),
+        fetchPublishedManifest(app.guided.help.manifest).then(m => ({ ok: true as const, measurement: m.measurement }), failed),
+      ])
+      const row = list.ok ? agentRow(list.rows, vaultId) : null
       return {
-        row: row ? { registration: row.registration, agent_status: row.agent_status, expires_at: row.expires_at, last_tick_unix: row.last_tick_unix } : null,
+        approval: manifest.ok ? { ok: true, matches: state.approved ? measurementMatches(state.approved, manifest.measurement) : null } : { ok: false, error: manifest.error },
         keyLimited: agentKeyLimited(keys, vaultId, state.agent?.public_key),
         vaultAgent: state.agent,
+        list: list.ok ? { ok: true, row: row ? { registration: row.registration, agent_status: row.agent_status, expires_at: row.expires_at, last_tick_unix: row.last_tick_unix } : null } : { ok: false, error: list.error },
       }
     },
     async readActivity({ config, guided }, positionAddress, toBlock, fromBlock) {

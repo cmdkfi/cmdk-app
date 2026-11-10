@@ -52,7 +52,7 @@ test('wallet slot: connect, wrong network, switch, menu and disconnect', async (
   const slot = page.getByRole('button', { name: `${SHORT} · Base Sepolia` })
   await expect(slot).toBeVisible(); await slot.click()
   const menu = page.getByRole('menu')
-  await expect(menu.getByRole('menuitem')).toHaveText(['Copy address', 'View on BaseScan', 'Disconnect'])
+  await expect(menu.getByRole('menuitem')).toHaveText(['Copy address', 'View on BaseScan', 'Show USDC in MetaMask', 'Disconnect'])
   await expect(menu.getByRole('menuitem', { name: 'View on BaseScan' })).toHaveAttribute('href', `https://sepolia.basescan.org/address/${OWNER}`)
   await page.keyboard.press('Escape'); await expect(menu).toBeHidden()
   await page.goto('/#settings'); await slot.click(); await page.getByRole('menuitem', { name: 'Disconnect' }).click()

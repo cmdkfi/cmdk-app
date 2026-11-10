@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { test, expect, BASE, OTHER, OWNER, vault, type LiveFixture } from './live-fixture.ts'
+import { test, expect, BASE, MEASUREMENT, OTHER, OWNER, vault, type LiveFixture } from './live-fixture.ts'
 
 const WETH = '0x4200000000000000000000000000000000000006'
 const prompts = (fx: LiveFixture) => fx.walletCalls.filter(m => m === 'personal_sign' || m === 'eth_sendTransaction')
@@ -224,3 +224,40 @@ test('creation is guarded by a fresh ownership read: with a stale "none" and a v
   expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
 })
 
+
+test('Phase 7b: a relayer 503 on the POST shows Checking with the reason, the expiry and a countdown; nothing is re-posted; after expiry it asks for a new signature', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.ownerCallModes = ['answer-503']
+  await fx.install(context)
+  await page.clock.install()
+  await createPosition(page)
+  const setup = step(page, 'Approve agent and rules')
+  await expect(setup.getByRole('status')).toHaveText('Checking…', { timeout: 20_000 })
+  await expect(setup).toContainText(/The relayer answered HTTP 503 \(container restarting\); the request may have been accepted\. Waiting for the signed message to expire at \d{1,2}:\d{2}:\d{2}( [AP]M)? \((9:[0-5]\d|10:00) left\) unless the vault shows it ran\./)
+  await page.clock.runFor(11_000)
+  await expect(setup).toContainText(/\((9:[0-5]\d) left\)/)
+  expect(ownerCalls(fx)).toHaveLength(1)
+  // the message expires unused (NEAR time past its expiry, owner_nonce unchanged)
+  fx.nearNow += 601
+  // the check loop re-reads every 10 s of page time once the previous reads have answered: step the clock until it does
+  await expect.poll(async () => { await page.clock.runFor(5_000); return setup.innerText() }, { timeout: 20_000 }).toContain('The signed message expired without being used. Sign again.')
+  expect(ownerCalls(fx)).toHaveLength(1)
+  await setup.getByRole('button', { name: 'Sign a new message' }).click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(signed(fx)).toEqual(['setup', 'setup', 'open', 'withdraw'])
+})
+
+test('Phase 7b item 1a: when the published agent version differs from the app\'s config, setup pauses before any signature; Check again continues once they agree', async ({ page, context, fx }) => {
+  fresh(fx)
+  fx.publishedMeasurement = { ...MEASUREMENT, compose_hash: 'db4f5085'.padEnd(64, '0') } // the agent moved on (9 Nov)
+  await fx.install(context)
+  await createPosition(page)
+  const setup = step(page, 'Approve agent and rules')
+  await expect(setup).toContainText("This app's configuration is behind the published agent version; try again later.", { timeout: 20_000 })
+  expect(signed(fx)).toEqual([])
+  expect(ownerCalls(fx)).toHaveLength(0)
+  fx.publishedMeasurement = { ...MEASUREMENT }
+  await setup.getByRole('button', { name: 'Check again' }).click()
+  await expect(page).toHaveURL(/#position$/, { timeout: 30_000 })
+  expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
+})

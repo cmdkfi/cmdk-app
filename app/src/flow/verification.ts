@@ -1,10 +1,11 @@
 // The agent verification panel (PRD §6): row statuses from the adapter's facts. Pure.
 // "Checked" only for a positive result obtained in this session; a failed fetch is "Unavailable", never a guess;
 // a check with nothing to compare yet (no approval, no agent key, no vault) is "Not checked"; static rows are
-// statements, never "Checked".
+// "Statement", never "Checked" (Phase 7b).
 import type { Fetched, VerificationFacts } from '../adapters/types.ts'
+import { listBehind, REGISTERING } from './position.ts'
 
-export type RowStatus = 'Checked' | 'Mismatch' | 'Unavailable' | 'Not checked'
+export type RowStatus = 'Checked' | 'Mismatch' | 'Unavailable' | 'Not checked' | 'Statement'
 export type RowId = 'measurement' | 'compose' | 'registration' | 'keys' | 'code' | 'relayer' | 'unchecked'
 export type VerificationRow = { id: RowId; status: RowStatus; result: string; checkedAt: number | null; registrationTx?: string | null; sourceCommit?: string | null }
 
@@ -14,8 +15,8 @@ const unavailable = (f: Extract<Fetched<unknown>, { ok: false }>, id: RowId): Ve
 
 /** Static rows (PRD §6 rows 6 and 7): statements with links, not live checks. */
 const STATIC: VerificationRow[] = [
-  { id: 'relayer', status: 'Not checked', checkedAt: null, result: 'Statement, not a live check: the relayer holds no authority. It cannot make the vault sign anything; the vault checks the owner\'s signature and its allowlist and builds every Base transaction itself (scripts/RELAYER.md).' },
-  { id: 'unchecked', status: 'Not checked', checkedAt: null, result: 'The TDX quote signature, the PCCS collateral and the RTMR replay are not checked here: they need Docker and dstack-mr (agent/MEASUREMENT.md).' },
+  { id: 'relayer', status: 'Statement', checkedAt: null, result: 'Statement, not a live check: the relayer holds no authority. It cannot make the vault sign anything; the vault checks the owner\'s signature and its allowlist and builds every Base transaction itself (scripts/RELAYER.md).' },
+  { id: 'unchecked', status: 'Statement', checkedAt: null, result: 'The TDX quote signature, the PCCS collateral and the RTMR replay are not checked here: they need Docker and dstack-mr (agent/MEASUREMENT.md).' },
 ]
 
 /** Without facts: no vault yet (Not checked), the first read still running (Not checked, "Checking…"), or the whole read failed (Unavailable). */
@@ -49,12 +50,20 @@ export function verificationRows(facts: VerificationFacts | null, nowSecs: numbe
   })
 
   const r = facts.registration
+  // the vault's NEAR keys already show the restricted agent key (row 4): a list that says otherwise lags the chain
+  const chainHasKey = facts.keys.ok && facts.keys.value.limited === true
+  const behind = r.ok && listBehind(r.value && { registration: r.value.registration, agent_status: r.value.agentStatus ?? undefined })
   if (!r.ok) rows.push(unavailable(r, 'registration'))
   // register_agent needs an approved measurement (vault/src/attest.rs): before setup there is nothing to register yet
   else if (r.value === null && m.ok && m.value.matches === null) rows.push({ id: 'registration', status: 'Not checked', result: 'Waits for the setup step: the agent registers once your vault approves its version.', checkedAt: r.at })
-  else if (r.value === null || r.value.registration === 'registering') rows.push({ id: 'registration', status: 'Not checked', result: 'Registering (usually a few minutes).', checkedAt: r.at })
+  // only under an approval of the published version: an old key under a stale approval is not the running agent's
+  else if (chainHasKey && behind && m.ok && m.value.matches === true) rows.push({ id: 'registration', status: 'Not checked', result: 'The agent\'s list has not caught up yet; your vault already holds the restricted agent key (see the key row).', checkedAt: r.at })
+  // agent/src/vaults.rs l.8-9: the running agent watches (and registers on) a vault only under its own measurement
+  else if ((r.value === null || r.value.registration === 'registering') && m.ok && m.value.matches === false) rows.push({ id: 'registration', status: 'Not checked', result: 'The running agent does not watch your vault: it approved an earlier agent version (see the first row).', checkedAt: r.at })
+  else if (r.value === null || r.value.registration === 'registering') rows.push({ id: 'registration', status: 'Not checked', result: REGISTERING, checkedAt: r.at })
   else if (r.value.registration === 'registered' && r.value.agentStatus === 'active' && r.value.expiresAt !== null && r.value.expiresAt > nowSecs) {
-    rows.push({ id: 'registration', status: 'Checked', result: `Registered and active on your vault until ${new Date(r.value.expiresAt * 1000).toLocaleString()}.`, checkedAt: r.at, registrationTx: r.value.registrationTx })
+    const tx = r.value.registrationTx ? '' : ' The agent\'s list gives no registration transaction for it; your vault\'s access keys on NearBlocks show the agent key.'
+    rows.push({ id: 'registration', status: 'Checked', result: `Registered and active on your vault until ${new Date(r.value.expiresAt * 1000).toLocaleString()}.${tx}`, checkedAt: r.at, registrationTx: r.value.registrationTx })
   } else rows.push({ id: 'registration', status: 'Mismatch', result: `${r.value.registration}${r.value.agentStatus ? ` · ${r.value.agentStatus}` : ''}${r.value.expiresAt !== null && r.value.expiresAt <= nowSecs ? ' · registration expired' : ''}`, checkedAt: r.at, registrationTx: r.value.registrationTx })
 
   const k = facts.keys

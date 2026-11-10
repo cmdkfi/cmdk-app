@@ -46,6 +46,12 @@ export type StepState = {
   attempted?: boolean
   /** open: the LTV the market could lend when below the target (WAD), shown as "opened below target". */
   belowTarget?: string
+  /**
+   * Checking an owner call whose outcome is unknown (FR-6): why, and the NEAR time (unix seconds) the signed message
+   * expires; until then only the vault's owner_nonce can show that it ran (Phase 7b). `nearNow` is the last NEAR time
+   * read and `readAt` the browser time (ms) of that read, so the countdown runs on NEAR's clock.
+   */
+  check?: { reason: string; expiry: number; nearNow?: number; readAt?: number }
   /** close transfer: the wallet holds less USDC than the shortfall; the Get test USDC panel shows these (S6a). */
   funding?: { shortfall: string; wallet: string; missing: string; checkedAt: number }
 }

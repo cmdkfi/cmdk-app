@@ -1,7 +1,7 @@
 // React Query hooks over the adapters. Every key includes the adapter kind so live and sandbox data
 // never share a cache entry (PRD §8a "never mix"). Failed reads surface as errors, never as values.
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef } from 'react'
 import type { Address } from 'viem'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import type { ActivityWindow, WalletFunding } from '../adapters/types.ts'
@@ -96,33 +96,57 @@ export function useAgent(vaultId: string | undefined) {
 }
 
 /**
- * Recent actions in 10,000-block windows; "Load earlier" fetches the next window down (PRD S5, R9). Live mode keeps
- * the confirmed part (≥ 2 confirmations) per position address (PRD §9 3): it is shown at once on return, and only the
- * blocks after it up to the head are fetched before the list is merged.
+ * Recent actions in 10,000-block windows; "Load earlier" fetches the next window down (PRD S5, R9). The newest window
+ * ends at `toBlock`, the block of the position read, and is extended whenever the position is read again, so the
+ * list and the position name the same block (Phase 7b). Only the blocks after the confirmed part (≥ 2 confirmations)
+ * are read again; older windows are not re-read. Live mode keeps the confirmed part per position address (PRD §9 3):
+ * it is shown at once on return, and only the blocks after it are fetched before the list is merged.
  */
-export function useActivity(positionAddress: Address | undefined) {
+export function useActivity(positionAddress: Address | undefined, toBlock: bigint | undefined) {
   const { protocol, kind } = useAdapters()
   const app = useAppConfig().data
+  const queryClient = useQueryClient()
+  const queryKey = useMemo(() => ['activity', kind, positionAddress?.toLowerCase() ?? null], [kind, positionAddress])
   const cached = useMemo(() => (positionAddress ? loadActivity(kind, positionAddress) : null), [kind, positionAddress])
+  const target = useRef(toBlock)
+  target.current = toBlock
   const query = useInfiniteQuery({
-    queryKey: ['activity', kind, positionAddress?.toLowerCase() ?? null],
-    enabled: !!app && !!positionAddress,
+    queryKey,
+    enabled: !!app && !!positionAddress && toBlock !== undefined,
     initialPageParam: null as bigint | null,
     queryFn: async ({ pageParam }): Promise<ActivityWindow> => {
-      if (pageParam !== null || !cached) return protocol.readActivity(app!, positionAddress!, pageParam)
-      // newest blocks only: from the cached range's end + 1 to the head, window by window
-      const top = await protocol.readActivity(app!, positionAddress!, null, cached.to + 1n)
+      const previous = queryClient.getQueryData<InfiniteData<ActivityWindow, bigint | null>>(queryKey)
+      if (pageParam !== null) {
+        // an older window lies far below the head and is fixed: a refresh reuses it instead of reading it again
+        const index = previous?.pageParams.findIndex(p => p === pageParam) ?? -1
+        if (previous && index > 0) return previous.pages[index]
+        return protocol.readActivity(app!, positionAddress!, pageParam)
+      }
+      const to = target.current!
+      // the confirmed part of what is already shown (this session's newest window, else the saved list)
+      const shown = previous?.pages[0]
+      const base = shown ? confirmedActivity([shown], shown.head) : cached
+      if (!base) return protocol.readActivity(app!, positionAddress!, to)
+      if (base.to >= to) return { ...base, head: to, to: base.to }
+      // newest blocks only: from the confirmed end + 1 to the position's block, window by window
+      const top = await protocol.readActivity(app!, positionAddress!, to, base.to + 1n)
       let items = top.items, lowest = top.from
-      while (lowest > cached.to + 1n) {
-        const w = await protocol.readActivity(app!, positionAddress!, lowest - 1n, cached.to + 1n)
+      while (lowest > base.to + 1n) {
+        const w = await protocol.readActivity(app!, positionAddress!, lowest - 1n, base.to + 1n)
         items = [...items, ...w.items]; lowest = w.from
       }
-      return { from: cached.from, to: top.to, head: top.head, items: [...items, ...cached.items], reachedStart: cached.reachedStart }
+      return { from: base.from, to: top.to, head: top.head, items: [...items, ...base.items], reachedStart: base.reachedStart }
     },
     getNextPageParam: last => (last.reachedStart ? undefined : last.from - 1n),
     retry: false,
   })
   const pages = query.data?.pages
+  const top = pages?.[0]?.to
+  const { refetch, isFetching } = query
+  // a new position read: extend the newest window to its block
+  useEffect(() => {
+    if (toBlock !== undefined && top !== undefined && toBlock > top && !isFetching) void refetch({ cancelRefetch: false })
+  }, [toBlock, top, isFetching, refetch])
   useEffect(() => {
     if (!pages?.length || !positionAddress) return
     const keep = confirmedActivity(pages, pages[0].head)

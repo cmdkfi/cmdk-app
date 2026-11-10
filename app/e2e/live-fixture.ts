@@ -50,6 +50,8 @@ const ABI = parseAbi([
   'function allowance(address, address) view returns (uint256)',
   'function transfer(address, uint256) returns (bool)',
   'function decimals() view returns (uint8)',
+  // EIP-20 optional metadata (viem erc20Abi), read for wallet_watchAsset
+  'function symbol() view returns (string)',
   // scripts/rebalance_pool.py l.349
   'function deposit() payable',
   // agent/src/chain.rs l.824-834
@@ -84,12 +86,13 @@ const EVENTS = parseAbi([
 type FixtureLog = { address: Hex; topics: Hex[]; data: Hex; blockNumber: bigint; transactionHash: Hex; logIndex: number }
 
 /** One log of `EVENTS` at `blockNumber`, encoded as a node would return it. */
-export function fixtureLog(address: Hex, eventName: 'CorridorSet' | 'Opened' | 'Reduced' | 'Repaid' | 'Transfer', args: Record<string, unknown>, blockNumber: bigint, logIndex = 0): FixtureLog {
+/** `tx`: logs given the same tag share one transaction hash (an Executor event and its token legs). */
+export function fixtureLog(address: Hex, eventName: 'CorridorSet' | 'Opened' | 'Reduced' | 'Repaid' | 'Transfer', args: Record<string, unknown>, blockNumber: bigint, logIndex = 0, tx?: string): FixtureLog {
   const item = EVENTS.find(e => e.type === 'event' && e.name === eventName)! as Extract<(typeof EVENTS)[number], { type: 'event' }>
   const topics = encodeEventTopics({ abi: EVENTS, eventName, args } as never) as Hex[]
   const unindexed = (item.inputs as readonly { indexed?: boolean; name?: string; type: string }[]).filter(i => !i.indexed)
   const data = unindexed.length ? encodeAbiParameters(unindexed as never, unindexed.map(i => args[i.name!]) as never) : '0x'
-  return { address, topics, data, blockNumber, transactionHash: keccak256(toHex(`fixture-log-${eventName}-${blockNumber}-${logIndex}`)), logIndex }
+  return { address, topics, data, blockNumber, transactionHash: keccak256(toHex(tx ? `fixture-tx-${tx}` : `fixture-log-${eventName}-${blockNumber}-${logIndex}`)), logIndex }
 }
 export const HEAD = 30_000_100n, DEPLOY = 30_000_001n
 export const ADDRESSES = { WETH, USDC, EXECUTOR, MORPHO, NOW, HEAD, DEPLOY }
@@ -105,6 +108,11 @@ export type VaultFixture = {
   collateralAllowance: bigint
   corridorSet: boolean
   approved: typeof MEASUREMENT | null
+  /**
+   * Whether the vault records the agent key. Default: exactly when it approved a measurement (register_agent needs
+   * one, vault/src/lib.rs l.482; revoke_agent clears both, l.419-424), as if the agent registered at once.
+   */
+  agentKey?: boolean
 }
 
 export function vault(overrides: Partial<VaultFixture> = {}): VaultFixture {
@@ -170,8 +178,11 @@ export class LiveFixture {
   feedStale = false
   /** create-vault: 'ok', or 'lose-job' (the vault is created but GET /job answers 404). */
   createMode: 'ok' | 'lose-job' = 'ok'
-  /** Per owner-call, consumed in order: 'lose-job' runs the call but forgets the job. */
-  ownerCallModes: ('ok' | 'lose-job')[] = []
+  /**
+   * Per owner-call, consumed in order: 'lose-job' runs the call but forgets the job; 'answer-503' answers the POST
+   * with 503 and runs nothing (the relayer redeploy seen during the 9 Nov rehearsal).
+   */
+  ownerCallModes: ('ok' | 'lose-job' | 'answer-503')[] = []
   /** ETH the relayer float puts at a new vault's position address (relayer check_funds needs `gasNeed`). */
   floatWei = 5n * 10n ** 15n
   gasNeed = 10n ** 15n
@@ -181,7 +192,7 @@ export class LiveFixture {
   receipts = new Set<string>()
   // records
   walletCalls: string[] = []; signs: string[] = []; txs: { to: string; data: string; value: string }[] = []
-  posts: { path: string; body: unknown }[] = []; addChain: unknown[] = []
+  posts: { path: string; body: unknown }[] = []; addChain: unknown[] = []; watchAssets: unknown[] = []
   hosts = new Set<string>(); unexpected: string[] = []; runtimeErrors: string[] = []; ethCalls: string[] = []
   private connected = false; private added = false; private txCount = 0
 
@@ -197,11 +208,16 @@ export class LiveFixture {
     }
   }
 
+  private hasAgentKey(n: number) {
+    const v = this.vaults.get(n)
+    return v ? v.agentKey ?? v.approved !== null : true
+  }
+
   private state(n: number) {
     const v = this.vaults.get(n)
     const nonce = v?.ownerNonce ?? 3
     const m = (id: Hex) => ({ id, loan_token: USDC, collateral_token: WETH, executor: EXECUTOR, previous_executors: [], slice_max: '1000000000', corridor_set: v?.corridorSet ?? false })
-    return { owner: v?.owner ?? OTHER, owner_nonce: nonce, signer: 'signer.fixture.testnet', path: 'cmdk-base', base_address: BASE, morpho: MORPHO, cooldown_secs: 120, last_agent_action: 0, markets: [m(LIVE), m(BACKUP)], approved: v?.approved ?? null, agent: { public_key: 'ed25519:' + '2'.repeat(44), expires_at: NOW + 86400 } }
+    return { owner: v?.owner ?? OTHER, owner_nonce: nonce, signer: 'signer.fixture.testnet', path: 'cmdk-base', base_address: BASE, morpho: MORPHO, cooldown_secs: 120, last_agent_action: 0, markets: [m(LIVE), m(BACKUP)], approved: v?.approved ?? null, agent: this.hasAgentKey(n) ? { public_key: 'ed25519:' + '2'.repeat(44), expires_at: NOW + 86400 } : null }
   }
 
   /** The newest fixture vault: the one whose Base state the app reads (one position address in this fixture). */
@@ -227,6 +243,7 @@ export class LiveFixture {
         this.chain = chainId
         return { result: null, emit: [['chainChanged', chainId]] }
       }
+      case 'wallet_watchAsset': this.watchAssets.push(params as unknown); return { result: true }
       case 'wallet_addEthereumChain': {
         const p = params[0] as { chainId: string }
         this.addChain.push(p); this.added = true; this.chain = p.chainId
@@ -290,6 +307,7 @@ export class LiveFixture {
       case 'price': return this.price === null ? '0x' : result(this.price)
       case 'borrowRateView': return this.rate === null ? '0x' : result(this.rate)
       case 'decimals': return result(target === USDC.toLowerCase() ? 6 : 18)
+      case 'symbol': return result(target === USDC.toLowerCase() ? 'USDC' : 'WETH')
       case 'position': return result(isLive(args[0]) && v ? [0n, v.borrowShares, v.collateral] : [0n, 0n, 0n])
       case 'corridors': return result([pct(50), pct(70), pct(30), pct(20), true, true, v?.corridorSet ?? false])
       case 'isAuthorized': return result(v?.authorized ?? false)
@@ -377,6 +395,7 @@ export class LiveFixture {
     }
     if (body.method === 'block') return ok({ header: { height: 1, hash: 'fixture', timestamp_nanosec: String(BigInt(this.nearNow) * 1_000_000_000n) } })
     if (p.request_type === 'view_account') return ok({ code_hash: '11111111111111111111111111111111', global_contract_hash: 'fixturecodehash', amount: '1' })
+    if (p.request_type === 'view_access_key_list' && match && !this.hasAgentKey(Number(match[1]))) return ok({ keys: [] })
     if (p.request_type === 'view_access_key_list') return ok({ keys: [{ public_key: 'ed25519:' + '2'.repeat(44), access_key: { nonce: 1, permission: { FunctionCall: { receiver_id: p.account_id, method_names: ['reduce', 'migrate', 'exit'], allowance: '1' } } } }] })
     throw Error(`Unexpected NEAR query ${JSON.stringify(p)}`)
   }
@@ -451,6 +470,7 @@ export class LiveFixture {
     }
     if (method === 'POST' && (path === '/create-vault' || path === '/owner-call')) {
       this.posts.push({ path, body })
+      if (path === '/owner-call' && this.ownerCallModes[0] === 'answer-503') { this.ownerCallModes.shift(); return { status: 503, json: { ok: false, error: 'container restarting' } } }
       const id = keccak256(toHex(`job-${this.posts.length}`)).slice(2, 18)
       return { status: 202, json: { ok: true, job: id }, after: path === '/create-vault' ? () => this.createVault(id) : () => this.ownerCall(id, body as { vault: string; message: string; signature: Hex }) }
     }
