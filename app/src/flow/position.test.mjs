@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, describe, positionVariant } from './position.ts'
+import { actionRows, agentState, approveAction, backupStatus, budgetFor, canRevoke, currentMarket, describe, positionVariant } from './position.ts'
 
 const NOW = 2_000_000_000
 const row = (extra = {}) => ({ registration: 'registered', agent_status: 'active', expires_at: NOW + 3600, last_tick_unix: NOW - 30, ...extra })
@@ -153,8 +153,21 @@ test('recent actions: every USDC amount has at most two decimals (Phase 7b)', ()
 test('Phase 7c: the agent card offers re-approval only for an open position that is Outdated or Not approved, never while closing', () => {
   assert.equal(approveAction('Outdated', 'active', false), 'Approve current agent version')
   assert.equal(approveAction('Not approved', 'active', false), 'Approve agent')
-  for (const state of ['Active', 'Registering', 'Expired', 'Revoked', 'Unavailable', null]) assert.equal(approveAction(state, 'active', false), null, String(state))
+  assert.equal(approveAction('Revoked', 'active', false), 'Approve agent') // Phase 12: the list still shows the registration the chain no longer has
+  for (const state of ['Active', 'Registering', 'Expired', 'Unavailable', null]) assert.equal(approveAction(state, 'active', false), null, String(state))
   assert.equal(approveAction('Outdated', 'active', true), null) // a close chain holds the vault's one owner-call lock
+  assert.equal(approveAction('Revoked', 'active', true), null)
+  // Phase 12: Revoke agent shows while the chain holds an approval or a key, never while another owner call runs
+  const key = { public_key: 'ed25519:k', expires_at: 2_000_000_000 }
+  const facts = (approval, vaultAgent) => ({ approval, keyLimited: true, vaultAgent, list: { ok: true, row: null } })
+  assert.equal(canRevoke(facts({ ok: true, matches: true }, key), false), true)
+  assert.equal(canRevoke(facts({ ok: true, matches: false }, null), false), true, 'an outdated approval can be revoked')
+  assert.equal(canRevoke(facts({ ok: true, matches: null }, key), false), true, 'a key without approval can be revoked')
+  assert.equal(canRevoke(facts({ ok: true, matches: null }, null), false), false, 'nothing to revoke')
+  assert.equal(canRevoke(facts({ ok: false, error: 'x' }, null), false), false, 'manifest unreadable and no key: nothing known to revoke')
+  assert.equal(canRevoke(facts({ ok: false, error: 'x' }, key), false), true, 'the key alone is enough')
+  assert.equal(canRevoke(facts({ ok: true, matches: true }, key), true), false, 'another owner call runs')
+  assert.equal(canRevoke(null, false), false)
   for (const variant of ['empty', 'closed', 'liquidated']) {
     assert.equal(approveAction('Outdated', variant, false), null, variant)
     assert.equal(approveAction('Not approved', variant, false), null, variant)

@@ -8,14 +8,16 @@ import { ExtLink } from '../components/Sandbox.tsx'
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
 import { newApproveRecord, useApprove, type Approve } from '../components/useApprove.ts'
+import { newRevokeRecord, useRevoke, type Revoke } from '../components/useRevoke.ts'
 import { useNow } from '../components/use-now.ts'
 import { defaultDeposit } from '../flow/amount.ts'
 import { closeShortfall, newCloseRecord, startOverAllowed, visibleCloseSteps, type CloseStepId } from '../flow/close.ts'
+import type { RetryKind, StepState } from '../flow/onboarding.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
 import { dollarText, formatUnits, formatWadPercent, shortAddress, usdcText, wethText } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
-import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, positionVariant, type AgentState, type Variant } from '../flow/position.ts'
+import { actionRows, agentState, approveAction, backupStatus, budgetFor, canRevoke, currentMarket, positionVariant, type AgentState, type Variant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 import { MarketCrash } from './MarketCrash.tsx'
 import { VerificationPanel } from './VerificationPanel.tsx'
@@ -78,27 +80,47 @@ function LtvTrack({ m }: { m: PositionMarket }) {
   </section>
 }
 
-/** Phase 7c: the re-approve call inline on the agent card (button, then its step with the runner's statuses and retries). */
-function ApproveInline({ label, approve, explorer, now, onBegin }: { label: string | null; approve: Approve; explorer: string; now: number; onBegin: (() => void) | null }) {
-  const r = approve.record
-  const step = r?.steps.approve
-  const pending = !!step && step.status !== 'done'
+/** Phase 7c/12: one owner call inline on the agent card: its step with the runner's statuses and retries, Continue after a reload. */
+function InlineStep({ title, why, step, running, explorer, now, onAct, onStart }: { title: string; why: string; step: StepState; running: boolean; explorer: string; now: number; onAct: (kind: RetryKind) => void; onStart: () => void }) {
   return <>
-    {r && step && <ol className="steps">
-      <StepRow title={APPROVE_TITLE} why={APPROVE_WHY} index={1} step={step} explorer={explorer} now={now} onAct={kind => approve.act('approve', kind)} active />
-    </ol>}
-    {pending && !approve.running && step.status === 'waiting' && <button type="button" className="btn primary" style={{ justifySelf: 'start' }} onClick={approve.start}>Continue</button>}
-    {label && !pending && onBegin && <button type="button" className="btn primary" style={{ justifySelf: 'start' }} onClick={onBegin}>{label}</button>}
+    <ol className="steps"><StepRow title={title} why={why} index={1} step={step} explorer={explorer} now={now} onAct={onAct} active /></ol>
+    {step.status === 'waiting' && !running && <button type="button" className="btn primary" style={{ justifySelf: 'start' }} onClick={onStart}>Continue</button>}
   </>
 }
 
 const APPROVE_TITLE = 'Approve the agent version'
 const APPROVE_WHY = 'The agent watches your vault only while your vault approves its exact version (the six measurement values in the published manifest). One signature sets the approval; the rest of your setup is left as it is.'
+const REVOKE_TITLE = 'Revoke the agent'
+const REVOKE_WHY = 'One signature deletes the agent\'s key from your vault and clears the approval in one NEAR transaction; nothing changes on Base. The agent can then do nothing on this vault, except a call it signed in the last 10 minutes.'
 
-function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, explorer, onApprove, corridor }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; explorer: string; onApprove: (() => void) | null; corridor: { migrate: boolean; exit: boolean } }) {
+/**
+ * Phase 12: confirm before the revoke_agent signature. Wording from the protocol README's claims table: revocation is
+ * final within 10 minutes (every signed executor call carries a 10-minute deadline); calls already signed are not covered.
+ */
+function RevokeSheet({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => { const d = ref.current; if (d && !d.open) d.showModal() }, [])
+  return <dialog ref={ref} className="sheet" aria-labelledby="revoke-title" onCancel={event => { event.preventDefault(); onCancel() }}>
+    <h2 id="revoke-title">Revoke the agent?</h2>
+    <p className="muted">The agent's key is deleted and its approval cleared. A call it signed in the last 10 minutes can still land; after that it can do nothing on this vault. Your position stays open and unprotected until you approve the agent again.</p>
+    <div style={{ display: 'flex', gap: 12 }}>
+      <button type="button" className="btn primary" onClick={onConfirm}>Revoke agent</button>
+      <button type="button" className="btn" onClick={onCancel}>Keep the agent</button>
+    </div>
+  </dialog>
+}
+
+function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, revoke, explorer, onApprove, onRevoke, corridor }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; revoke: Revoke; explorer: string; onApprove: (() => void) | null; onRevoke: (() => void) | null; corridor: { migrate: boolean; exit: boolean } }) {
   const agent = useAgent(vaultId)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
-  const label = approveAction(status?.state ?? null, variant, closing)
+  const approveStep = approve.record?.steps.approve, revokeStep = revoke.record?.steps.revoke
+  // one owner call at a time per vault (the shared lock): no button while a close, an approval or a revocation runs
+  const busy = closing || (!!approveStep && approveStep.status !== 'done') || (!!revokeStep && revokeStep.status !== 'done')
+  const label = approveAction(status?.state ?? null, variant, busy)
+  // the newer of the two inline calls is shown; a finished one stays until the next begins
+  const showRevoke = !!revoke.record && (!approve.record || revoke.record.createdAt > approve.record.createdAt)
+  const showApprove = !!approve.record && !showRevoke
+  const revokable = canRevoke(agent.data ?? null, busy) && !!onRevoke
   const row = agent.data?.list.ok ? agent.data.list.row : null
   const budget = market ? budgetFor(view, market) : null
   const collateral = view.markets.reduce((sum, m) => sum + m.collateral, 0n)
@@ -107,8 +129,8 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
     <div className="card-head"><h3 id="agent-title">Agent</h3><span className={`tag${status ? AGENT_TAG[status.state] : ''}`} role="status">{status ? status.state : 'Reading…'}</span></div>
     {status?.detail && <p className="muted small agent-detail">{status.detail}</p>}
     <dl className="rows">
-      {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it can never increase debt */}
-      {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increase your debt on this venue`)}
+      {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it cannot increase debt (protocol README: a move may add one loan-token unit of rounding) */}
+      {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increases your debt (a move may round it up by 0.000001 USDC)`)}
       {row2('Last check', row?.last_tick_unix ? `${date(row.last_tick_unix)} (${ago(now - row.last_tick_unix)})` : <Unavailable>none reported</Unavailable>)}
       {row2('Key expires', agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : agent.data ? <Unavailable>no key on your vault</Unavailable> : <Unavailable />)}
       {row2('Discretionary sell budget left today', collateral === 0n
@@ -118,7 +140,12 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
           : <Unavailable>no active corridor</Unavailable>)}
     </dl>
     {agent.isError && agent.data && <p className="muted small" role="alert">The last agent read failed; showing the previous one.</p>}
-    <ApproveInline label={label} approve={approve} explorer={explorer} now={now} onBegin={onApprove} />
+    {showApprove && approveStep && <InlineStep title={APPROVE_TITLE} why={APPROVE_WHY} step={approveStep} running={approve.running} explorer={explorer} now={now} onAct={kind => approve.act('approve', kind)} onStart={approve.start} />}
+    {showRevoke && revokeStep && <InlineStep title={REVOKE_TITLE} why={REVOKE_WHY} step={revokeStep} running={revoke.running} explorer={explorer} now={now} onAct={kind => revoke.act('revoke', kind)} onStart={revoke.start} />}
+    {(label && onApprove) || revokable ? <div style={{ display: 'flex', gap: 12 }}>
+      {label && onApprove && <button type="button" className="btn primary" onClick={onApprove}>{label}</button>}
+      {revokable && <button type="button" className="btn" onClick={onRevoke!}>Revoke agent</button>}
+    </div> : null}
     <button type="button" className="btn ghost" style={{ justifySelf: 'start', paddingLeft: 0 }} aria-expanded={verifying} aria-controls="verify-panel" onClick={onVerify}>Verify the agent</button>
   </section>
 }
@@ -273,7 +300,10 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const close = useClose(mode, app, owner, chainOk, closeVault, () => undefined)
   const closing = !!close.record && !close.record.completed
   const approve = useApprove(mode, app, owner, chainOk, closeVault, () => undefined)
+  const revoke = useRevoke(mode, app, owner, chainOk, closeVault, () => undefined)
+  const revokePending = !!revoke.record && revoke.record.steps.revoke.status !== 'done'
   const [review, setReview] = useState(false)
+  const [revoking, setRevoking] = useState(false)
   const [verifying, setVerifying] = useState(false)
   // read on S5 and on Close position; while a close runs it is re-read every 10 s for the summary rows (a fresh read)
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed', closing)
@@ -314,6 +344,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   else if (restored) closeReason = 'Refreshing your position…'
   // one owner call at a time per vault (the shared lock): closing waits for a re-approval in progress (Phase 7c)
   else if (approve.record && approve.record.steps.approve.status !== 'done') closeReason = 'Waiting for the agent approval to finish.'
+  else if (revokePending) closeReason = 'Waiting for the agent revocation to finish.'
   else if (plan.isError) closeReason = PLAN_FAILED
   else if (!plan.data) closeReason = 'Reading the amount to repay…'
   const shortfall = plan.data ? closeShortfall(plan.data) : null
@@ -368,6 +399,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     {review && plan.isFetching && <p className="muted small" role="status">Reading the amount to repay…</p>}
     {review && plan.isError && !plan.isFetching && <p className="notice notice--warning" role="alert">The amount to repay could not be read. Nothing is signed.</p>}
     {review && plan.data && !plan.isFetching && !plan.isError && owner && <ReviewSheet app={app} plan={plan.data} owner={owner} onStart={startClosing} onCancel={() => setReview(false)} />}
+    {revoking && owner && closeVault && <RevokeSheet onConfirm={() => { setRevoking(false); revoke.begin(newRevokeRecord(owner, closeVault, Date.now())) }} onCancel={() => setRevoking(false)} />}
     {closing && owner && <CloseSteps app={app} close={close} owner={owner} explorer={explorer} now={now} plan={plan.data} />}
 
     <section className="cols-3" aria-label="Balances">
@@ -387,8 +419,9 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
 
     <section className="cols-2 agent-market" aria-label="Agent and market">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}
-        variant={variant} closing={closing} approve={approve} explorer={explorer} corridor={app.guided.corridor}
-        onApprove={owner && closeVault && !restored && !stale ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null} />
+        variant={variant} closing={closing} approve={approve} revoke={revoke} explorer={explorer} corridor={app.guided.corridor}
+        onApprove={owner && closeVault && !restored && !stale && !revokePending ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null}
+        onRevoke={owner && closeVault && !restored && !stale ? () => setRevoking(true) : null} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </section>
     {verifying && <div id="verify-panel"><VerificationPanel vaultId={vaultId} poll={false} /></div>}

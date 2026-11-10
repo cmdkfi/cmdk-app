@@ -3,7 +3,7 @@
 // the close. A fake clock drives it; no storage, no network.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isHealthy, liquidationIncentiveFactor, LLTV, ltvOf, REGISTER_MS, repayToLtv, SandboxEngine, STAGE_MS, START_PRICE, valueOf, WAD, withoutAgent } from './engine.ts'
+import { isHealthy, liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, REGISTER_MS, repayToLtv, SandboxEngine, STAGE_MS, START_PRICE, valueOf, WAD, withoutAgent } from './engine.ts'
 
 const pct = n => BigInt(n) * 10n ** 16n
 const CORRIDOR = { target: pct(50), act: pct(70), floor: pct(30), budget: pct(20) }
@@ -196,4 +196,33 @@ test('sandbox Start over: the price returns to $3,210 before the new position op
   s.e.crashRun()
   assert.equal(s.e.state().vault.crash.start.price, START_PRICE)
   assert.equal(s.e.state().vault.crash.stages[0].price, 2247n * 10n ** 24n)
+})
+
+test('sandbox revoke_agent (Phase 12): clears the approval and the key, keeps the position and the Base corridors; setup again re-registers', () => {
+  const s = engineAt()
+  const v0 = openPosition(s)
+  s.tick(REGISTER_MS)
+  assert.ok(s.e.registeredAt())
+  assert.equal(v0.corridorSet, true)
+  const before = { collateral: v0.collateral, principal: v0.principal, nonce: v0.ownerNonce }
+  // vault/src/lib.rs l.419-424: one NEAR transaction, no Base receipt
+  const id = s.e.ownerCall('revoke_agent', {}, before.nonce + 1)
+  s.tick(STAGE_MS)
+  const v = s.e.state().vault
+  assert.equal(s.e.job(id).applied, true)
+  assert.deepEqual(s.e.job(id).receipts, [])
+  assert.equal(v.approved, false)
+  assert.equal(s.e.registeredAt(), null)
+  assert.equal(v.corridorSet, true, 'the Base corridors stay set')
+  assert.equal(v.collateral, before.collateral); assert.equal(v.principal, before.principal)
+  assert.ok(v.revokedAt !== null && v.revokedAt + LIST_LAG_MS > s.now(), 'the simulated agent list lags the chain for a while')
+  s.tick(LIST_LAG_MS)
+  assert.ok(v.revokedAt + LIST_LAG_MS <= s.now())
+  // Approve agent: a setup again; the key registers REGISTER_MS later
+  s.e.ownerCall('setup', {}, before.nonce + 2); s.tick(STAGE_MS)
+  assert.equal(s.e.state().vault.approved, true)
+  assert.equal(s.e.state().vault.revokedAt, null)
+  assert.equal(s.e.registeredAt(), null)
+  s.tick(REGISTER_MS)
+  assert.ok(s.e.registeredAt())
 })

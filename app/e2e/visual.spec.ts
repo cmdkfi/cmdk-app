@@ -137,6 +137,15 @@ test('S6 review sheet', async ({ page, context, fx }) => {
   await shot(page, 's6-review-sheet')
 })
 
+test('S5 Revoke the agent sheet', async ({ page, context, fx }) => {
+  position(fx)
+  await fx.install(context); await frozen(page)
+  await connect(page)
+  await page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'Agent', exact: true }) }).getByRole('button', { name: 'Revoke agent' }).click()
+  await expect(page.getByRole('dialog', { name: 'Revoke the agent?' })).toBeVisible()
+  await shot(page, 's5-revoke-sheet')
+})
+
 test('S7 Position closed, Start over', async ({ page, context, fx }) => {
   position(fx, { idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 200_000_000n } })
   await fx.install(context); await frozen(page)

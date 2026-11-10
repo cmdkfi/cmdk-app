@@ -454,6 +454,8 @@ export class LiveFixture {
       v.idle.weth += v.collateral; v.collateral = 0n
       this.closes++
     }
+    // vault/src/lib.rs l.419-424: revoke_agent deletes the key and clears `approved`; no Base transaction
+    if (m.method === 'revoke_agent') { v.approved = null; v.agentKey = false }
     if (m.method === 'setup') { v.authorized = true; v.loanAllowance = (1n << 256n) - 1n; v.collateralAllowance = (1n << 256n) - 1n; v.corridorSet = true; v.approved = MEASUREMENT }
     if (m.method === 'open') {
       const collateralIn = BigInt(m.args.collateral_in), target = BigInt(m.args.target_ltv)

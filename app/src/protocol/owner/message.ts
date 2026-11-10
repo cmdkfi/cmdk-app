@@ -10,7 +10,7 @@ export const MAX_EXPIRY_AHEAD_SECS = 3600
 /** scripts/p2_owner.py l.33 (`--ttl` default 600). */
 export const DEFAULT_TTL_SECS = 600
 
-export type OwnerMethod = 'setup' | 'open' | 'withdraw' | 'close'
+export type OwnerMethod = 'setup' | 'open' | 'withdraw' | 'close' | 'revoke_agent'
 type Hex = `0x${string}`
 
 const VAULT = /^v[1-9][0-9]*\.[a-z0-9._-]+$/
@@ -102,6 +102,14 @@ export function withdrawArgs(token: Hex, amount: bigint, destination: Hex) {
 /** vault/src/lib.rs l.126-129 `MarketArg`, used by `close` (l.356-359). */
 export function closeArgs(market: Hex) {
   return { market }
+}
+
+/**
+ * vault/src/lib.rs l.419-424 `revoke_agent` (`NoArgs`): deletes the agent's key and clears the approved measurement in one
+ * NEAR transaction, no Base transaction; scripts/relayer.py OWNER_ARGS lists it with no fields. Signed as `args: {}`.
+ */
+export function revokeAgentArgs(): Record<string, never> {
+  return {}
 }
 
 /** Expiry for a message signed now, from chain time (owner.rs l.14: at most 3600 s ahead). */

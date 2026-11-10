@@ -22,7 +22,7 @@ export function Settings({ mode, href, banner }: ScreenProps) {
   // docs/mockups/S2-Settings: the track ends at the liquidation LTV (floor 30 → 34.9 % of the width at 86 %)
   const scale = (at: number) => `${Math.min(100, (at / (lltv ?? 100)) * 100)}%`
   const points = [
-    { key: 'floor', at: c.floor, label: `Floor ${c.floor}%`, text: 'The agent never reduces below this.' },
+    { key: 'floor', at: c.floor, label: `Floor ${c.floor}%`, text: 'Sales are sized to stop at this line; a fill better than the oracle price can end a few hundredths of a point under it.' },
     { key: 'target', at: c.target, label: `Target ${c.target}%`, text: 'You open here. The agent brings you back here.' },
     { key: 'act', at: c.act, label: `Reduce above ${c.act}%`, text: 'The agent sells collateral to repay part of the debt.' },
     { key: 'liq', at: lltv, label: lltv === null ? 'Liquidation unavailable' : `Liquidation ${lltv}%`, text: "Morpho's rule, not ours. Protection is not a guarantee." },
@@ -60,7 +60,8 @@ export function Settings({ mode, href, banner }: ScreenProps) {
       <section className="surface stack" aria-labelledby="rules-never">
         <h3 id="rules-never">The agent can never</h3>
         <ul className="list">
-          <li>Increase your debt on this venue.</li>
+          {/* protocol README corridor table: a move may add one loan-token unit (0.000001 USDC) of rounding */}
+          <li>Increase your debt on this venue (a move may round it up by 0.000001 USDC).</li>
           {/* Executor.sol l.261-266, l.296: a protective reduce (above the act line) sells to target and is not budget-limited */}
           <li>Sell at its own discretion more than {c.budget}% of your collateral per rolling day (above {c.act}% it sells what is needed to return to {c.target}%).</li>
           <li>Send funds anywhere except repaying your loan.</li>
@@ -74,6 +75,8 @@ export function Settings({ mode, href, banner }: ScreenProps) {
           <li>Every other action: only your signature moves funds.</li>
           <li>The right to close at any time by repaying.</li>
           <li>A {expiryMinutes}-minute expiry on every message you sign.</li>
+          {/* vault/src/lib.rs l.419-424 revoke_agent: one owner signature deletes the key and clears the approval (S5, Phase 12) */}
+          <li>The right to revoke the agent in one signature, on your position screen.</li>
         </ul>
         <p className="muted small">Which agent build you approve is checked on the next screens against the values published on GitHub.</p>
       </section>

@@ -1,7 +1,7 @@
 # cmdk testnet app — guided flow
 
 The React/Vite application in `app/` guides one ETH → USDC position on Morpho (Base Sepolia, chain 84532), protected by
-the cmdk agent through a NEAR testnet vault. It is deployed from `main` to https://testnet.cmdk.fi. **Testnet only,
+the cmdk agent through a NEAR testnet vault. It is deployed to https://testnet.cmdk.fi from `feat/guided-flow` by hand (`deploy testnet`, workflow_dispatch) until PR #80 merges; after the merge, from `main`. **Testnet only,
 unaudited, no real funds. Agent protection is risk management, not insurance.**
 
 The protocol source of truth is [cmdkfi/app](https://github.com/cmdkfi/app) (contracts, vault, agent, relayer). This app
@@ -29,7 +29,7 @@ does not apply (for example `#position` without a position goes to `#start`).
 | `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, at most 20 % of collateral sold per rolling day, migration and exit allowed) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
 | `#connect` | **S3 Connect** — the wallets in this browser (EIP-6963), Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
 | `#progress` | **S4 Opening your position** — the onboarding steps with their status, and the agent verification panel in the right rail | The vault (NEAR `get_state` plus one Base snapshot) before every step, relayer jobs, Base receipts (two confirmations), NEAR time for message expiry, the open plan (feeds and liquidity) right before the open signature |
-| `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
+| `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c; **Revoke agent** with a confirm sheet while the vault approves a version or holds the agent key, Phase 12), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
 
 S6 (close) and S7 (closed, Start over) are states of `#position`, not routes. The agent verification panel (PRD §6) opens
 from S5's "Verify the agent".
@@ -49,8 +49,12 @@ live protocol.
 ### One vault per wallet
 
 The app shows the owner's newest vault numbered from `guided.firstVaultNumber` (10) in `config.app.json`, found by
-scanning the factory's vaults down from its count (two at a time, `Retry-After` honoured). **Vaults numbered below the
-cutoff were made by the previous app and are not used:** they are never read, shown or offered. A failed scan is shown
+scanning the factory's vaults down from its count (two at a time, `Retry-After` honoured), **and only a vault that holds
+the published policy** (the same cooldown and markets, each with the published Executor, tokens and `slice_max`;
+`app/src/protocol/near/vault.ts` `policyMatches`). Anyone can call the factory's `create_vault` for any owner with any
+Executor, and `setup` approves the Executor stored in the vault, so a vault with another policy is skipped like another
+owner's (never refused: a refusal would let anyone lock a wallet out), and setup refuses it before any signature (PR #81).
+**Vaults numbered below the cutoff were made by the previous app and are not used:** they are never read, shown or offered. A failed scan is shown
 as "Could not read your vaults" with Retry; it never means "no position" and never offers creation. The vault found is
 remembered per owner in the browser and verified with one `get_state` on return; the scan runs again when it no longer
 belongs to the owner.
@@ -151,11 +155,11 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 159 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 162 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
-pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
+pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers (the sandbox ships, PRD §8a)
 pnpm exec playwright install chromium
-pnpm test:browser           # 85 browser scenarios, desktop Chromium (17 of them screenshot comparisons)
+pnpm test:browser           # 88 browser scenarios, desktop Chromium (18 of them screenshot comparisons), against a production build served by vite preview
 pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
 

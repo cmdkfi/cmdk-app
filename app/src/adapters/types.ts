@@ -83,6 +83,8 @@ export type VaultView = {
   agentPublicKey: string | null
   setupComplete: boolean
   measurementApproved: boolean
+  /** The vault approves some measurement (`approved` not null); false after revoke_agent or before the first setup. */
+  approvesAny: boolean
   /** The vault holds the published markets, executor and cooldown (protocol/near/vault.ts `policyMatches`). */
   policyMatches: boolean
   idle: { eth: bigint; weth: bigint; usdc: bigint }
@@ -95,6 +97,8 @@ export type OwnerIntent =
   | { method: 'open'; collateralIn: bigint; targetLtv: bigint }
   | { method: 'withdraw'; token: 'weth' | 'usdc'; amount: bigint; destination: Address }
   | { method: 'close'; market: Hex }
+  /** Phase 12: delete the agent key and clear the approval (vault/src/lib.rs l.419-424). */
+  | { method: 'revoke_agent' }
 
 export type JobView = {
   ok: boolean

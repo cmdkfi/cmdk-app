@@ -9,7 +9,7 @@ import { MAX_WINDOW, readActivity } from '../../protocol/base/activity.ts'
 import { agentKeyLimited, agentRow, codeMatchesFactory, composeHashMatches, fetchPublishedManifest, measurementMatches, sha256Hex } from '../../protocol/evidence/verify.ts'
 import { finalBlockTime, viewAccessKeyList, viewAccount, type NearRpc } from '../../protocol/near/rpc.ts'
 import { discoverWithHint, getFactoryConfig, getState, policyMatches, type VaultState } from '../../protocol/near/vault.ts'
-import { closeArgs, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
+import { closeArgs, openArgs, ownerMessage, recoverOwner, revokeAgentArgs, setupArgs, setupComplete, wad, withdrawArgs, type SetupFact } from '../../protocol/owner/message.ts'
 import { agentEvidence, agentIndex, agentVaults, assessHealth, createVault, fundsShortfall, health, job, ownerCall, RelayerError } from '../../protocol/relayer/client.ts'
 import { sendEth, transferToken, wrapEth } from '../../protocol/wallet/tx.ts'
 import { ProtocolError, type DeploymentStatic, type Fetched, type ProtocolAdapter } from '../types.ts'
@@ -111,7 +111,7 @@ export function createLiveProtocol(): ProtocolAdapter {
       return {
         accountId: vaultId, number: Number(/^v(\d+)\./.exec(vaultId)?.[1] ?? 0), owner: state.owner, baseAddress: state.base_address,
         ownerNonce: state.owner_nonce, agentPublicKey: state.agent?.public_key ?? null,
-        setupComplete: setupComplete(snapshot.setup, measurementApproved), measurementApproved, policyMatches: policyMatches(state, publishedPolicy(config)),
+        setupComplete: setupComplete(snapshot.setup, measurementApproved), measurementApproved, approvesAny: state.approved !== null, policyMatches: policyMatches(state, publishedPolicy(config)),
         idle: snapshot.idle, markets: snapshot.markets.map(m => ({ id: m.id, collateral: m.collateral, borrowShares: m.borrowShares, debt: m.debt })), setup: snapshot.setup,
       }
     },
@@ -150,7 +150,9 @@ export function createLiveProtocol(): ProtocolAdapter {
           ? openArgs(guided.liveMarket.id, intent.collateralIn, intent.targetLtv)
           : intent.method === 'close'
             ? closeArgs(intent.market)
-            : withdrawArgs(intent.token === 'weth' ? guided.base.weth : guided.base.usdc, intent.amount, intent.destination)
+            : intent.method === 'revoke_agent'
+              ? revokeAgentArgs()
+              : withdrawArgs(intent.token === 'weth' ? guided.base.weth : guided.base.usdc, intent.amount, intent.destination)
       return ownerMessage({ vault: vault.accountId, method: intent.method, args, nonce, expiry })
     },
     async checkOwnerSignature(message, signature, owner) {

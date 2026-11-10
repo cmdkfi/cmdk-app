@@ -54,7 +54,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Borrow USDC against ETH. Keep risk on autopilot.</h1>
-      <p className="muted">Choose what you deposit, what you borrow and where. An agent watches the position and reduces risk within fixed limits. It can never increase your debt on this venue.</p>
+      <p className="muted">Choose what you deposit, what you borrow and where. An agent watches the position and reduces risk within fixed limits. It can never increase your debt on this venue, apart from 0.000001 USDC of rounding when it moves the loan.</p>
     </div>
     <Catalogue />
     {app.isError && <p className="notice notice--warning" role="alert">The app configuration could not be loaded, so no estimate can be shown.</p>}
@@ -68,7 +68,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
         </div>
         <p id="deposit-hint" className="muted small">
           {amountHint ?? <>
-            {estimate?.value != null ? `≈ $${formatUnits(estimate.value, q!.loanDecimals, 2)} at the live market oracle` : check.kind === 'ok' ? <>Value <Unavailable /></> : 'Value shown after you enter an amount'}
+            {estimate?.value != null ? `≈ $${formatUnits(estimate.value, q!.loanDecimals, 2)} at the ${mode === 'sandbox' ? 'simulated' : 'live market'} oracle` : check.kind === 'ok' ? <>Value <Unavailable /></> : 'Value shown after you enter an amount'}
             {guided && ` · minimum ${guided.minDepositText} ETH`} · wallet balance shown after connecting
           </>}
         </p>
@@ -91,7 +91,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
     </section>
     <div className="page-actions">
       <p className="muted small">
-        Estimates update every 30 s from the market read{q ? ` (block ${q.blockNumber.toString()})` : ''}. A value that cannot be read is shown as unavailable.
+        Estimates update every 30 s from the {mode === 'sandbox' ? 'simulated market' : 'market read'}{q ? ` (block ${q.blockNumber.toString()})` : ''}. A value that cannot be read is shown as unavailable.
         {estimate && !estimate.liquidityKnown && ' Market liquidity could not be read, so a shortfall cannot be ruled out.'}
       </p>
       <button type="button" className="btn primary" disabled={check.kind !== 'ok'} onClick={() => go(href('settings'))}>Continue</button>

@@ -90,3 +90,8 @@
 **Mistake:** to make the sandbox crash card read exactly like the PRD's prose (0.286 WETH, $596, $82), I gave the card its own rounding, while the hero beside it truncated (320.99 USDC in the hero, 321 USDC in the card). The product owner corrected it: the same quantity must never read differently on one screen; spec figures in prose are approximate.
 **Rule:** a new panel formats numbers with the screen's existing formatters (shared from `flow/format.ts`), never with a local rule chosen to match spec prose. Tests compare against formatted engine values, not the spec sentence. When spec prose and the app's number format disagree, use the app's format and say so; don't add a second format.
 
+
+## Copy promises are checked against the protocol README's claims, not against intent (Phase 12, 11 Nov 2026)
+**Mistake:** three app sentences promised more than the protocol does ("never reduces below this", "never increase your debt") and were caught by the AI screening of 10 Nov, not by us. The protocol README's corridor table and claims table already carried the exact limits (a fill better than the oracle can end under the floor; a move may add one loan-token unit).
+**Rule:** every sentence that states what the agent will or will never do is matched word for word against the protocol README's corridor and claims tables, with the table cited in a code comment; when the README changes, the sentences change with it.
+**Also:** a browser suite that passes alone and fails in parallel has a shared resource; find it before raising timeouts. Here it was the Vite dev server, replaced by a prebuilt bundle served by `vite preview`.

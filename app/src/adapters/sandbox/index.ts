@@ -4,7 +4,7 @@
 import type { Hex } from 'viem'
 import { ProtocolError, type Adapters, type AgentFacts, type ProtocolAdapter, type VaultView, type WalletAdapter, type WalletOption, type WalletState } from '../types.ts'
 import { SANDBOX_VAULT, SIM, sandboxConfig } from './config.ts'
-import { liquidationIncentiveFactor, LLTV, ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, WAD } from './engine.ts'
+import { liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, WAD } from './engine.ts'
 
 const NO_WALLETS: WalletOption[] = []
 const CONNECTED: WalletState = { status: 'connected', address: SANDBOX_OWNER, chainId: 84532, walletName: 'Sandbox wallet' }
@@ -44,7 +44,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
     const debt = engine.debt()
     return {
       accountId: SANDBOX_VAULT, number: 10, owner: SANDBOX_OWNER, baseAddress: SANDBOX_POSITION, ownerNonce: v.ownerNonce,
-      agentPublicKey: engine.registeredAt() ? 'ed25519:sandbox' : null, setupComplete: v.approved, measurementApproved: v.approved, policyMatches: true,
+      agentPublicKey: engine.registeredAt() ? 'ed25519:sandbox' : null, setupComplete: v.approved, measurementApproved: v.approved, approvesAny: v.approved, policyMatches: true,
       idle: { ...v.idle },
       markets: [{ id: SIM.live, collateral: v.collateral, borrowShares: v.principal, debt }, { id: SIM.backup, collateral: 0n, borrowShares: 0n, debt: 0n }],
       setup: null,
@@ -92,7 +92,8 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const args = intent.method === 'open' ? { market: SIM.live, collateral_in: intent.collateralIn.toString(), target_ltv: intent.targetLtv.toString() }
         : intent.method === 'withdraw' ? { token: intent.token, amount: intent.amount.toString(), destination: intent.destination }
           : intent.method === 'close' ? { market: intent.market }
-            : { markets: 'live, backup', measurement: 'simulated' }
+            : intent.method === 'revoke_agent' ? {}
+              : { markets: 'live, backup', measurement: 'simulated' }
       return JSON.stringify({ protocol: 'cmdk-vault/1', network: 'sandbox (simulated)', vault: v.accountId, method: intent.method, args, nonce, expiry })
     },
     checkOwnerSignature: async () => true,
@@ -102,7 +103,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const v = vault()
       if (!v) throw new ProtocolError('unavailable', 'No simulated vault yet.')
       const price = engine.price(), debt = engine.debt(), value = valueOf(v.collateral, price), now = engine.now()
-      const corridor = { target: pct(c.target), act: pct(c.act), floor: pct(c.floor), sellBudget: pct(c.budget), migrateAllowed: c.migrate, set: v.approved }
+      const corridor = { target: pct(c.target), act: pct(c.act), floor: pct(c.floor), sellBudget: pct(c.budget), migrateAllowed: c.migrate, set: v.corridorSet ?? v.approved }
       const feeds = [{ address: SIM.feed, description: 'ETH / USD', maxAge: 1200, updatedAt: BigInt(Math.floor(now / 1000) - 10) }]
       const market = (id: `0x${string}`, collateral: bigint, d: bigint, val: bigint) => ({ id, executor: SIM.executor, collateral, debt: d, value: val, ltv: ltvOf(d, val), lltv: LLTV, corridor, closedForAgent: false, collateralToken: SIM.weth, loanDecimals: 6, collateralDecimals: 18, feeds })
       // protective sales are not counted in the discretionary window (Executor.sol l.296), so the budget stays whole
@@ -118,11 +119,14 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
     },
     readAgent: async (): Promise<AgentFacts> => {
       const v = vault(), registered = engine.registeredAt(), now = Math.floor(engine.now() / 1000)
+      // after a revoke the simulated agent list lags the chain (Phase 7b rule): its row still says registered, so the card
+      // reads Revoked until the list catches up and the row disappears (Not approved)
+      const lagging = v?.revokedAt != null && engine.now() < v.revokedAt + LIST_LAG_MS
       return {
         approval: { ok: true, matches: v?.approved ? true : null },
         keyLimited: registered !== null,
         vaultAgent: registered !== null ? { public_key: 'ed25519:sandbox', expires_at: Math.floor(registered / 1000) + 7 * 86_400 } : null,
-        list: { ok: true, row: registered !== null ? { registration: 'registered', agent_status: 'active', expires_at: Math.floor(registered / 1000) + 7 * 86_400, last_tick_unix: now - 2 } : v?.approved ? { registration: 'registering' } : null },
+        list: { ok: true, row: registered !== null ? { registration: 'registered', agent_status: 'active', expires_at: Math.floor(registered / 1000) + 7 * 86_400, last_tick_unix: now - 2 } : v?.approved ? { registration: 'registering' } : lagging ? { registration: 'registered', agent_status: 'revoked', last_tick_unix: now - 2 } : null },
       }
     },
     readActivity: async (_app, _address, toBlock, fromBlock) => {

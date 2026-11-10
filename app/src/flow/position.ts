@@ -12,15 +12,27 @@ export type AgentState = 'Active' | 'Registering' | 'Expired' | 'Revoked' | 'Out
 export const REGISTERING = 'Registering (usually within a few minutes).'
 
 /**
- * Phase 7c: the agent card's re-approve button. Only for an open position (variant active, no close chain running):
- * Outdated → "Approve current agent version", Not approved (revoked while open) → "Approve agent"; null otherwise.
- * An empty vault is re-approved by S4's setup step instead (classifyVault 'setup').
+ * Phase 7c: the agent card's re-approve button. Only for an open position (variant active, no other owner call
+ * running): Outdated → "Approve current agent version", Not approved or Revoked (the chain holds no approval; the agent's
+ * list may still show the registration, Phase 12) → "Approve agent"; null otherwise. An empty vault is re-approved by
+ * S4's setup step instead (classifyVault 'setup').
  */
-export function approveAction(state: AgentState | null, variant: Variant, closing: boolean): string | null {
-  if (variant !== 'active' || closing) return null
+export function approveAction(state: AgentState | null, variant: Variant, busy: boolean): string | null {
+  if (variant !== 'active' || busy) return null
   if (state === 'Outdated') return 'Approve current agent version'
-  if (state === 'Not approved') return 'Approve agent'
+  if (state === 'Not approved' || state === 'Revoked') return 'Approve agent'
   return null
+}
+
+/**
+ * Phase 12: the agent card's Revoke agent button shows while the vault approves a measurement or holds an agent key
+ * (revoke_agent clears both, vault/src/lib.rs l.419-424), from the chain facts only; never while another owner call
+ * runs (`busy`) and never without facts.
+ */
+export function canRevoke(facts: AgentFacts | null, busy: boolean): boolean {
+  if (!facts || busy) return false
+  const approves = facts.approval.ok && facts.approval.matches !== null
+  return approves || facts.vaultAgent !== null
 }
 /** agent/src/logic.rs l.653-660 AgentStatus::Replaced: the vault lists another key than the running agent's. */
 export const REPLACED = 'revoked (another key registered)'

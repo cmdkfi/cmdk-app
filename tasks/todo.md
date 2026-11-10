@@ -199,6 +199,12 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] README and audit status: one sentence that the sandbox price path is scripted and shows a calculated "without the agent" outcome.
 - [x] Five checks, commit, push; CI green. No deploy, no merge: the product owner reviews the deployed preview after their own deploy.
 
+## Phase 12 — Screening fixes, test server, Revoke agent (product owner, 11 Nov; done by the planning session, no Opus agent)
+- [x] A. Copy from the AI screening of 10 Nov, matching the protocol README: S2 floor sentence; the debt-rounding note on S1, S2 and the S5 "May do" row (a move may round the debt up by 0.000001 USDC); sandbox labels on S1 ("simulated oracle", "simulated market"); README deploy line and bundle-boundary line; README "One vault per wallet" and PRD D4/FR-4 say the vault must hold the published policy (PR #81).
+- [x] B. Browser tests timing out at default parallelism: the cause is the Vite dev server (one process transforming hundreds of unbundled modules per page load for every worker; 13 s per six-step scenario at four workers against 1.7–2.4 s alone). The Playwright web server now builds once and serves `dist-e2e` with `vite preview`.
+- [x] C. Revoke agent on S5 (PRD S5, FR-18): `revoke_agent` owner call (args {}), confirm sheet, inline step on the agent card, Revoked → Not approved → Approve agent; sandbox simulation with a 10 s list lag; vector V18 and message test; `canRevoke` and `approveAction('Revoked')` unit tests; engine test; one browser scenario; screenshot of the sheet.
+- [x] Five checks; commit, push; CI green; linux baselines from the `frontend quality` job. No deploy, no merge without the product owner's word.
+
 ## Mockups
 - [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
 - [ ] The product owner reviews the mockups; layout changes go back into the canvas before Phase 2 starts.

@@ -41,6 +41,10 @@ export const V = {
   },
 
   // ---- math ---------------------------------------------------------------------------------------------------
+  V18_revoke: {
+    from: 'cmdkfi/app vault/src/lib.rs l.419-424 (revoke_agent takes NoArgs; deletes the agent key and clears approved) and scripts/relayer.py OWNER_ARGS revoke_agent: () — composed as scripts/p2_owner.py l.38-39 does, json.dumps(separators=(",",":"))',
+    text: '{"protocol":"cmdk-vault/1","network":"testnet","vault":"v10.factory.testnet","method":"revoke_agent","args":{},"nonce":5,"expiry":1793724600}',
+  },
   V14_marketMath: { from: 'main:app/src/positions.test.mjs › calculates stored Morpho debt, collateral value and LTV with integer rounding', collateral: 2n * 10n ** 18n, shares: 2_500_000_000n, totalAssets: 2_500_000_000n, totalShares: 2_500_000_000n, price: 2_500n * 10n ** 24n, value: 5_000_000_000n, debt: 2_499_000_401n, ltv: 499_800_080_200_000_000n },
   V15_zeroCollateral: { from: 'main:app/src/positions.test.mjs › zero collateral cannot produce a finite LTV', debt: 1n },
   V16_accrual: { from: 'main:app/src/positions.test.mjs › accrued debt includes Morpho Taylor interest with integer rounding', cases: [[1_000_000n, 0n, 100n, 1_000_000n], [1_000_000n, 10n ** 15n, 10n, 1_010_050n]] },

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { privateKeyToAccount } from 'viem/accounts'
 import { V } from '../vectors.mjs'
-import { closeArgs, corridorArgs, expiryFor, messageExpired, nonceAccepted, openArgs, ownerMessage, recoverOwner, setupArgs, setupComplete, wad, withdrawArgs } from './message.ts'
+import { closeArgs, corridorArgs, expiryFor, messageExpired, nonceAccepted, openArgs, ownerMessage, recoverOwner, revokeAgentArgs, setupArgs, setupComplete, wad, withdrawArgs } from './message.ts'
 
 test('V1: setup message bytes equal the p2_owner.py formula, field order and WAD fractions', () => {
   const v = V.V1_setupMessage
@@ -44,6 +44,8 @@ test('V13: open, withdraw and close message bytes', () => {
   assert.equal(ownerMessage({ vault: 'v10.factory.testnet', method: 'open', args: openArgs(live, 10n ** 17n, 5n * 10n ** 17n), nonce: 2, expiry: 1793722800 }), V.V13_open.text)
   assert.equal(ownerMessage({ vault: 'v10.factory.testnet', method: 'withdraw', args: withdrawArgs('0x036CbD53842c5426634e7929541eC2318f3dCF7e', 160_000_000n, '0x' + '19'.repeat(20)), nonce: 3, expiry: 1793723400 }), V.V13_open.withdraw)
   assert.equal(ownerMessage({ vault: 'v10.factory.testnet', method: 'close', args: closeArgs(live), nonce: 4, expiry: 1793724000 }), V.V13_open.close)
+  // Phase 12: revoke_agent carries no fields (vault/src/lib.rs l.419-424 NoArgs; relayer.py OWNER_ARGS ()), so args is {}
+  assert.equal(ownerMessage({ vault: 'v10.factory.testnet', method: 'revoke_agent', args: revokeAgentArgs(), nonce: 5, expiry: 1793724600 }), V.V18_revoke.text)
   assert.throws(() => withdrawArgs('0x036CbD53842c5426634e7929541eC2318f3dCF7e', 0n, '0x' + '19'.repeat(20)))
 })
 

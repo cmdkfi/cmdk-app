@@ -46,7 +46,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   }
   // agent card: /agent/vaults row + NEAR key check; sell budget (0.1 + 0.005) × 20 % − 0.005 = 0.016 WETH
   await expect(card(page, 'Agent').getByRole('status')).toHaveText('Active')
-  await expect(fact(page, 'Agent', 'May do')).toHaveText('Reduce · migrate to backup · exit · never increase your debt on this venue')
+  await expect(fact(page, 'Agent', 'May do')).toHaveText('Reduce · migrate to backup · exit · never increases your debt (a move may round it up by 0.000001 USDC)')
   await expect(page.getByRole('heading', { name: 'Risk corridor' })).toBeVisible()
   await expect(fact(page, 'Agent', 'Last check')).toHaveText(/\(\d+ s ago\)$/)
   await expect(fact(page, 'Agent', 'Discretionary sell budget left today')).toHaveText('0.016 WETH of 0.021 WETH (20% per rolling 24 h)')
@@ -237,4 +237,49 @@ test('Phase 7c: the 1a guard applies on S5: with the app\'s config behind the pu
   await expect(step).toContainText("This app's configuration is behind the published agent version; try again later.", { timeout: 20_000 })
   await expect(step.getByRole('button', { name: 'Check again' })).toBeVisible()
   expect(fx.signs).toEqual([])
+})
+
+test('Phase 12: Revoke agent: the confirm sheet, one revoke_agent signature, Revoked while the agent\'s list lags, Not approved when it catches up; Approve agent re-registers', async ({ page, context, fx }) => {
+  activeVault(fx)
+  await fx.install(context)
+  await page.clock.install()
+  await openPosition(page)
+  await expect(agentStatus(page)).toHaveText('Active')
+  const agent = card(page, 'Agent')
+  await agent.getByRole('button', { name: 'Revoke agent' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Revoke the agent?' })
+  await expect(sheet).toContainText('A call it signed in the last 10 minutes can still land')
+  await expect(sheet).toContainText('Your position stays open and unprotected until you approve the agent again.')
+  await sheet.getByRole('button', { name: 'Keep the agent' }).click()
+  await expect(sheet).toHaveCount(0)
+  expect(fx.signs).toEqual([])
+  await agent.getByRole('button', { name: 'Revoke agent' }).click()
+  await sheet.getByRole('button', { name: 'Revoke agent' }).click()
+  const step = agent.getByRole('listitem', { name: 'Revoke the agent' })
+  await expect(step.getByRole('status')).toHaveText('Done', { timeout: 20_000 })
+  // vault/src/lib.rs l.419-424: method revoke_agent, args {}; one post, no Base transaction
+  expect(fx.signs.map(text => JSON.parse(text).method)).toEqual(['revoke_agent'])
+  expect(JSON.parse(fx.signs[0]).args).toEqual({})
+  expect(fx.posts.filter(p => p.path === '/owner-call')).toHaveLength(1)
+  expect(fx.vaults.get(10)!.approved).toBeNull()
+  // the chain holds no key and no approval while the agent's list still shows the registration: Revoked (Phase 7b rule)
+  await expect(agentStatus(page)).toHaveText('Revoked', { timeout: 20_000 })
+  await expect(agent.getByRole('button', { name: 'Revoke agent' })).toHaveCount(0)
+  await expect(agent.getByRole('button', { name: 'Approve agent' })).toBeVisible()
+  // the list catches up on the next 30 s poll
+  fx.agentRows = []
+  await page.clock.runFor(31_000)
+  await expect(agentStatus(page)).toHaveText('Not approved', { timeout: 20_000 })
+  await expect(agentDetail(page)).toHaveText('Your vault approves no agent version, so no agent watches it.')
+  await agent.getByRole('button', { name: 'Approve agent' }).click()
+  const approveStep = agent.getByRole('listitem', { name: 'Approve the agent version' })
+  await expect(approveStep.getByRole('status')).toHaveText('Done', { timeout: 20_000 })
+  await expect(step).toHaveCount(0) // the newer call replaces the finished revoke step on the card
+  expect(fx.signs.map(text => JSON.parse(text).method)).toEqual(['revoke_agent', 'setup'])
+  await expect(agentStatus(page)).toHaveText('Registering', { timeout: 20_000 })
+  fx.vaults.get(10)!.agentKey = true
+  fx.agentRows = [{ slot: 10, vault: VAULT, base_address: BASE, registration: 'registered', agent_status: 'active', expires_at: NOW + 86_400, last_tick_unix: NOW - 30 }]
+  await page.clock.runFor(31_000)
+  await expect(agentStatus(page)).toHaveText('Active', { timeout: 20_000 })
+  await expect(agent.getByRole('button', { name: 'Revoke agent' })).toBeVisible()
 })

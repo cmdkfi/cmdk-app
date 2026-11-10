@@ -18,6 +18,8 @@ const ORACLE_SCALE = 10n ** 36n
 const YEAR = 31_536_000n
 export const STAGE_MS = 2_000
 export const REGISTER_MS = 5_000
+/** After revoke_agent the agent's list still shows the registration for this long (the live list lags the chain; Phase 7b rule). */
+export const LIST_LAG_MS = 10_000
 const BLOCK_MS = 2_000
 const FIRST_BLOCK = 30_000_000n
 /** $3,210 per ETH in the oracle's scale (loan 6 decimals, collateral 18): value = collateral × price / 1e36. */
@@ -49,6 +51,10 @@ export type SimVault = {
   ownerNonce: number
   approved: boolean
   setupAt: number | null
+  /** Set by the first setup; a revoke clears the approval and the key but leaves the Base corridors (Executor state). */
+  corridorSet?: boolean
+  /** When revoke_agent ran (ms), or null; the simulated agent list lags it by LIST_LAG_MS. */
+  revokedAt?: number | null
   idle: { eth: bigint; weth: bigint; usdc: bigint }
   collateral: bigint
   /** Debt is principal accrued at RATE_APR_WAD simple interest since `debtSince` (ms). */
@@ -213,13 +219,19 @@ export class SandboxEngine {
     job.receipts = [receipt]
     switch (job.method) {
       case 'setup': {
-        v.approved = true; v.setupAt = at
+        v.approved = true; v.setupAt = at; v.corridorSet = true; v.revokedAt = null
         // the live setup sets the corridor on both markets, each in its own Base transaction (vault/src/lib.rs
         // l.289-320, PRD fact 3), so recent actions show one row per market
         const backup = this.hash()
         job.receipts = [receipt, backup]
         this.event({ name: 'CorridorSet', actor: 'you', at, hash: receipt, args: { market: 'live' } })
         this.event({ name: 'CorridorSet', actor: 'you', at, hash: backup, args: { market: 'backup' } })
+        break
+      }
+      case 'revoke_agent': {
+        // vault/src/lib.rs l.419-424: the key is deleted and `approved` cleared in one NEAR transaction; nothing on Base
+        v.approved = false; v.setupAt = null; v.revokedAt = at
+        job.receipts = []
         break
       }
       case 'open': {
