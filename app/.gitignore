@@ -2,3 +2,4 @@ node_modules/
 dist/
 public/prototype/
 public/config.json
+dist-e2e/

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S9 Sandbox: opening your position</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 1180px; display: flex; flex-direction: column">
+  <div class="banner" role="status">Sandbox · simulated wallet and simulated protocol · nothing touches Base Sepolia or NEAR · <a href="S11-Sandbox-Leave.dc.html">Leave sandbox</a></div>
+  <header class="header">
+    <a class="brand" href="S8-Sandbox.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">Sandbox wallet · simulated ▾</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main wide" style="display: grid; gap: 28px">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+      <div style="display: grid; gap: 8px; max-width: 680px">
+        <h1>Opening your position <span class="tag warn" style="vertical-align: middle">Simulated</span></h1>
+        <p class="muted">The same steps as the live app. Here each signature and transaction is simulated and completes in a second or two, so you can watch the whole sequence without a wallet.</p>
+      </div>
+      <span class="tag warn">Step 5 of 6 · simulated signature</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 24px; align-items: start">
+      <section class="surface" aria-label="Steps">
+        <div class="step done"><span class="n" aria-hidden="true">✓</span><div class="body"><strong>Create your position</strong><span class="why">Simulated position address 0xSb0x…0001 · simulated vault sandbox-1</span></div><span class="st">Done · 2 s</span></div>
+        <div class="step done"><span class="n" aria-hidden="true">✓</span><div class="body"><strong>Approve agent and rules</strong><span class="why">Simulated signature · 5 simulated transactions: allowances, Morpho authorization, live and backup corridors</span></div><span class="st">Done · 3 s</span></div>
+        <div class="step done"><span class="n" aria-hidden="true">✓</span><div class="body"><strong>Agent registration</strong><span class="why">Simulated: in the live app this takes minutes and does not block the next steps.</span></div><span class="st">Done · 5 s</span></div>
+        <div class="step done"><span class="n" aria-hidden="true">✓</span><div class="body"><strong>Send 0.5 WETH to your position address</strong><div class="sub"><div><span>4a · Wrap 0.5 ETH → WETH</span><span class="muted">Simulated transaction</span></div><div><span>4b · Transfer 0.5 WETH</span><span class="muted">Simulated transaction</span></div></div></div><span class="st">Done · 4 s</span></div>
+        <div class="step active"><span class="n" aria-hidden="true">5</span><div class="body"><strong>Open position at 50% LTV</strong><span class="why">Simulated signature. Supplies 0.5 WETH and borrows 802.50 USDC at the simulated price of $3,210.</span></div><span class="st"><span class="pulse" aria-hidden="true"></span>Simulating…</span></div>
+        <div class="step"><span class="n" aria-hidden="true">6</span><div class="body"><strong>Send the USDC to your wallet</strong><span class="why">Simulated signature. In the live app this is the last MetaMask prompt.</span></div><span class="st">Next</span></div>
+        <div class="notice" style="margin-top: 20px"><strong>Live-app differences shown inline:</strong> no MetaMask prompts, no faucets, no waiting for blocks. Everything else (order, copy, evidence lines) is identical so the live flow holds no surprises.</div>
+      </section>
+      <aside class="surface" style="display: grid; gap: 8px" aria-label="Agent verification">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2>Agent verification</h2><span class="tag warn">Simulated</span></div>
+        <p class="muted small">In the sandbox nothing is checked against NEAR, Base or GitHub. These rows show what the live panel checks.</p>
+        <div>
+          <div class="check"><div>Agent version approved by your vault<div class="how">Live: vault state vs deployments/testnet.json in cmdkfi/app</div></div><span class="tag">Simulated (not checked)</span></div>
+          <div class="check"><div>Running agent matches the approved version<div class="how">Live: SHA-256 of app-compose.json vs approved compose hash</div></div><span class="tag">Simulated (not checked)</span></div>
+          <div class="check"><div>Agent registered on your vault<div class="how">Live: relayer agent list, registration tx on NearBlocks</div></div><span class="tag">Simulated (not checked)</span></div>
+          <div class="check"><div>Agent key is limited<div class="how">Live: one function-call key for reduce, migrate, exit</div></div><span class="tag">Simulated (not checked)</span></div>
+          <div class="check"><div>Vault code matches the factory<div class="how">Live: account code hash vs factory config</div></div><span class="tag">Simulated (not checked)</span></div>
+        </div>
+        <a class="btn ghost" href="https://github.com/cmdkfi/app" style="justify-self: start; padding-left: 0">See the real published values on GitHub</a>
+      </aside>
+    </div>
+  </main>
+  <footer class="footer">
+    <span>Sandbox: nothing here is evidence about the live protocol.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

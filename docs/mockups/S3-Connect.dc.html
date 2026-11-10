@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S3 Connect MetaMask and get testnet ETH</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 980px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">0x19E7…ff2A · Base Sepolia</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main" style="display: grid; gap: 28px">
+    <div style="display: grid; gap: 8px; max-width: 640px">
+      <h1>Connect MetaMask</h1>
+      <p class="muted">Desktop MetaMask on Base Sepolia. The app switches the network for you, or adds it, with MetaMask's own confirmation.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start">
+      <section class="surface" style="display: grid; gap: 20px" aria-label="Wallet">
+        <div class="rows">
+          <div class="row"><span class="k">Wallet</span><span class="v">MetaMask · 0x19E7…ff2A</span></div>
+          <div class="row"><span class="k">Network</span><span class="v"><span class="tag ok">Base Sepolia</span></span></div>
+          <div class="row"><span class="k">Account type</span><span class="v">Plain account (supported)</span></div>
+          <div class="row"><span class="k">Base Sepolia ETH</span><span class="v">0.081 ETH</span></div>
+          <div class="row"><span class="k">Needed for 0.05 ETH deposit</span><span class="v">0.05 + ~0.002 gas = <strong>0.052 ETH</strong> <span class="tag ok">Enough</span></span></div>
+          <div class="row"><span class="k">Existing position</span><span class="v">None for this wallet</span></div>
+        </div>
+        <div style="display: grid; gap: 10px">
+          <a class="btn primary" href="S4-Progress.dc.html">Create position</a>
+          <p class="muted small">This is the only click. From here every signature and transaction is requested automatically; you only act inside MetaMask. The button is disabled while the balance is below the deposit plus gas.</p>
+        </div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap">
+          <a class="btn" href="S8-Sandbox.dc.html">Try in sandbox</a>
+          <a class="btn ghost" href="S2-Settings.dc.html">Back</a>
+        </div>
+      </section>
+      <aside class="help" aria-label="Get Base Sepolia ETH" style="border-style: dashed; opacity: .85">
+        <span class="tag" style="justify-self: start">Variant · appears only when the balance is short</span>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2>Get Base Sepolia ETH</h2><span class="tag warn">0.040 ETH missing</span></div>
+        <p class="muted small">Testnet ETH is free. Request it from one of these faucets, then come back. This page checks your balance every 10 seconds and continues by itself.</p>
+        <div class="addr"><span>0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A</span><button type="button">Copy</button></div>
+        <ol>
+          <li><a href="https://docs.base.org/base-chain/tools/network-faucets">Base docs: network faucets</a> <span class="muted small">— the list Base keeps current</span></li>
+          <li><a href="https://portal.cdp.coinbase.com/products/faucet">Coinbase Developer Platform faucet</a> <span class="muted small">— Base Sepolia ETH and USDC, Coinbase developer login</span></li>
+          <li><a href="https://www.alchemy.com/faucets/base-sepolia">Alchemy Base Sepolia faucet</a> <span class="muted small">— Alchemy login, needs a small mainnet balance</span></li>
+        </ol>
+        <p class="muted small">Limits apply, usually one request per day per faucet.</p>
+        <details>
+          <summary class="muted small" style="cursor: pointer; min-height: 44px; display: flex; align-items: center">Having trouble switching networks? Add Base Sepolia manually</summary>
+          <div class="rows small" style="margin-top: 8px">
+            <div class="row"><span class="k">Network name</span><span class="v">Base Sepolia</span></div>
+            <div class="row"><span class="k">RPC URL</span><span class="v">https://sepolia.base.org</span></div>
+            <div class="row"><span class="k">Chain ID</span><span class="v">84532</span></div>
+            <div class="row"><span class="k">Currency</span><span class="v">ETH</span></div>
+            <div class="row"><span class="k">Explorer</span><span class="v">https://sepolia.basescan.org</span></div>
+          </div>
+        </details>
+        <p class="small"><span class="pulse" aria-hidden="true"></span>Waiting for funds… last checked 4 s ago</p>
+      </aside>
+    </div>
+    <div class="notice"><strong>Other states of this screen:</strong> MetaMask not installed → install link and Try in sandbox only · wrong network → "Switch to Base Sepolia" button, add-network prompt on 4902 · contract or delegated account → blocked with explanation · existing position found → opens the position screen directly · relayer not ready → "Creation temporarily unavailable" with the relayer's message.</div>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

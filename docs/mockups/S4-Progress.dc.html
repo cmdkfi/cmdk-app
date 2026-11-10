@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S4 Opening your position</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 1180px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">0x19E7…ff2A · Base Sepolia</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main wide" style="display: grid; gap: 28px">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+      <div style="display: grid; gap: 8px; max-width: 640px">
+        <h1>Opening your position</h1>
+        <p class="muted">Everything below runs by itself. MetaMask will ask you to confirm three signatures and two transactions, one at a time. You can close this tab and come back; progress is saved.</p>
+      </div>
+      <span class="tag warn">Step 4 of 6 · waiting for MetaMask</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 24px; align-items: start">
+      <section class="surface" aria-label="Steps">
+        <div class="step done">
+          <span class="n" aria-hidden="true">✓</span>
+          <div class="body"><strong>Create your position</strong><span class="why">Position address 0x1563…5508 · vault v9 on NEAR · <a href="https://testnet.nearblocks.io">NearBlocks</a></span></div>
+          <span class="st">Done · 14 s</span>
+        </div>
+        <div class="step done">
+          <span class="n" aria-hidden="true">✓</span>
+          <div class="body"><strong>Approve agent and rules</strong><span class="why">1 signature · 5 Base transactions confirmed: USDC and WETH allowances, Morpho authorization, live and backup corridors</span></div>
+          <span class="st">Done · 41 s</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">3</span>
+          <div class="body"><strong>Agent registration</strong><span class="why">Nothing to do. The agent registers its restricted key on your vault, usually within a few minutes. The next steps do not wait for it.</span></div>
+          <span class="st"><span class="pulse" aria-hidden="true"></span>Registering</span>
+        </div>
+        <div class="step active">
+          <span class="n" aria-hidden="true">4</span>
+          <div class="body">
+            <strong>Send 0.05 WETH to your position address</strong>
+            <div class="sub">
+              <div><span>4a · Wrap 0.05 ETH → WETH</span><span class="muted">Confirmed · <a href="https://sepolia.basescan.org">tx 0x8c1d…</a></span></div>
+              <div><span>4b · Transfer 0.05 WETH to 0x1563…5508</span><span>Waiting for MetaMask…</span></div>
+            </div>
+            <span class="why">Your wallet held 0 WETH, so the app wrapped exactly the missing amount first. Morpho accepts WETH only.</span>
+          </div>
+          <span class="st">In progress</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">5</span>
+          <div class="body"><strong>Open position at 50% LTV</strong><span class="why">1 signature. Supplies the WETH and borrows about 80.20 USDC in one Base transaction, if the price feed is fresh and the market has liquidity.</span></div>
+          <span class="st">Next</span>
+        </div>
+        <div class="step">
+          <span class="n" aria-hidden="true">6</span>
+          <div class="body"><strong>Send the USDC to your wallet</strong><span class="why">1 signature. Moves the borrowed USDC from the position address to 0x19E7…ff2A.</span></div>
+          <span class="st">Pending</span>
+        </div>
+        <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+          <button class="btn" type="button">Retry step 4b</button>
+          <span class="muted small">Shown only after a rejected or failed prompt. Nothing is ever re-sent on its own.</span>
+        </div>
+      </section>
+      <aside class="surface" style="display: grid; gap: 8px" aria-label="Agent verification">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2>Agent verification</h2><span class="muted small">read 12 s ago</span></div>
+        <p class="muted small">What this page checked just now, and how you can check it yourself.</p>
+        <div>
+          <div class="check"><div>Agent version approved by your vault<div class="how">Vault state equals deployments/testnet.json in cmdkfi/app at fd0272f</div></div><span class="tag ok">Checked</span></div>
+          <div class="check"><div>Running agent matches the approved version<div class="how">SHA-256 of app-compose.json equals the approved compose hash</div></div><span class="tag ok">Checked</span></div>
+          <div class="check"><div>Agent registered on your vault<div class="how">Relayer agent list: registration, status, expiry, registration tx</div></div><span class="tag warn">Registering</span></div>
+          <div class="check"><div>Agent key is limited<div class="how">One function-call key: reduce, migrate, exit · NearBlocks → Access keys</div></div><span class="tag">Not yet</span></div>
+          <div class="check"><div>Vault code matches the factory<div class="how">Account code hash equals factory config</div></div><span class="tag ok">Checked</span></div>
+          <div class="check"><div>Relayer holds no authority<div class="how">It forwards your signed messages and pays NEAR gas. See RELAYER.md</div></div><span class="tag">Info</span></div>
+          <div class="check"><div>Not checked here<div class="how">TDX quote signature, PCCS collateral, RTMR replay need Docker and dstack-mr. See agent/MEASUREMENT.md</div></div><span class="tag">Out of scope</span></div>
+        </div>
+        <a class="btn ghost" href="https://github.com/cmdkfi/app" style="justify-self: start; padding-left: 0">Open the published values on GitHub</a>
+      </aside>
+    </div>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. A submitted transaction is not a completed one; each step shows its own evidence.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

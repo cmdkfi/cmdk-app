@@ -1,9 +1,42 @@
 {
   "baseChainId": 84532,
   "nearNetwork": "testnet",
-  "nearRpcUrl": "https://rpc.testnet.near.org",
+  "nearRpcUrl": "https://test.rpc.fastnear.com",
+  "nearRpcUrlFallback": "https://near-testnet.drpc.org",
   "baseRpcUrl": "https://base-sepolia-rpc.publicnode.com",
   "relayerUrl": "https://relayer.cmdk.fi",
   "relayerUrlFallback": "https://cmdk-relayer.fffilimonov.workers.dev",
-  "policy": { "cooldownSecs": 120, "sliceMax": "1000000000", "depositNear": "2", "markets": ["live", "backup"] }
+  "policy": { "cooldownSecs": 120, "sliceMax": "1000000000", "depositNear": "2", "markets": ["live", "backup"] },
+  "guided": {
+    "corridor": { "floor": 30, "target": 50, "act": 70, "budget": 20, "migrate": true, "exit": true },
+    "minDepositEth": "0.001",
+    "messageExpirySecs": 600,
+    "walletTxGasLimit": 100000,
+    "usdcDust": "10000",
+    "firstVaultNumber": 10
+  },
+  "network": {
+    "chainId": "0x14a34",
+    "chainName": "Base Sepolia",
+    "rpcUrls": ["https://sepolia.base.org"],
+    "nativeCurrency": { "name": "Ether", "symbol": "ETH", "decimals": 18 },
+    "blockExplorerUrls": ["https://sepolia.basescan.org"]
+  },
+  "help": {
+    "metamaskInstall": "https://metamask.io/download/",
+    "connectingToBase": "https://docs.base.org/base-chain/quickstart/connecting-to-base",
+    "nearblocks": "https://testnet.nearblocks.io",
+    "manifest": "https://raw.githubusercontent.com/cmdkfi/app/main/deployments/testnet.json",
+    "measurementDoc": "https://github.com/cmdkfi/app/blob/main/agent/MEASUREMENT.md",
+    "relayerDoc": "https://github.com/cmdkfi/app/blob/main/scripts/RELAYER.md",
+    "ethFaucets": [
+      { "label": "Base docs: network faucets", "url": "https://docs.base.org/base-chain/tools/network-faucets", "note": "the list Base keeps current" },
+      { "label": "Coinbase Developer Platform faucet", "url": "https://portal.cdp.coinbase.com/products/faucet", "note": "Base Sepolia ETH and USDC, Coinbase developer login" },
+      { "label": "Alchemy Base Sepolia faucet", "url": "https://www.alchemy.com/faucets/base-sepolia", "note": "Alchemy login, needs a small mainnet balance" }
+    ],
+    "usdcFaucets": [
+      { "label": "Circle faucet", "url": "https://faucet.circle.com", "note": "choose Base Sepolia in the network dropdown" },
+      { "label": "Coinbase Developer Platform faucet", "url": "https://portal.cdp.coinbase.com/products/faucet", "note": "also dispenses test USDC on Base Sepolia" }
+    ]
+  }
 }

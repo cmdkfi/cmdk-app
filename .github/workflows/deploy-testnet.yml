@@ -33,7 +33,7 @@ jobs:
       - name: Install test browser
         run: pnpm exec playwright install --with-deps chromium
         working-directory: app
-      - name: Desktop and mobile browser scenarios
+      - name: Desktop browser scenarios
         run: pnpm test:browser
         working-directory: app
       - name: Browser failure diagnostics

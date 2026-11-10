@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S5 Your position</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 1180px; display: flex; flex-direction: column">
+  <header class="header">
+    <a class="brand" href="Main.dc.html" aria-label="cmdk home">⌘K</a>
+    <div class="header-actions"><span class="chip wallet">0x19E7…ff2A · Base Sepolia</span><span class="chip">Testnet · no real funds</span></div>
+  </header>
+  <main class="main wide" style="display: grid; gap: 24px">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap">
+      <div style="display: grid; gap: 6px">
+        <h1>Your position</h1>
+        <p class="muted small">Read at block 54 412 988 · 12 s ago · updates every 30 s while this tab is visible</p>
+      </div>
+      <a class="btn primary" href="S6-Close.dc.html">Close position</a>
+    </div>
+    <section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px" aria-label="Balances">
+      <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">Debt</h3><div class="big">80.31 <span>USDC</span></div><p class="muted small">Includes interest accrued to the read block. Borrow rate 3.1% / year.</p></div>
+      <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">Collateral</h3><div class="big">0.05 <span>WETH</span></div><p class="muted small">≈ $160.40 at the live market oracle.</p></div>
+      <div class="surface" style="display: grid; gap: 8px"><h3 class="muted">LTV</h3><div class="big">50.1<span>%</span></div><p class="muted small">Target 50% · reduce above 70% · liquidation at 86%.</p></div>
+    </section>
+    <section class="surface" aria-label="Risk corridor">
+      <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><h3>Risk corridor</h3><span class="muted small">Oracle: Chainlink ETH/USD · updated 3 min ago</span></div>
+      <div class="ltv-track" role="img" aria-label="LTV 50.1% between floor 30% and trigger 70%; liquidation at 86%">
+        <div class="ltv-fill" style="width: 58.3%"></div>
+        <span class="tick floor" style="left: 34.9%"></span>
+        <span class="tick target" style="left: 58.1%"></span>
+        <span class="tick act" style="left: 81.4%"></span>
+        <span class="tick liq" style="left: 100%"></span>
+        <span class="cur" style="left: 58.3%"></span>
+      </div>
+      <dl class="legend">
+        <div><dt><i class="floor"></i>Floor</dt><dd>30%</dd></div>
+        <div><dt><i class="target"></i>Target</dt><dd>50%</dd></div>
+        <div><dt><i class="act"></i>Reduce trigger</dt><dd>70%</dd></div>
+        <div><dt><i class="liq"></i>Liquidation</dt><dd>86%</dd></div>
+      </dl>
+    </section>
+    <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px" aria-label="Agent and market">
+      <div class="surface" style="display: grid; gap: 12px">
+        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><h3>Agent</h3><span class="tag ok">Active</span></div>
+        <div class="rows">
+          <div class="row"><span class="k">Last check</span><span class="v">38 s ago</span></div>
+          <div class="row"><span class="k">May do</span><span class="v">Reduce · migrate to backup · exit</span></div>
+          <div class="row"><span class="k">Sell budget left today</span><span class="v">0.01 WETH of 0.01</span></div>
+          <div class="row"><span class="k">Key expires</span><span class="v">in 6 days · renews automatically</span></div>
+        </div>
+        <a class="btn ghost" href="S4-Progress.dc.html" style="justify-self: start; padding-left: 0">Verify the agent</a>
+      </div>
+      <div class="surface" style="display: grid; gap: 12px">
+        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><h3>Market</h3><span class="tag">live</span></div>
+        <div class="rows">
+          <div class="row"><span class="k">Venue</span><span class="v">Morpho · Base Sepolia</span></div>
+          <div class="row"><span class="k">Pair</span><span class="v">USDC / WETH · LLTV 86%</span></div>
+          <div class="row"><span class="k">Market id</span><span class="v"><a href="https://sepolia.basescan.org">0xa25a…535c</a></span></div>
+          <div class="row"><span class="k">Backup market</span><span class="v">Approved · not in use</span></div>
+        </div>
+        <p class="muted small">Position address <a href="https://sepolia.basescan.org">0x1563…5508</a> · vault <a href="https://testnet.nearblocks.io">v9.factory.prime-measure…</a></p>
+      </div>
+    </section>
+    <section class="surface" aria-label="Recent actions">
+      <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><h3>Recent actions</h3><span class="muted small">Base blocks 54 402 988 – 54 412 988</span></div>
+      <div style="margin-top: 8px">
+        <div class="event"><span class="who you">You</span><span>Sent 80.20 USDC to your wallet · <a href="https://sepolia.basescan.org">tx</a></span><span class="when">today 14:32</span></div>
+        <div class="event"><span class="who you">You</span><span>Opened position: 0.05 WETH supplied, 80.20 USDC borrowed on live market · <a href="https://sepolia.basescan.org">tx</a></span><span class="when">today 14:31</span></div>
+        <div class="event"><span class="who you">You</span><span>Deposited 0.05 WETH to the position address · <a href="https://sepolia.basescan.org">tx</a></span><span class="when">today 14:30</span></div>
+        <div class="event"><span class="who agent">Agent</span><span>Registered on your vault · key limited to reduce, migrate, exit · <a href="https://testnet.nearblocks.io">NEAR tx</a></span><span class="when">today 14:29</span></div>
+        <div class="event"><span class="who you">You</span><span>Approved agent and rules: corridors set on live and backup markets · <a href="https://sepolia.basescan.org">5 tx</a></span><span class="when">today 14:28</span></div>
+      </div>
+      <button class="btn ghost" type="button" style="padding-left: 0; margin-top: 8px">Load earlier</button>
+    </section>
+  </main>
+  <footer class="footer">
+    <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
+    <a href="https://github.com/cmdkfi/app">Protocol source</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

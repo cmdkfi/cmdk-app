@@ -1,5 +1,6 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { guidedValues } from './guided-values.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const source = resolve(root, 'deployments/testnet.json')
@@ -22,10 +23,14 @@ const approvedMeasurement = measurement && hashes.every(key => new RegExp(`^[0-9
 if (factory !== null && (typeof factory !== 'string' || !/^[a-z0-9._-]+$/.test(factory))) {
   throw new Error('Invalid NEAR factory in deployments/testnet.json')
 }
+// Guided-flow blocks (PRD FR-2, FR-17): validated, and only emitted with a published deployment.
+const guided = deployment ? guidedValues(appValues, deployment) : { guided: null, network: null, help: null, base: null }
 const config = {
+  ...guided,
   baseChainId: deployment?.base?.chainId ?? appValues.baseChainId,
   nearNetwork: deployment?.near?.network ?? appValues.nearNetwork,
   nearRpcUrl: appValues.nearRpcUrl,
+  nearRpcUrlFallback: appValues.nearRpcUrlFallback,
   baseRpcUrl: appValues.baseRpcUrl,
   relayerUrl: appValues.relayerUrl,
   relayerUrlFallback: appValues.relayerUrlFallback,

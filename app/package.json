@@ -9,27 +9,32 @@
     "prepare:config": "node scripts/generate-config.mjs",
     "dev": "pnpm run prepare:prototype && pnpm run prepare:config && vite --host localhost --port 5173 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/*.test.mjs",
+    "test": "node --experimental-strip-types --test 'src/**/*.test.mjs'",
     "build": "pnpm run prepare:prototype && pnpm run prepare:config && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test:browser": "tsc -p tsconfig.e2e.json && playwright test",
-    "test:bundle-boundary": "node scripts/check-test-boundary.mjs"
+    "test:bundle-boundary": "node scripts/check-test-boundary.mjs",
+    "test:visual:update": "sh scripts/update-visual-baselines.sh"
   },
   "dependencies": {
+    "@tanstack/query-sync-storage-persister": "5.105.2",
     "@tanstack/react-query": "^5.105.2",
+    "@tanstack/react-query-persist-client": "5.105.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "viem": "^2.57.14",
     "wagmi": "^2.19.5"
   },
   "devDependencies": {
+    "@morpho-org/blue-sdk": "8.0.1",
+    "@morpho-org/morpho-ts": "4.0.1",
     "@playwright/test": "^1.65.0",
     "@types/node": "^22.20.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "^5.9.0",
-    "vite": "^8.3.5",
+    "vite": "8.3.5",
     "wrangler": "^4.0.0"
   }
 }

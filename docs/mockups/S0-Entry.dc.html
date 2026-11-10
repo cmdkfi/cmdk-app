@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S0 Entry and navigation</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./cmdk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="shell" style="min-height: 980px; display: flex; flex-direction: column">
+  <main class="main wide" style="display: grid; gap: 28px; padding-top: 48px">
+    <div style="display: grid; gap: 8px; max-width: 720px">
+      <h1>Entry and navigation</h1>
+      <p class="muted">The app has one job, so it has no menu. The header carries the brand mark, the wallet slot and the testnet chip. The wallet slot is the only navigation control; where <code style="color: #fff">/</code> lands is decided from wallet state and vault discovery.</p>
+    </div>
+    <section class="surface" style="display: grid; gap: 14px" aria-label="Header wallet slot states">
+      <h3>Header: the wallet slot in its five states</h3>
+      <div style="display: grid; gap: 10px">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #303030"><span class="muted small">Not connected</span><div class="header" style="min-height: 56px; padding: 0 16px; background: #0a0a0a; border-radius: 12px; gap: 24px"><span class="brand" style="font-size: 22px">⌘K</span><div class="header-actions"><button class="btn" type="button" style="min-height: 36px; padding: 8px 16px">Connect wallet</button><span class="chip">Testnet · Base Sepolia · no real funds</span></div></div></div>
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #303030"><span class="muted small">Connecting · checking vaults</span><div class="header" style="min-height: 56px; padding: 0 16px; background: #0a0a0a; border-radius: 12px; gap: 24px"><span class="brand" style="font-size: 22px">⌘K</span><div class="header-actions"><span class="chip wallet"><span class="pulse" aria-hidden="true"></span>Checking your vaults…</span><span class="chip">Testnet · no real funds</span></div></div></div>
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #303030"><span class="muted small">Connected · menu open</span><div class="header" style="min-height: 56px; padding: 0 16px; background: #0a0a0a; border-radius: 12px; gap: 24px; position: relative"><span class="brand" style="font-size: 22px">⌘K</span><div class="header-actions"><span class="chip wallet" style="border-color: #fff">0x19E7…ff2A · Base Sepolia ▾</span><span class="chip">Testnet · no real funds</span></div><div style="position: absolute; right: 190px; top: 50px; width: 220px; background: #202020; border: 1px solid #303030; border-radius: 12px; padding: 8px; display: grid; gap: 2px; z-index: 2"><a href="#" style="padding: 10px 12px; border-radius: 8px; text-decoration: none; font-size: 13px">Copy address</a><a href="https://sepolia.basescan.org" style="padding: 10px 12px; border-radius: 8px; text-decoration: none; font-size: 13px">View on BaseScan</a><a href="#" style="padding: 10px 12px; border-radius: 8px; text-decoration: none; font-size: 13px; color: #ee858e">Disconnect</a></div></div></div>
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #303030"><span class="muted small">Wrong network</span><div class="header" style="min-height: 56px; padding: 0 16px; background: #0a0a0a; border-radius: 12px; gap: 24px"><span class="brand" style="font-size: 22px">⌘K</span><div class="header-actions"><button class="btn" type="button" style="min-height: 36px; padding: 8px 16px; background: #e4ba69; color: #0a0a0a">0x19E7…ff2A · Switch to Base Sepolia</button><span class="chip">Testnet · no real funds</span></div></div></div>
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #303030"><span class="muted small">Sandbox active</span><div style="display: grid; border-radius: 12px; overflow: hidden"><div class="banner" style="min-height: 32px; font-size: 12px">Sandbox · simulated wallet and simulated protocol · <a href="S11-Sandbox-Leave.dc.html">Leave sandbox</a></div><div class="header" style="min-height: 56px; padding: 0 16px; background: #0a0a0a; gap: 24px"><span class="brand" style="font-size: 22px">⌘K</span><div class="header-actions"><span class="chip wallet">Sandbox wallet · simulated ▾</span><span class="chip">Testnet · no real funds</span></div></div></div></div>
+      </div>
+    </section>
+    <section class="surface" style="display: grid; gap: 12px" aria-label="Where the root page lands">
+      <h3>Where <code>/</code> lands</h3>
+      <div style="display: grid; grid-template-columns: 180px 1fr 1fr; gap: 0 16px; font-size: 13px">
+        <span class="muted small" style="padding: 8px 0">Wallet</span><span class="muted small" style="padding: 8px 0">Vaults found for this wallet</span><span class="muted small" style="padding: 8px 0">Lands on</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Not connected</span><span style="padding: 10px 0; border-top: 1px solid #303030" class="muted">—</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="Main.dc.html">S1 Choose</a>, Connect wallet in the header for returning users</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected, discovery failed</span><span style="padding: 10px 0; border-top: 1px solid #303030" class="muted">unknown</span><span style="padding: 10px 0; border-top: 1px solid #303030">S1 with "Could not read your vaults · Retry". Never "no position", never Create position</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected</span><span style="padding: 10px 0; border-top: 1px solid #303030">none</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="Main.dc.html">S1 Choose</a> with the wallet shown → S2 → <a href="S3-Connect.dc.html">S3</a> (funding check, Create position)</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected</span><span style="padding: 10px 0; border-top: 1px solid #303030">onboarding started, not finished</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="S4-Progress.dc.html">S4 Progress</a> at the first unfinished step, Continue re-requests the prompt</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected</span><span style="padding: 10px 0; border-top: 1px solid #303030">active position (debt or collateral)</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="S5-Position.dc.html">S5 Position</a></span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected</span><span style="padding: 10px 0; border-top: 1px solid #303030">closed position only</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="S7-Closed.dc.html">S7 Closed</a> with Start over</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Connected</span><span style="padding: 10px 0; border-top: 1px solid #303030">liquidated (collateral 0, debt &gt; 0)</span><span style="padding: 10px 0; border-top: 1px solid #303030">S5 liquidated variant, no Start over</span>
+        <span style="padding: 10px 0; border-top: 1px solid #303030">Sandbox</span><span style="padding: 10px 0; border-top: 1px solid #303030" class="muted">simulated</span><span style="padding: 10px 0; border-top: 1px solid #303030"><a href="S8-Sandbox.dc.html">S8 sheet</a> → #sandbox/start, the same flow with the banner</span>
+      </div>
+    </section>
+    <div class="notice"><strong>Route guards:</strong> #position without a position → #start · #progress without an onboarding record → #start · #start with an active position → #position (so the brand mark opens the position when one exists) · Disconnect → #start, local onboarding records kept per wallet · #sandbox/… never redirects into live routes. <strong>Returning user:</strong> MetaMask reconnects silently, discovery runs, the position appears with no clicks.</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

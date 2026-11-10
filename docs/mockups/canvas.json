@@ -1,0 +1,32 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-09T16:20:00Z"},
+  "title": "cmdk guided flow mockups",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "S0-Entry.dc.html": {"x": 0, "y": -1500, "w": 1280, "h": 980, "title": "S0 Entry and navigation", "expand": "fill"},
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 980, "title": "S1 Choose", "expand": "fill"},
+    "S2-Settings.dc.html": {"x": 1360, "y": 0, "w": 1280, "h": 980, "title": "S2 Settings (read-only)", "expand": "fill"},
+    "S3-Connect.dc.html": {"x": 2720, "y": 0, "w": 1280, "h": 980, "title": "S3 Connect + S3a Get ETH", "expand": "fill"},
+    "S4-Progress.dc.html": {"x": 0, "y": 1340, "w": 1280, "h": 1180, "title": "S4 Progress + verification", "expand": "fill"},
+    "S5-Position.dc.html": {"x": 1360, "y": 1340, "w": 1280, "h": 1180, "title": "S5 Position", "expand": "fill"},
+    "S6-Close.dc.html": {"x": 2720, "y": 1340, "w": 1280, "h": 1180, "title": "S6 Close position + S6a Get USDC", "expand": "fill"},
+    "S7-Closed.dc.html": {"x": 0, "y": 2880, "w": 1280, "h": 900, "title": "S7 Closed · Start over", "expand": "fill"},
+    "S8-Sandbox.dc.html": {"x": 1360, "y": 2880, "w": 1280, "h": 900, "title": "S8 Sandbox entry sheet", "expand": "fill"},
+    "S9-Sandbox-Progress.dc.html": {"x": 0, "y": 4140, "w": 1280, "h": 1180, "title": "S9 Sandbox · progress", "expand": "fill"},
+    "S10-Sandbox-Position.dc.html": {"x": 1360, "y": 4140, "w": 1280, "h": 1180, "title": "S10 Sandbox · position after scripted drop", "expand": "fill"},
+    "S11-Sandbox-Leave.dc.html": {"x": 2720, "y": 4140, "w": 1280, "h": 1180, "title": "S11 Sandbox · leave", "expand": "fill"}
+  },
+  "order": ["S0-Entry.dc.html", "Main.dc.html", "S2-Settings.dc.html", "S3-Connect.dc.html", "S4-Progress.dc.html", "S5-Position.dc.html", "S6-Close.dc.html", "S7-Closed.dc.html", "S8-Sandbox.dc.html", "S9-Sandbox-Progress.dc.html", "S10-Sandbox-Position.dc.html", "S11-Sandbox-Leave.dc.html"],
+  "notes": {
+    "row0": {"x": 0, "y": -1800, "text": "Entry: what / shows and the wallet slot", "kind": "title1", "maxW": 4000},
+    "row1": {"x": 0, "y": -300, "text": "Open: choose → settings → connect", "kind": "title1", "maxW": 4000},
+    "row2": {"x": 0, "y": 1040, "text": "Progress (one click, prompts chained) → position", "kind": "title1", "maxW": 4000},
+    "row3": {"x": 0, "y": 2580, "text": "Close → start over · sandbox entry", "kind": "title1", "maxW": 4000},
+    "row4": {"x": 0, "y": 3840, "text": "Sandbox: the same flow on simulated adapters, labelled on every screen", "kind": "title1", "maxW": 4000},
+    "legend": {"x": 2720, "y": 2880, "w": 520, "text": "All numbers are example values for layout only. Live screens read them from Base Sepolia, NEAR and the relayer; missing reads show \"unavailable\", never a placeholder. Dark theme is the default; tokens match src/ui/prototype-controls.css. Font: CmdkReference in the app, Inter here.", "fill": "gray"},
+    "entrynote": {"x": 1360, "y": -1500, "w": 520, "text": "Row 0 is not a screen the user sees as such: it shows the header's wallet slot in its five states and the table that decides where / lands. Everything else in the app is reached from these two things; there is no menu.", "fill": "gray"}
+  },
+  "designSystems": []
+}

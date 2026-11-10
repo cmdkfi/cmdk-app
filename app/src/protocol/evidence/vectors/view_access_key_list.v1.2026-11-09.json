@@ -1,0 +1,32 @@
+{
+ "_comment": "Live NEAR RPC view_access_key_list for v1.factory.prime-measure-1792736012.testnet, captured 2026-11-09 (block 276953227). Recorded as a vector for agentKeyLimited (PRD \u00a76 row 4).",
+ "account_id": "v1.factory.prime-measure-1792736012.testnet",
+ "agent_public_key": "ed25519:2QwVDKFgp3AT6XMURgWr5ZkKUAS6dYt5nqeHwc85SHio",
+ "response": {
+  "jsonrpc": "2.0",
+  "result": {
+   "block_hash": "orAmcLHtnUbCm61CXwzksHCPPTwrUYc57deeJzM2quw",
+   "block_height": 276953227,
+   "keys": [
+    {
+     "access_key": {
+      "nonce": 276455692000000,
+      "permission": {
+       "FunctionCall": {
+        "allowance": "2000000000000000000000000",
+        "method_names": [
+         "reduce",
+         "migrate",
+         "exit"
+        ],
+        "receiver_id": "v1.factory.prime-measure-1792736012.testnet"
+       }
+      }
+     },
+     "public_key": "ed25519:2QwVDKFgp3AT6XMURgWr5ZkKUAS6dYt5nqeHwc85SHio"
+    }
+   ]
+  },
+  "id": "cmdk"
+ }
+}
