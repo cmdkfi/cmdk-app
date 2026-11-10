@@ -190,6 +190,15 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] Final docs pass: README counts and protocol commit, PRD status line, audit status header and "pending" list.
 - [ ] The product owner approves; merge PR #80 into main (main deploys automatically). Only on the product owner's explicit word.
 
+## Phase 11 — Sandbox market crash (PRD §8a.1; product owner, 11 Nov, after the live review)
+- [ ] Commit the product owner's PRD §8a.1 and this phase first (`git diff HEAD -- docs tasks`).
+- [ ] Engine: remove the timed drop and reduce; add the three explicit stages (×0.70, ×0.55 of start, back to start) and the "without the agent" calculation with Morpho Blue's liquidation incentive, cited from the Morpho source (`Morpho.sol` `liquidate`, `LIQUIDATION_CURSOR`, `MAX_LIQUIDATION_INCENTIVE_FACTOR`); the protective reduce stays on `repayToLtv`. Unit tests with the §8a.1 figures.
+- [ ] S5 sandbox: the Market crash card under the hero with **Run market crash**, three stages advanced by the user, two columns per stage, the stage 3 summary line, the finished state, once per position, Start over offers it again; Close position available at every stage.
+- [ ] Copy exactly as §8a.1, including the honesty lines; S8 explainer sheet gains "Open a position, then run a market crash to see what the agent does."
+- [ ] Browser test for the whole run; screenshots before the run and at stage 3 (both platforms via the baseline job).
+- [ ] README and audit status: one sentence that the sandbox price path is scripted and shows a calculated "without the agent" outcome.
+- [ ] Five checks, commit, push; CI green. No deploy, no merge: the product owner reviews the deployed preview after their own deploy.
+
 ## Mockups
 - [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
 - [ ] The product owner reviews the mockups; layout changes go back into the canvas before Phase 2 starts.

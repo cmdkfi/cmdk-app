@@ -368,7 +368,7 @@ Pattern observed in the Spark app on 9 Nov 2026: a "Try in Sandbox" button next 
 | Interface | Live implementation | Sandbox implementation |
 |---|---|---|
 | `WalletAdapter` — connect, account, chain, `signMessage`, `sendTransaction`, balances | wagmi + any injected wallet | In-memory account `0xSandbox…`, generous ETH/WETH/USDC balances, instant "signatures" and "transactions" with fake hashes, optional simulated rejection |
-| `ProtocolAdapter` — relayer jobs, NEAR state reads, Morpho/Executor reads, activity logs, agent evidence | existing `protocol/*` modules | In-memory state machine: create → setup → open → agent actions → close, advancing on timers (1–3 s per stage) so the progress UI shows every state; deterministic scripted events (one price drop and one agent `Reduced`), simulated feeds and interest accrual |
+| `ProtocolAdapter` — relayer jobs, NEAR state reads, Morpho/Executor reads, activity logs, agent evidence | existing `protocol/*` modules | In-memory state machine: create → setup → open → agent actions → close, advancing on timers (1–3 s per stage) so the progress UI shows every state; the price moves only when the user runs the market crash (§8a.1; no timer), simulated feeds and interest accrual |
 
 The same adapter interfaces are what the Playwright fixtures drive, so the sandbox implementation doubles as the browser-test backend for most scenarios; only the live adapter's wire formats need the existing protocol fixture.
 
@@ -380,7 +380,7 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 | S2 Settings | `#sandbox/settings` | None |
 | S3 Connect | `#sandbox/connect` | Already "connected"; funding check always passes; no faucet panel; Create position enabled |
 | S4 Progress | `#sandbox/progress` | Each stage advances on a 1–3 s timer; "Waiting for <wallet>…" is replaced by "Simulated signature" / "Simulated transaction"; agent registration completes in ~5 s; verification rows read "Simulated (not checked)" |
-| S5 Position | `#sandbox/position` | After ~20 s a scripted price drop (−30%) pushes LTV from 50% to about 71%; the simulated agent posts a protective `Reduced` action within the cooldown and LTV returns to 50%: it repays `repayToLtv(debt, value, target)` (about 43% of the collateral at −30%), not budget-limited and not counted against the discretionary sell budget, exactly as `Executor.reduce`'s protective branch (fact 4a; product owner, 10 Nov: the S10 artboard's figures are superseded; the engine derives every figure from that math); interest accrues; hash links disabled and tagged "simulated" |
+| S5 Position | `#sandbox/position` | No timer. The hero is the live S5 with a **Market crash** card (§8a.1, product owner 11 Nov; replaces the 20 s scripted drop and the S10 artboard): one big **Run market crash** button plays three price stages, each advanced by the user, and shows side by side what Morpho would have done without the agent and what the simulated agent does. The agent's protective `Reduced` uses `repayToLtv(debt, value, target)` (about 43% of the collateral at −30%), not budget-limited and not counted against the discretionary sell budget, exactly as `Executor.reduce`'s protective branch (fact 4a); interest accrues; hash links disabled and tagged "simulated" |
 | S6 Close | `#sandbox/position` (close state; `#sandbox/close` redirects here) | Shortfall exists (interest), wallet has enough USDC, so the transfer step runs without a faucet panel; all steps instant |
 | S7 Closed | `#sandbox/position` (closed state; `#sandbox/closed` redirects here) | Start over reuses the simulated vault at the deposit step |
 
@@ -394,6 +394,42 @@ The same adapter interfaces are what the Playwright fixtures drive, so the sandb
 - Exit: **Leave sandbox** in the banner and the wallet slot; clears all sandbox state (`sessionStorage` only) and returns to `#start`. Sandbox state is never written to the `localStorage` keys the live flow uses.
 - Never mix: the live adapter is never instantiated while the sandbox is active, and vice versa. No live read is shown inside the sandbox, including prices.
 - Record for README: the previous app deliberately removed demo balances and demo routes. The sandbox is allowed only because it is isolated, labelled on every screen, and makes no claims about the live protocol. `README.md` and `docs/audit-status.md` must say so when it lands.
+
+### 8a.1 Market crash simulation (S10 revised; product owner, 11 Nov 2026)
+
+**Why.** In the first sandbox the price dropped on a timer and the agent's `Reduced` row simply appeared: the user had deposited ETH, received USDC, and a moment later held less ETH and less debt without seeing why, or what the alternative was. The sandbox exists to show what the agent is for, so the crash is run by the user, step by step, and every stage shows the position **without the agent** next to the position **with the agent**.
+
+**Where.** On `#sandbox/position`, a **Market crash** card sits directly under the hero (above the Agent and Market cards). Before the run it reads: "See what happens in a crash. The price of ETH falls 45% and recovers; compare your position with and without the agent." and one big primary button **Run market crash**. There is no timer anywhere in the sandbox: nothing moves until the button is pressed.
+
+**The run.** Three stages. Each shows the price, a two-column comparison (**Without the agent** · **With the agent**) and one button that advances to the next stage; the user reads at their own pace. The hero, the LTV track and Recent actions always show the *with the agent* position, because that is the sandbox position; the *without* column is a calculation and is labelled "what Morpho would have done".
+
+| Stage | Price (ETH/USD) | Without the agent (calculation) | With the agent (the sandbox position) | Button |
+|---|---|---|---|---|
+| Open (reference, shown above the stages) | $3,210 | 0.5 WETH ($1,605) · debt 802.5 USDC · LTV 50% · 802.5 USDC in your wallet | same | — |
+| 1 · "The price falls 30%" | $2,247 | LTV 71.4%. Nothing happens; the position waits for the market. | LTV crosses 70%: the agent sells 0.214 WETH at $2,247 to repay 481.5 USDC. Collateral 0.286 WETH, debt 321 USDC, LTV 50%. A `Reduced` row appears in Recent actions. | **Next: the price keeps falling** |
+| 2 · "The price falls further, 45% in total" | $1,765.50 | LTV 90.9%, above the 86% liquidation line. A liquidator repays the whole 802.5 USDC debt and takes 0.474 WETH (debt × 1.0438, Morpho's liquidation incentive at 86% LLTV). **You keep 0.026 WETH ($45).** | LTV 63.6%, below the 70% line: no action. Collateral 0.286 WETH, debt 321 USDC. | **Next: the price recovers** |
+| 3 · "The price recovers to $3,210" | $3,210 | You hold 0.026 WETH ($82). The recovery does not help: the collateral is gone. | 0.286 WETH ($917) against 321 USDC of debt: **$596 of collateral value is yours.** | **Done** |
+
+Below the stage 3 table one summary line: "Collateral value net of debt after the crash: **$596 with the agent, $82 without**. Both keep the 802.5 USDC borrowed at open." After Done the card stays in its finished state ("Crash simulated · price back at $3,210") with the comparison kept visible; the run is once per position, and **Start over** (S7) offers it again. **Close position** stays available at every stage (it closes the *with the agent* position at the current price).
+
+**Numbers (engine derives them, never hard-codes).** Open 0.5 WETH at $3,210, borrow 50%. Stage 1 price × 0.70; the protective reduce repays `repayToLtv(debt, value, target)` (fact 4a, `Executor.reduce` protective branch; not budget-limited, not recorded against the discretionary budget). Stage 2 price × 0.55 of the start; the liquidation calculation follows Morpho Blue: liquidation incentive factor `LIF = min(1.15, 1 / (1 − 0.3 × (1 − LLTV)))` = 1.04384 at LLTV 86%, seized collateral `= debt × LIF / price` (capped at the collateral; the remainder is the user's), with the Morpho Blue source cited in the engine (`Morpho.sol` `liquidate`, constants `LIQUIDATION_CURSOR` 0.3 and `MAX_LIQUIDATION_INCENTIVE_FACTOR` 1.15). Stage 3 price back to the start. Interest keeps accruing on the *with* position during the run as it does now, so the debt may read a few cents above 321.
+
+| Figure | Value |
+|---|---|
+| Stage 1 repay / sold | 481.5 USDC / 0.214286 WETH |
+| Stage 2 without: seized / kept | 0.474473 WETH / 0.025527 WETH ($45.07) |
+| Stage 3 without: kept value | $81.94 |
+| Stage 3 with: collateral value / debt / net | $917.14 / 321.0 USDC / $596.14 |
+
+**Honesty rules.**
+- The price path is scripted and chosen to show both outcomes; the card says so once: "Scripted price path; numbers are illustrative."
+- The *without* column is labelled a calculation of what Morpho would have done; the *with* column is the sandbox position's state, and Recent actions show the agent's row with the same figures.
+- The agent sold at −30%; the comparison is with the same loan without the agent, not with holding ETH without a loan. The stage 3 summary therefore states net collateral value, and the card never says "profit".
+- No live price is used (§8a "never mix"); the sandbox price is its own.
+
+**Engine changes.** Remove `DROP_AFTER_OPEN_MS` and `REDUCE_AFTER_DROP_MS` (no timed events). Add explicit stage calls on the sandbox `ProtocolAdapter` (`crash.run()`, `crash.next()`), a stage state on the simulated vault, and the pure *without* calculation beside the existing `repayToLtv` use. The S10 artboard is superseded by this section; S9 and S11 are unchanged.
+
+**Tests.** Engine unit tests with the figures above (exact, from the same bigint math). Browser: run the three stages, assert both columns per stage, the `Reduced` row after stage 1, Close position working at stage 2, Done and the finished card, Start over offering the run again. Screenshots: the card before the run and at stage 3.
 
 ---
 
