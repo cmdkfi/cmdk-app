@@ -10,6 +10,15 @@ export function formatUnits(value: bigint, decimals: number, maxFraction = 4, gr
   return `${negative ? '-' : ''}${wholeText}${kept ? `.${kept}` : ''}`
 }
 
+/**
+ * The token and dollar figures of S5, shared by the hero (screens/Position.tsx), Recent actions (flow/position.ts) and
+ * the sandbox's Market crash card (flow/crash.ts), so one quantity reads the same everywhere on the screen (product
+ * owner, 11 Nov): USDC and dollars to cents, WETH to 6 decimals, all truncated.
+ */
+export const usdcText = (v: bigint) => `${formatUnits(v, 6, 2)} USDC`
+export const wethText = (v: bigint) => `${formatUnits(v, 18, 6)} WETH`
+export const dollarText = (usdcUnits: bigint) => `$${formatUnits(usdcUnits, 6, 2)}`
+
 /** WAD fraction as a percentage, e.g. 0.5e18 → "50%". */
 export function formatWadPercent(wad: bigint, maxFraction = 1): string {
   return `${formatUnits(wad * 100n, 18, maxFraction, false)}%`

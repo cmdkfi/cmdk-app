@@ -159,6 +159,8 @@ export interface CrashControl {
   read(): Promise<CrashView | null>
   run(): Promise<void>
   next(): Promise<void>
+  /** Start over: the price back to the start before the new position opens (§8a.1); refused while a position is open. */
+  resetPrice(): Promise<void>
 }
 
 export type Fetched<T> = { ok: true; at: number; value: T } | { ok: false; at: number; error: string }

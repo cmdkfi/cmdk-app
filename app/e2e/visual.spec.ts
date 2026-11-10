@@ -223,7 +223,7 @@ test('Sandbox S5: Market crash at stage 3', async ({ page, context, fx }) => {
   await card.getByRole('button', { name: 'Run market crash' }).click()
   await card.getByRole('button', { name: 'Next: the price keeps falling' }).click()
   await card.getByRole('button', { name: 'Next: the price recovers' }).click()
-  await expect(card.locator('.crash-summary')).toContainText('$596 with the agent, $82 without')
+  await expect(card.locator('.crash-summary')).toContainText('$596.14 with the agent, $81.94 without')
   await expect(page.locator('.event').filter({ hasText: 'Reduced' })).toHaveCount(1)
   await shot(page, 'sandbox-s5-crash-stage3')
 })

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Address } from 'viem'
 import { useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
-import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition } from '../components/data.ts'
+import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition, useSandboxPriceReset } from '../components/data.ts'
 import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
 import { ExtLink } from '../components/Sandbox.tsx'
 import { StepRow } from '../components/StepRow.tsx'
@@ -13,7 +13,7 @@ import { defaultDeposit } from '../flow/amount.ts'
 import { closeShortfall, newCloseRecord, startOverAllowed, visibleCloseSteps, type CloseStepId } from '../flow/close.ts'
 import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
-import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
+import { dollarText, formatUnits, formatWadPercent, shortAddress, usdcText, wethText } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
 import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, positionVariant, type AgentState, type Variant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
@@ -24,8 +24,8 @@ const BASE_SEPOLIA = 84532
 /** The one close reason that keeps the button usable: clicking reads the plan again. */
 const PLAN_FAILED = 'The amount to repay could not be read. Click to read it again.'
 
-const usdc = (v: bigint) => `${formatUnits(v, 6, 2)} USDC`
-const weth = (v: bigint) => `${formatUnits(v, 18, 6)} WETH`
+const usdc = usdcText
+const weth = wethText
 const pctNum = (wad: bigint) => Number(wad * 10_000n / 10n ** 18n) / 100
 const ago = (seconds: number) => (seconds < 90 ? `${Math.max(0, Math.round(seconds))} s ago` : seconds < 5400 ? `${Math.round(seconds / 60)} min ago` : `${Math.round(seconds / 3600)} h ago`)
 const date = (secs: number | bigint) => new Date(Number(secs) * 1000).toLocaleString()
@@ -278,6 +278,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   // read on S5 and on Close position; while a close runs it is re-read every 10 s for the summary rows (a fresh read)
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed', closing)
   const [, setAmount] = useSessionValue(mode, 'amount', defaultDeposit(mode))
+  const resetSandboxPrice = useSandboxPriceReset()
 
   if (!app || !vaultId) return <section className="page page--tight" aria-labelledby="screen-title"><h1 id="screen-title">Your position</h1><p className="muted small" role="status">Reading your vault…</p></section>
   if (!view) {
@@ -326,8 +327,10 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     setReview(false)
     close.begin(newCloseRecord({ factory: app.config.near.factory, owner, vault: closeVault, now: Date.now() }))
   }
-  const startOver = () => {
+  const startOver = async () => {
     if (!owner) return
+    // sandbox only: the price back to $3,210 before the new position opens, so the crash reproduces §8a.1 (PRD §8a.1)
+    await resetSandboxPrice()
     clearCloseRecord(mode, app.config.near.factory, owner, vaultId)
     setAmount(defaultDeposit(mode))
     window.location.hash = href('start')
@@ -355,7 +358,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
       </div>}
       {variant === 'closed' && <div className="stack-8 close-action" style={{ justifyItems: 'end', maxWidth: 420, textAlign: 'right' }}>
         {canStartOver
-          ? <button type="button" className="btn primary" onClick={startOver}>Start over</button>
+          ? <button type="button" className="btn primary" onClick={() => { void startOver() }}>Start over</button>
           : <p className="small">Start over appears once your position address holds no WETH and no more than 0.01 USDC.</p>}
         <p className="muted small create-action__small">Start over reuses this vault: no new vault is created.</p>
       </div>}
@@ -369,7 +372,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
 
     <section className="cols-3" aria-label="Balances">
       {figure('Debt', debtN, debtU, `with interest accrued to block ${view.blockNumber.toString()}`)}
-      {figure('Collateral', collN, collU, value !== null ? `≈ $${formatUnits(value, 6, 2)} at the market oracle` : <Unavailable>value unavailable</Unavailable>)}
+      {figure('Collateral', collN, collU, value !== null ? `≈ ${dollarText(value)} at the market oracle` : <Unavailable>value unavailable</Unavailable>)}
       {figure('LTV', market?.ltv != null ? formatWadPercent(market.ltv) : debt > 0n && collateral === 0n ? 'unbounded' : <Unavailable />, null, null)}
     </section>
     {market && <LtvTrack m={market} />}

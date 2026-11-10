@@ -151,7 +151,7 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 158 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 159 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium

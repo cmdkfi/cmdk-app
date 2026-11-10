@@ -1,7 +1,7 @@
 // S5 position screen rules (PRD S5), pure: agent status, current market, sell budget, variant, event descriptions.
 import type { Address } from 'viem'
 import type { ActivityItem, AgentFacts, PositionMarket, PositionView } from '../adapters/types.ts'
-import { formatUnits, formatWadPercent } from './format.ts'
+import { formatWadPercent, usdcText, wethText } from './format.ts'
 
 /**
  * Phase 7b: 'Outdated' — the vault approved another agent version than the published one, so the running agent does
@@ -116,8 +116,8 @@ export function positionVariant(view: Pick<PositionView, 'markets'>, closeRecord
 export type Described = { who: 'You' | 'Agent' | 'Transfer'; text: string }
 type Ctx = { owner: Address; positionAddress: Address; weth: Address; usdc: Address; marketLabels: Record<string, string> }
 
-const usdc = (v: unknown) => `${formatUnits(v as bigint, 6, 2)} USDC`
-const weth = (v: unknown) => `${formatUnits(v as bigint, 18, 6)} WETH`
+const usdc = (v: unknown) => usdcText(v as bigint)
+const weth = (v: unknown) => wethText(v as bigint)
 const pct = (v: unknown) => formatWadPercent(v as bigint)
 const label = (ctx: Ctx, id: unknown) => ctx.marketLabels[String(id).toLowerCase()] ?? 'unknown'
 

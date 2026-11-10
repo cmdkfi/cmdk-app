@@ -299,6 +299,18 @@ export class SandboxEngine {
     this.save()
   }
 
+  /**
+   * Start over in the sandbox (PRD §8a.1, product owner 11 Nov): the price returns to $3,210 before the new position
+   * opens, so every crash run reproduces the §8a.1 stages. Refused while a position is open.
+   */
+  resetPrice() {
+    this.advance()
+    const v = this.s.vault
+    if (v && (v.collateral > 0n || v.principal > 0n)) throw new Error('A simulated position is still open.')
+    this.s.price = START_PRICE
+    this.save()
+  }
+
   /** The next crash stage, advanced by the user; after the third, Done finishes the run. */
   crashNext() {
     this.advance()

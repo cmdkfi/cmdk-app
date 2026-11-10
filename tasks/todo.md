@@ -515,3 +515,15 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - Browser: the full run with both columns per stage, the `Reduced` row, the hero at 63.6%, the summary, Done and the finished card, still with no network request and no localStorage. A new scenario covers Close position at stage 2, Start over, and the crash offered again.
   - Two screenshots (before the run, at stage 3) from an engine state seeded at the frozen clock; the S8 baseline was updated for its new copy.
 
+**Phase 11 follow-up (11 Nov 2026, product owner's acceptance with two changes).**
+- *One format:*
+  - The card now formats every number with the hero's formatters. `usdcText`, `wethText` and `dollarText` are exported from `flow/format.ts` and used by the hero, Recent actions and the card. The card's own rounding is removed, and the price uses the hero's dollar format (`$1,765.5`).
+  - The copy tests compare against engine values formatted with those functions.
+  - The browser run checks that the card's with-the-agent collateral, debt and LTV equal the hero's text.
+  - PRD §8a.1 notes that its figures are approximate prose. Lesson added.
+- *Start over:*
+  - In the sandbox, Start over resets the price to $3,210 before it navigates. This is `crash.resetPrice()` on the sandbox adapter; the engine refuses it while a position is open, and the live adapter has no `crash`, so it does nothing there. The quote is re-read, so S1 shows "about 802.5 USDC" again.
+  - Engine test: after a close at stage 2, the reset and a new open run the §8a.1 stages. Browser test: after Start over, S1 shows 802.5 USDC and the new run opens at $3,210 and falls to $2,247.
+  - Noted in PRD §8a.1.
+- *Left as is:* a stage row is a snapshot. If the user waits minutes, the live hero's debt can move past the snapshot's last cent.
+

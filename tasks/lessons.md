@@ -85,3 +85,8 @@
 - **What happened:** S2 said the agent sells "never more than 20% of your collateral per day", taken from the corridor's `sell_budget` parameter. `Executor.reduce` clamps to that budget only in its discretionary branch; a protective reduce above the act line sells to target with no budget clamp and is not counted (`Executor.sol` l.261-266, l.296; `agent/src/logic.rs` l.174). The promise was false. It surfaced while scripting the sandbox's price drop, whose "back to 50%" outcome looked impossible under the 20% cap; I asked with the wrong premise, and the product owner corrected it from the code.
 - **Rule:** every promise in copy (limits, caps, "never", "at most") is checked against every branch of the contract function that enforces it, with the line cited, before it ships; a parameter's name is not its semantics.
 - **Rule:** when a scenario looks impossible under a stated rule, read the enforcing code before proposing to bend the scenario or the rule.
+
+## One quantity, one format on a screen (Phase 11, 11 Nov 2026)
+**Mistake:** to make the sandbox crash card read exactly like the PRD's prose (0.286 WETH, $596, $82), I gave the card its own rounding, while the hero beside it truncated (320.99 USDC in the hero, 321 USDC in the card). The product owner corrected it: the same quantity must never read differently on one screen; spec figures in prose are approximate.
+**Rule:** a new panel formats numbers with the screen's existing formatters (shared from `flow/format.ts`), never with a local rule chosen to match spec prose. Tests compare against formatted engine values, not the spec sentence. When spec prose and the app's number format disagree, use the app's format and say so; don't add a second format.
+

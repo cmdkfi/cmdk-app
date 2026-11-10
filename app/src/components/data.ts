@@ -188,3 +188,18 @@ export function useCrashStep() {
     onSettled: () => Promise.all(['crash', 'position', 'agent', 'activity', 'close-plan'].map(key => queryClient.invalidateQueries({ queryKey: [key, kind] }))),
   })
 }
+
+/**
+ * Start over's sandbox step (PRD §8a.1): the simulated price back to the start before the new position opens, and the
+ * quote re-read so S1 shows it. On the live adapter (no `crash`) it does nothing.
+ */
+export function useSandboxPriceReset() {
+  const { kind, protocol } = useAdapters()
+  const queryClient = useQueryClient()
+  return async () => {
+    if (!protocol.crash) return
+    await protocol.crash.resetPrice()
+    await queryClient.invalidateQueries({ queryKey: ['quote', kind] })
+  }
+}
+

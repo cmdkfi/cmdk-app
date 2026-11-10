@@ -177,3 +177,23 @@ test('sandbox market crash: Close position works mid-run; Start over (a new open
   s.e.crashRun()
   assert.equal(s.e.state().vault.crash.stages.length, 1)
 })
+
+test('sandbox Start over: the price returns to $3,210 before the new position opens; refused while a position is open', () => {
+  const s = engineAt()
+  openPosition(s)
+  s.e.crashRun(); s.e.crashNext() // closed at stage 2, the price at $1,765.50
+  assert.throws(() => s.e.resetPrice(), /still open/)
+  const debt = s.e.debt()
+  s.e.walletTx({ kind: 'transfer', token: 'usdc', amount: debt + debt / 100n + 10n ** 6n })
+  s.e.ownerCall('close', { market: 'live' }, 3); s.tick(STAGE_MS)
+  assert.equal(s.e.price(), 17655n * 10n ** 23n)
+  s.e.resetPrice()
+  assert.equal(s.e.price(), START_PRICE)
+  // the next run reproduces the §8a.1 stages
+  const deposit = 5n * 10n ** 17n
+  s.e.walletTx({ kind: 'wrap', amount: deposit }); s.e.walletTx({ kind: 'transfer', token: 'weth', amount: deposit })
+  s.e.ownerCall('open', { collateral_in: (s.e.state().vault.idle.weth).toString(), target_ltv: pct(50).toString() }, 4); s.tick(STAGE_MS)
+  s.e.crashRun()
+  assert.equal(s.e.state().vault.crash.start.price, START_PRICE)
+  assert.equal(s.e.state().vault.crash.stages[0].price, 2247n * 10n ** 24n)
+})

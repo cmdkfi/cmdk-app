@@ -156,6 +156,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       },
       run: async () => engine.crashRun(),
       next: async () => engine.crashNext(),
+      resetPrice: async () => engine.resetPrice(),
     },
   }
 }

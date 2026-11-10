@@ -1,10 +1,9 @@
 // The sandbox's Market crash card (PRD §8a.1, Phase 11): its copy, built from the engine's figures (CrashView). The
-// sentences are §8a.1's; every number comes from the view. Figures are rounded to the precision §8a.1 prints (WETH to
-// 3 decimals, USDC to cents, values to whole dollars, LTV to 0.1%) so the card reads as the PRD does. This is the one
-// place in the app that rounds instead of truncating (flow/format.ts): these are illustrative figures of a scripted
-// path, not balances.
+// sentences are §8a.1's; every number comes from the view and is formatted exactly as the hero and Recent actions
+// format it (flow/format.ts: truncated, same decimals), so one quantity never reads differently on S5. The figures
+// printed in §8a.1 are approximate prose (product owner, 11 Nov).
 import type { CrashStage, CrashView } from '../adapters/types.ts'
-import { formatUnits } from './format.ts'
+import { dollarText, formatUnits, formatWadPercent, usdcText, wethText } from './format.ts'
 
 /** A sentence part; `strong` parts are bold (§8a.1 bolds "You keep …", "… is yours." and the summary figures). */
 export type Seg = string | { strong: string }
@@ -26,21 +25,13 @@ export const WITH_HEAD = 'With the agent'
 export const WITH_NOTE = 'Your sandbox position'
 const NEXT = ['Next: the price keeps falling', 'Next: the price recovers', 'Done']
 
-function rounded(value: bigint, decimals: number, fraction: number): string {
-  const step = 10n ** BigInt(decimals - fraction)
-  return formatUnits((value + step / 2n) / step * step, decimals, fraction)
-}
-const weth = (v: bigint) => `${rounded(v, 18, 3)} WETH`
-const usdc = (v: bigint) => `${rounded(v, 6, 2)} USDC`
-const dollars = (v: bigint) => `$${rounded(v, 6, 0)}`
-const pct = (wad: bigint | null) => (wad === null ? 'unbounded' : `${rounded(wad * 100n, 18, 1)}%`)
+const weth = wethText
+const usdc = usdcText
+const dollars = dollarText
+const pct = (wad: bigint | null) => (wad === null ? 'unbounded' : formatWadPercent(wad))
 
-/** Oracle price (1e36 scale; 6-decimal loan, 18-decimal collateral) as dollars per ETH, with cents only when there are any. */
-export function priceText(price: bigint): string {
-  const cents = (price + 5n * 10n ** 21n) / 10n ** 22n
-  const whole = formatUnits(cents / 100n, 0, 0)
-  return cents % 100n === 0n ? `$${whole}` : `$${whole}.${(cents % 100n).toString().padStart(2, '0')}`
-}
+/** Oracle price (1e36 scale; 6-decimal loan, 18-decimal collateral) as the dollar value of one ETH, formatted as the hero's values. */
+export const priceText = (price: bigint): string => dollarText(price / 10n ** 18n)
 
 function stageTitle(s: CrashStage, start: bigint): string {
   if (s.price >= start) return `${s.index} · The price recovers to ${priceText(s.price)}`
