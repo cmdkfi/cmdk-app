@@ -46,7 +46,7 @@ test('active position: hero, agent, market, idle line and recent actions render 
   }
   // agent card: /agent/vaults row + NEAR key check; sell budget (0.1 + 0.005) × 20 % − 0.005 = 0.016 WETH
   await expect(card(page, 'Agent').getByRole('status')).toHaveText('Active')
-  await expect(fact(page, 'Agent', 'May do')).toHaveText('Reduce · migrate to backup · exit · never increases your debt (a move may round it up by 0.000001 USDC)')
+  await expect(fact(page, 'Agent', 'May do')).toHaveText('Reduce · migrate to backup · exit · never increases your debt (a move may round it up by up to 0.000002 USDC)')
   await expect(page.getByRole('heading', { name: 'Risk corridor' })).toBeVisible()
   await expect(fact(page, 'Agent', 'Last check')).toHaveText(/\(\d+ s ago\)$/)
   await expect(fact(page, 'Agent', 'Discretionary sell budget left today')).toHaveText('0.016 WETH of 0.021 WETH (20% per rolling 24 h)')

@@ -129,8 +129,8 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
     <div className="card-head"><h3 id="agent-title">Agent</h3><span className={`tag${status ? AGENT_TAG[status.state] : ''}`} role="status">{status ? status.state : 'Reading…'}</span></div>
     {status?.detail && <p className="muted small agent-detail">{status.detail}</p>}
     <dl className="rows">
-      {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it cannot increase debt (protocol README: a move may add one loan-token unit of rounding) */}
-      {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increases your debt (a move may round it up by 0.000001 USDC)`)}
+      {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it cannot increase debt (protocol README: a move may add up to two loan-token units of rounding) */}
+      {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increases your debt (a move may round it up by up to 0.000002 USDC)`)}
       {row2('Last check', row?.last_tick_unix ? `${date(row.last_tick_unix)} (${ago(now - row.last_tick_unix)})` : <Unavailable>none reported</Unavailable>)}
       {row2('Key expires', agent.data?.vaultAgent ? date(agent.data.vaultAgent.expires_at) : agent.data ? <Unavailable>no key on your vault</Unavailable> : <Unavailable />)}
       {row2('Discretionary sell budget left today', collateral === 0n

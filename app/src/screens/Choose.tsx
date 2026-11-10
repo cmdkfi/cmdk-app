@@ -54,7 +54,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Borrow USDC against ETH. Keep risk on autopilot.</h1>
-      <p className="muted">Choose what you deposit, what you borrow and where. An agent watches the position and reduces risk within fixed limits. It can never increase your debt on this venue, apart from 0.000001 USDC of rounding when it moves the loan.</p>
+      <p className="muted">Choose what you deposit, what you borrow and where. An agent watches the position and reduces risk within fixed limits. It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.</p>
     </div>
     <Catalogue />
     {app.isError && <p className="notice notice--warning" role="alert">The app configuration could not be loaded, so no estimate can be shown.</p>}
