@@ -1,7 +1,7 @@
 # cmdk testnet app — guided flow
 
 The React/Vite application in `app/` guides one ETH → USDC position on Morpho (Base Sepolia, chain 84532), protected by
-the cmdk agent through a NEAR testnet vault. It is deployed to https://testnet.cmdk.fi from `feat/guided-flow` by hand (`deploy testnet`, workflow_dispatch) until PR #80 merges; after the merge, from `main`. **Testnet only,
+the cmdk agent through a NEAR testnet vault. It is deployed to https://testnet.cmdk.fi from `main` on every push (`deploy testnet`). **Testnet only,
 unaudited, no real funds. Agent protection is risk management, not insurance.**
 
 The protocol source of truth is [cmdkfi/app](https://github.com/cmdkfi/app) (contracts, vault, agent, relayer). This app
