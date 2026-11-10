@@ -95,7 +95,7 @@ const live = (env: Env, v: { markets: { id: string; collateral: bigint }[] }) =>
 const setupSpec: OwnerSpec = {
   id: 'setup',
   complete: v => v.setupComplete,
-  intent: (_v, env) => setupIntent(env, 'setup'),
+  intent: (v, env) => setupIntent(env, 'setup', v),
 }
 
 const openSpec: OwnerSpec = {

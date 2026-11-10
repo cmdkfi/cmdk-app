@@ -46,6 +46,8 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
   const explorer = app?.guided.network.blockExplorerUrls[0]?.replace(/\/$/, '')
   const nearblocks = app?.guided.help.nearblocks.replace(/\/$/, '')
   const vaultLink = (id: string) => (nearblocks ? <ExtLink href={`${nearblocks}/address/${id}`}>{id}</ExtLink> : id)
+  // the Executor setup approves: the published one, which the vault must hold before setup is signed (runner.ts setupIntent)
+  const executors = app ? [...new Set(app.config.createVault.markets.map(m => m.executor))].join(', ') : ''
   const r = ob.record
 
   if (!r) {
@@ -95,7 +97,7 @@ export function Progress({ mode, href, discovery, resume }: Omit<ScreenProps, 'b
     <div className="split-14">
       <section className="surface" aria-label="Steps">
         <ol className="steps">
-          {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} active={id === active}
+          {STEPS.map((id, index) => <StepRow key={id} title={TITLE[id]} why={id === 'setup' && executors ? `${WHY[id]} Executor: ${executors}.` : WHY[id]} index={index + 1} step={r.steps[id]} explorer={explorer} now={now} onAct={kind => ob.act(id, kind)} active={id === active}
             prompt={id === 'wrap' || id === 'transfer' ? 'transaction' : 'signature'}
             extra={id === 'withdraw' && r.steps.withdraw.status === 'done' && chainOk && mode === 'live' ? <p className="note"><ShowUsdcButton /></p> : undefined} />)}
         </ol>

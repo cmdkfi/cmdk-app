@@ -1,6 +1,7 @@
 // Vault and factory views on NEAR (cmdkfi/app 47fd4fb).
 import { NearRpcError, viewFunction } from './rpc.ts'
 import type { NearRpc } from './rpc.ts'
+import type { Policy } from '../relayer/client.ts'
 
 type Fetch = typeof fetch
 
@@ -62,6 +63,21 @@ export function vaultId(factory: string, n: number): string {
   return `v${n}.${factory}`
 }
 
+/**
+ * The vault holds exactly the published policy: the same cooldown and the same markets, each with the published
+ * executor, tokens and slice_max (hex case-insensitive; `get_state` prints lowercase, vault/src/lib.rs l.539-557). The
+ * factory and the relayer check formats only (vault/factory/src/lib.rs `validate` l.84-96, scripts/relayer.py
+ * `validate_policy` l.231-253), so anyone can create a vault for any owner with any executor, and `setup` approves the
+ * executor stored in the vault (vault/src/lib.rs l.289-320).
+ */
+export function policyMatches(state: Pick<VaultState, 'cooldown_secs' | 'markets'>, policy: Policy): boolean {
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  const match = (m: VaultMarket, p: Policy['markets'][number]) => same(m.id, p.id) && same(m.executor, p.executor)
+    && same(m.loan_token, p.loan_token) && same(m.collateral_token, p.collateral_token) && m.slice_max === p.slice_max
+  return state.cooldown_secs === policy.cooldown_secs && state.markets.length === policy.markets.length
+    && state.markets.every(m => policy.markets.some(p => match(m, p))) && policy.markets.every(p => state.markets.some(m => match(m, p)))
+}
+
 export type OwnedVault = { accountId: string; number: number; state: VaultState }
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -79,10 +95,11 @@ async function readState(rpcUrl: NearRpc, account: string, fetcher: Fetch): Prom
 
 /**
  * The owner's newest vault numbered from `firstVaultNumber` (PRD D4, R8): scans v<count> down to v<first>, two at a
- * time, and stops at the first vault the owner holds. Any account above it that cannot be read makes the answer
- * unknown and throws; nothing below the cutoff is read. Owner match is case-insensitive (get_state hex vs wallet).
+ * time, and stops at the first vault the owner holds with the published policy (`policyMatches`); an owned vault with
+ * another policy is skipped like another owner's. Any account above it that cannot be read makes the answer unknown
+ * and throws; nothing below the cutoff is read. Owner match is case-insensitive (get_state hex vs wallet).
  */
-export async function discover(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
+export async function discover(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, policy: Policy, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
   const { count } = await getFactoryConfig(rpcUrl, factory, fetcher)
   const wanted = owner.toLowerCase()
   for (let top = count; top >= firstVaultNumber; top -= 2) {
@@ -93,23 +110,24 @@ export async function discover(rpcUrl: NearRpc, factory: string, owner: string, 
         const reason = result.reason
         throw reason instanceof NearRpcError ? reason : new NearRpcError(`v${batch[index]} could not be read.`, true)
       }
-      if (result.value.owner.toLowerCase() === wanted) return { accountId: vaultId(factory, batch[index]), number: batch[index], state: result.value }
+      if (result.value.owner.toLowerCase() === wanted && policyMatches(result.value, policy)) return { accountId: vaultId(factory, batch[index]), number: batch[index], state: result.value }
     }
   }
   return null
 }
 
 /**
- * D4 with a remembered vault (PRD §9 5): when the owner's last known vault (from the cutoff) still names this owner,
- * one get_state answers; when it does not, or cannot be read, the factory scan runs as in `discover`.
+ * D4 with a remembered vault (PRD §9 5): when the owner's last known vault (from the cutoff) still names this owner
+ * and holds the published policy, one get_state answers; otherwise, or when it cannot be read, the factory scan runs as
+ * in `discover`.
  */
-export async function discoverWithHint(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, hint: string | null, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
+export async function discoverWithHint(rpcUrl: NearRpc, factory: string, owner: string, firstVaultNumber: number, policy: Policy, hint: string | null, fetcher: Fetch = fetch): Promise<OwnedVault | null> {
   const suffix = `.${factory}`
   const number = hint?.startsWith('v') && hint.endsWith(suffix) ? Number(hint.slice(1, -suffix.length)) : 0
   if (hint && Number.isSafeInteger(number) && number >= firstVaultNumber && hint === vaultId(factory, number)) {
     const state = await readState(rpcUrl, hint, fetcher).catch(() => null)
-    if (state && state.owner.toLowerCase() === owner.toLowerCase()) return { accountId: hint, number, state }
+    if (state && state.owner.toLowerCase() === owner.toLowerCase() && policyMatches(state, policy)) return { accountId: hint, number, state }
   }
-  return discover(rpcUrl, factory, owner, firstVaultNumber, fetcher)
+  return discover(rpcUrl, factory, owner, firstVaultNumber, policy, fetcher)
 }
 

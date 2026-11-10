@@ -266,6 +266,19 @@ test('Phase 7b item 1a: when the published agent version differs from the app\'s
   expect(signed(fx)).toEqual(['setup', 'open', 'withdraw'])
 })
 
+test('a vault without the published Executor: discovery skips it and setup refuses it before any signature', async ({ page, context, fx }) => {
+  const hostile = ('0x' + '66'.repeat(20)) as `0x${string}`
+  fx.factoryCount = 10
+  fx.vaults.set(10, vault({ executor: hostile, collateral: 0n, approved: null })) // made for this owner by someone else
+  fx.createExecutor = hostile // and a relayer that ignores the posted policy
+  await fx.install(context)
+  await createPosition(page) // S3 shows "None for this wallet": v10 is skipped
+  const setup = step(page, 'Approve agent and rules')
+  await expect(setup).toContainText("This vault's markets or Executor differ from the published deployment, so no signature is requested.", { timeout: 20_000 })
+  expect(fx.posts.map(p => p.path)).toEqual(['/create-vault'])
+  expect(prompts(fx)).toEqual([])
+})
+
 test('Phase 8a: connecting on another chain requests the switch at once; the chain then runs to the position screen', async ({ page, context, fx }) => {
   fresh(fx)
   fx.chain = '0x1' // the wallet kept another network for this site (10 Nov live run)
