@@ -175,7 +175,7 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] Port `docs/mockups/cmdk.css` as the app's stylesheet (tokens, type scale, spacing, 960/1120 columns, tiles, rows, steps, checks, LTV track, help panels, sheets); keep the CmdkReference font.
 - [x] Rebuild each screen's markup to the artboard structure: S0 header, S1 catalogue + amount card, S2 corridor + three lists, S3 facts + help panel variant, S4 steps + verification rail, S5 hero/corridor/agent/market/actions, S6 close steps + USDC panel, S7 closed, sandbox banner/sheet (for Phase 6b).
 - [x] Screenshot comparison per screen in the browser suite (desktop viewport, fixture data) with a tolerance; update the baselines only on purpose.
-- [ ] Linux baselines: the product owner runs `frontend quality` on the branch with `visual_baselines: true`; the artifact is reviewed and committed (until then the 12 screenshot tests fail on CI and in `deploy testnet`).
+- [x] Linux baselines: `frontend quality` run on the branch with `visual_baselines: true` (runs 42787573760, then 42787893201 after the input fix); the artifact is reviewed and committed (until then the 12 screenshot tests fail on CI and in `deploy testnet`).
 - [ ] Product owner reviews the deployed preview screen by screen against the canvas before Phase 6b starts.
 
 ## Phase 6b (updated 10 Nov) — Sandbox for production
@@ -431,3 +431,5 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - S7's "Left at position address" figure and its explanatory "Start over" section
   - S1 "Borrow rate … / year" (the app says APR, PRD S1)
 - *Unused components:* `PrototypeControls.tsx`, `VerificationDisclosure.tsx` and `TokenIcon.tsx` were already unused before this phase; their old CSS is gone with `screens.css`.
+
+**Phase 9 baselines (10 Nov 2026).** The first linux set showed an S1 defect macOS hid: with Linux font metrics, the amount input's intrinsic width pushed the input box into the estimate column. Fixed in `cmdk.css` (`.input input{width:0;flex:1}`, `.stack{min-width:0}`; 9da2437); the darwin images did not change. Second run's linux set reviewed screen by screen against darwin: same states (S5 connected, review sheet open, S4 paused with the rail, S6 with Get test USDC), font hinting differs only. The app serves no light theme (`main.tsx` pins `data-theme="dark"`), so no light captures; the light tokens in `prototype-controls.css` are unused. Product owner decisions on the conflicts (10 Nov): CmdkReference stays; the PRD wins on all eleven; the six S4 steps stay and the PRD S4 table is corrected in Phase 10; the frozen artboard copy ("Step N of 6", "Risk corridor", the agent card's "May do" row, the S6 summary rows) is added in Phase 10; the S7 extra figure is skipped.
