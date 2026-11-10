@@ -10,6 +10,18 @@ import { formatUnits, formatWadPercent } from './format.ts'
 export type AgentState = 'Active' | 'Registering' | 'Expired' | 'Revoked' | 'Outdated' | 'Not approved' | 'Unavailable'
 
 export const REGISTERING = 'Registering (usually within a few minutes).'
+
+/**
+ * Phase 7c: the agent card's re-approve button. Only for an open position (variant active, no close chain running):
+ * Outdated → "Approve current agent version", Not approved (revoked while open) → "Approve agent"; null otherwise.
+ * An empty vault is re-approved by S4's setup step instead (classifyVault 'setup').
+ */
+export function approveAction(state: AgentState | null, variant: Variant, closing: boolean): string | null {
+  if (variant !== 'active' || closing) return null
+  if (state === 'Outdated') return 'Approve current agent version'
+  if (state === 'Not approved') return 'Approve agent'
+  return null
+}
 /** agent/src/logic.rs l.653-660 AgentStatus::Replaced: the vault lists another key than the running agent's. */
 export const REPLACED = 'revoked (another key registered)'
 

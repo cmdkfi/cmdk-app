@@ -9,7 +9,7 @@ import { formatUnits, formatWadPercent } from '../flow/format.ts'
 import { activeStep, belowShown, type OnboardingRecord, type RetryKind, type StepId } from '../flow/onboarding.ts'
 import { clearLock, clearRecord, loadRecord, saveRecord } from '../flow/onboarding-record.ts'
 import type { Mode } from '../flow/routes.ts'
-import { confirmed, message, ownerStep, pollJob, prompted, useStepChain, type Env as ChainEnv, type OwnerSpec as ChainSpec } from './runner.ts'
+import { confirmed, message, ownerStep, pollJob, prompted, setupIntent, useStepChain, type Env as ChainEnv, type OwnerSpec as ChainSpec } from './runner.ts'
 
 type Env = ChainEnv<StepId, OnboardingRecord>
 type OwnerSpec = ChainSpec<StepId, OnboardingRecord>
@@ -95,13 +95,7 @@ const live = (env: Env, v: { markets: { id: string; collateral: bigint }[] }) =>
 const setupSpec: OwnerSpec = {
   id: 'setup',
   complete: v => v.setupComplete,
-  // Phase 7b item 1a: approving a measurement the published manifest no longer names costs a signature and leaves the
-  // vault unwatched (v10, 9 Nov); the baked config.json is compared with the manifest right before the prompt
-  intent: async (_v, env) => {
-    if (await env.protocol.configMatchesPublished(env.app)) return { method: 'setup' }
-    env.patch('setup', { status: 'paused', pause: { line: 'This app\'s configuration is behind the published agent version; try again later.', retry: 'check' } })
-    return null
-  },
+  intent: (_v, env) => setupIntent(env, 'setup'),
 }
 
 const openSpec: OwnerSpec = {

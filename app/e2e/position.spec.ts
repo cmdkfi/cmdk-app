@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { test, expect, fixtureLog, ADDRESSES, BASE, LIVE, OWNER, vault, type LiveFixture } from './live-fixture.ts'
+import { test, expect, fixtureLog, ADDRESSES, BASE, LIVE, MEASUREMENT, OWNER, vault, type LiveFixture } from './live-fixture.ts'
 
 const { WETH, USDC, EXECUTOR, NOW, HEAD, DEPLOY } = ADDRESSES
 const VAULT = 'v10.factory.fixture.testnet'
@@ -169,3 +169,65 @@ test('Phase 7b: Show USDC in MetaMask asks the wallet to watch the config USDC (
   expect(fx.watchAssets[1]).toEqual(expected)
 })
 
+
+// Phase 7c: re-approve from S5
+const OLD = { ...MEASUREMENT, compose_hash: '21'.repeat(32) } // the previous agent image's compose hash (v10, 9 Nov)
+const agentStatus = (page: Page) => card(page, 'Agent').locator('.card-s5__status')
+
+test('Phase 7c: an open position under an outdated approval offers "Approve current agent version"; one setup signature, then Registering, then Active', async ({ page, context, fx }) => {
+  activeVault(fx, { approved: OLD, agentKey: false })
+  fx.agentRows = []
+  await fx.install(context)
+  await page.clock.install()
+  await openPosition(page) // classifyVault stays active: S5, not S4
+  await expect(agentStatus(page)).toHaveText('Outdated · Your vault approved an earlier agent version; the running agent does not watch it.')
+  await card(page, 'Agent').getByRole('button', { name: 'Approve current agent version' }).click()
+  const step = card(page, 'Agent').getByRole('listitem', { name: 'Approve the agent version' })
+  await expect(step.getByRole('status')).toHaveText('Done', { timeout: 20_000 })
+  expect(fx.signs.map(text => JSON.parse(text).method)).toEqual(['setup'])
+  const setup = JSON.parse(fx.signs[0]).args
+  expect(setup.measurement).toEqual(MEASUREMENT)
+  expect(setup.markets.every((m: { approve: boolean }) => m.approve === true)).toBe(true)
+  expect(fx.posts.filter(p => p.path === '/owner-call')).toHaveLength(1)
+  await expect(page).toHaveURL(/#position$/)
+  // the vault approves the published version now; the agent has not registered yet
+  await expect(agentStatus(page)).toHaveText('Registering · Registering (usually within a few minutes).', { timeout: 20_000 })
+  await expect(card(page, 'Agent').getByRole('button', { name: 'Approve current agent version' })).toHaveCount(0)
+  // the agent registers: key on the vault, row in its list; the next 30 s poll shows Active
+  fx.vaults.get(10)!.agentKey = true
+  fx.agentRows = [{ slot: 10, vault: VAULT, base_address: BASE, registration: 'registered', agent_status: 'active', expires_at: NOW + 86_400, last_tick_unix: NOW - 30 }]
+  await page.clock.runFor(31_000)
+  await expect(agentStatus(page)).toHaveText('Active', { timeout: 20_000 })
+  expect(fx.signs).toHaveLength(1)
+})
+
+test('Phase 7c: Not approved with an open position offers "Approve agent"; a reload during the call resumes Checking from the lock and prompts nothing', async ({ page, context, fx }) => {
+  activeVault(fx, { approved: null })
+  fx.agentRows = []
+  fx.ownerCallModes = ['answer-503']
+  await fx.install(context)
+  await openPosition(page)
+  await expect(agentStatus(page)).toHaveText('Not approved · Your vault approves no agent version, so no agent watches it.')
+  await card(page, 'Agent').getByRole('button', { name: 'Approve agent' }).click()
+  const step = card(page, 'Agent').getByRole('listitem', { name: 'Approve the agent version' })
+  await expect(step.getByRole('status')).toHaveText('Checking…', { timeout: 20_000 })
+  await expect(step).toContainText('The relayer answered HTTP 503')
+  await expect(page.getByRole('button', { name: 'Close position' })).toBeDisabled()
+  await page.reload()
+  await expect(page).toHaveURL(/#position$/, { timeout: 20_000 })
+  await expect(step.getByRole('status')).toHaveText('Checking…', { timeout: 20_000 })
+  expect(fx.signs).toHaveLength(1)
+  expect(fx.posts.filter(p => p.path === '/owner-call')).toHaveLength(1)
+})
+
+test('Phase 7c: the 1a guard applies on S5: with the app\'s config behind the published version, re-approval pauses before any signature', async ({ page, context, fx }) => {
+  activeVault(fx, { approved: OLD })
+  fx.agentRows = []
+  fx.publishedMeasurement = { ...MEASUREMENT, compose_hash: 'db4f5085'.padEnd(64, '0') } // newer than config.json and than the vault
+  await fx.install(context); await openPosition(page)
+  await card(page, 'Agent').getByRole('button', { name: 'Approve current agent version' }).click()
+  const step = card(page, 'Agent').getByRole('listitem', { name: 'Approve the agent version' })
+  await expect(step).toContainText("This app's configuration is behind the published agent version; try again later.", { timeout: 20_000 })
+  await expect(step.getByRole('button', { name: 'Check again' })).toBeVisible()
+  expect(fx.signs).toEqual([])
+})

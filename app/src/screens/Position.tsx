@@ -6,6 +6,7 @@ import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDi
 import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
 import { StepRow } from '../components/StepRow.tsx'
 import { useClose, type Close } from '../components/useClose.ts'
+import { newApproveRecord, useApprove, type Approve } from '../components/useApprove.ts'
 import { useNow } from '../components/use-now.ts'
 import { defaultDeposit } from '../flow/amount.ts'
 import { closeShortfall, newCloseRecord, startOverAllowed, visibleCloseSteps, type CloseStepId } from '../flow/close.ts'
@@ -13,7 +14,7 @@ import type { LoadedConfig } from '../flow/config.ts'
 import type { PositionVariant } from '../flow/entry.ts'
 import { formatUnits, formatWadPercent, shortAddress } from '../flow/format.ts'
 import { clearCloseRecord } from '../flow/onboarding-record.ts'
-import { actionRows, agentState, backupStatus, budgetFor, currentMarket, positionVariant } from '../flow/position.ts'
+import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, positionVariant, type Variant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 import { VerificationPanel } from './VerificationPanel.tsx'
 
@@ -74,9 +75,27 @@ function LtvTrack({ m }: { m: PositionMarket }) {
   </div>
 }
 
-function AgentCard({ vaultId, market, view, now, verifying, onVerify }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void }) {
+/** Phase 7c: the re-approve call inline on the agent card (button, then its step with the runner's statuses and retries). */
+function ApproveInline({ label, approve, explorer, now, onBegin }: { label: string | null; approve: Approve; explorer: string; now: number; onBegin: (() => void) | null }) {
+  const r = approve.record
+  const step = r?.steps.approve
+  const pending = !!step && step.status !== 'done'
+  return <>
+    {r && step && <ol className="steps steps--inline">
+      <StepRow title={APPROVE_TITLE} why={APPROVE_WHY} index={1} step={step} explorer={explorer} now={now} onAct={kind => approve.act('approve', kind)} />
+    </ol>}
+    {pending && !approve.running && step.status === 'waiting' && <button type="button" className="prototype-button is-primary" onClick={approve.start}>Continue</button>}
+    {label && !pending && onBegin && <button type="button" className="prototype-button is-primary" onClick={onBegin}>{label}</button>}
+  </>
+}
+
+const APPROVE_TITLE = 'Approve the agent version'
+const APPROVE_WHY = 'The agent watches your vault only while your vault approves its exact version (the six measurement values in the published manifest). One signature sets the approval; the rest of your setup is left as it is.'
+
+function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, explorer, onApprove }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; explorer: string; onApprove: (() => void) | null }) {
   const agent = useAgent(vaultId)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
+  const label = approveAction(status?.state ?? null, variant, closing)
   const row = agent.data?.list.ok ? agent.data.list.row : null
   const budget = market ? budgetFor(view, market) : null
   const collateral = view.markets.reduce((sum, m) => sum + m.collateral, 0n)
@@ -93,6 +112,7 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify }: { vaultI
           : <Unavailable>no active corridor</Unavailable>}</dd></div>
     </dl>
     {agent.isError && agent.data && <p className="screen__note" role="alert">The last agent read failed; showing the previous one.</p>}
+    <ApproveInline label={label} approve={approve} explorer={explorer} now={now} onBegin={onApprove} />
     <button type="button" className="link-button" aria-expanded={verifying} aria-controls="verify-panel" onClick={onVerify}>Verify the agent</button>
   </section>
 }
@@ -229,6 +249,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const closeVault = summary ? { accountId: summary.vault.accountId, number: summary.vault.number, baseAddress: summary.vault.baseAddress } : undefined
   const close = useClose(mode, app, owner, chainOk, closeVault, () => undefined)
   const closing = !!close.record && !close.record.completed
+  const approve = useApprove(mode, app, owner, chainOk, closeVault, () => undefined)
   const [review, setReview] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed' && !closing)
@@ -265,6 +286,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   if (!owner || !chainOk) closeReason = 'Connect the vault owner on Base Sepolia to close.'
   else if (stale) closeReason = 'The latest read failed; closing waits for a fresh one.'
   else if (restored) closeReason = 'Refreshing your position…'
+  // one owner call at a time per vault (the shared lock): closing waits for a re-approval in progress (Phase 7c)
+  else if (approve.record && approve.record.steps.approve.status !== 'done') closeReason = 'Waiting for the agent approval to finish.'
   else if (plan.isError) closeReason = PLAN_FAILED
   else if (!plan.data) closeReason = 'Reading the amount to repay…'
   const shortfall = plan.data ? closeShortfall(plan.data) : null
@@ -304,7 +327,9 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     {showIdle && <p className="idle-line">At your position address, outside Morpho: {[idle.weth > 0n && weth(idle.weth), idle.usdc > app.guided.usdcDust && usdc(idle.usdc), idle.eth > 0n && `${formatUnits(idle.eth, 18, 6)} ETH for gas`].filter(Boolean).join(' · ')}</p>}
 
     <div className="cards-s5">
-      <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)} />
+      <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}
+        variant={variant} closing={closing} approve={approve} explorer={explorer}
+        onApprove={owner && closeVault && chainOk && !restored && !stale ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />
     </div>
     {verifying && <div id="verify-panel"><VerificationPanel vaultId={vaultId} poll={false} /></div>}

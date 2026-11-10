@@ -41,8 +41,8 @@ const settle = <T>(p: Promise<T>): Promise<Fetched<T>> => p.then(
 const SHARED_STATE_MS = 5_000
 
 export function createLiveProtocol(): ProtocolAdapter {
-  // S5 only: the position and agent queries of one refresh share one get_state; failures are not kept. The onboarding
-  // and close chains call getState directly and always read live.
+  // S5 only: the position and agent queries of one refresh share one get_state; failures are not kept. The onboarding,
+  // close and re-approve chains call getState directly and always read live; their answer replaces the shared one.
   const shared = new Map<string, { at: number; state: Promise<VaultState> }>()
   const sharedState = (rpcUrl: NearRpc, vaultId: string) => {
     const hit = shared.get(vaultId)
@@ -101,6 +101,9 @@ export function createLiveProtocol(): ProtocolAdapter {
 
     async readVault({ config, guided }, vaultId) {
       const state = await getState(nearRpc(config), vaultId)
+      // a chain's live read is the newest answer: S5's shared one is replaced, so the card re-read after a chain step
+      // (Phase 7c re-approval) shows the new state instead of a copy from before it
+      shared.set(vaultId, { at: Date.now(), state: Promise.resolve(state) })
       const snapshot = await readVaultSnapshot(baseClient(config.baseRpcUrl), state, { weth: guided.base.weth, usdc: guided.base.usdc })
       const measurementApproved = measurementMatches(state.approved, config.agent.measurement)
       return {

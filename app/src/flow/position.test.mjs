@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { actionRows, agentState, backupStatus, budgetFor, currentMarket, describe, positionVariant } from './position.ts'
+import { actionRows, agentState, approveAction, backupStatus, budgetFor, currentMarket, describe, positionVariant } from './position.ts'
 
 const NOW = 2_000_000_000
 const row = (extra = {}) => ({ registration: 'registered', agent_status: 'active', expires_at: NOW + 3600, last_tick_unix: NOW - 30, ...extra })
@@ -147,5 +147,16 @@ test('recent actions: every USDC amount has at most two decimals (Phase 7b)', ()
   for (const text of texts) {
     assert.match(text, /10\.72 USDC/, text)
     assert.doesNotMatch(text, /\d\.\d{3,} USDC/, text)
+  }
+})
+
+test('Phase 7c: the agent card offers re-approval only for an open position that is Outdated or Not approved, never while closing', () => {
+  assert.equal(approveAction('Outdated', 'active', false), 'Approve current agent version')
+  assert.equal(approveAction('Not approved', 'active', false), 'Approve agent')
+  for (const state of ['Active', 'Registering', 'Expired', 'Revoked', 'Unavailable', null]) assert.equal(approveAction(state, 'active', false), null, String(state))
+  assert.equal(approveAction('Outdated', 'active', true), null) // a close chain holds the vault's one owner-call lock
+  for (const variant of ['empty', 'closed', 'liquidated']) {
+    assert.equal(approveAction('Outdated', variant, false), null, variant)
+    assert.equal(approveAction('Not approved', variant, false), null, variant)
   }
 })

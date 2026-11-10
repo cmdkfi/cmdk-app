@@ -150,6 +150,14 @@ Order: fixes first, deploy, then the phases below.
 - [x] 6. "Show USDC in MetaMask" (`wallet_watchAsset`, ERC20 from config) after the withdraw step and on S5 next to the wallet; browser test that the wallet receives the request with the config address.
 - [x] 7. Registration copy: "usually within a few minutes" (cron now every minute); rehearsal file updated with the recorded values; commit, push, product owner deploys.
 
+## Phase 7c — Re-approve from S5 (product owner, 10 Nov, after Phase 7b; before Phase 8)
+- [x] Visibility rule (pure, unit-tested): an open position (variant active, no close running) whose agent card reads **Outdated** offers "Approve current agent version"; **Not approved** (revoked while open) offers "Approve agent"; nothing else.
+- [x] The button runs a setup-only owner call on the shared runner: resumed setup, `approve: true`, `authorize` from Base, the same `setupArgs` as S4 (PRD fact 3), with the 1a guard (the setup intent and guard are shared with S4, not copied). Shown inline on the agent card with the same statuses and retry kinds; "Done" only when the job is done and the vault's `approved` equals the measurement the guard compared with the manifest right before signing.
+- [x] Persisted through the existing lock (`lockKey`, method `approve`): a reload resumes checking without prompting, as for close.
+- [x] S5 keeps polling while it runs; after Done the agent card and the verification panel re-read (Registering, then Active).
+- [x] `classifyVault` stays `active`; S0 lands on S5 (PRD S0 table notes that re-approval happens on S5); never routed through S4.
+- [x] Fixture scenario + browser test: Outdated → button → setup signed once → Active; reload during the call resumes checking. Unit test for the visibility rule.
+
 ## Phase 8 — Wallet: any injected wallet, header slot only when connected (PRD S0, S3, FR-3 as revised 10 Nov)
 - [ ] Remove the header Connect button; the wallet slot renders only when connected (menu: Copy address, BaseScan, Disconnect). S1/S2 work without a wallet; S3 is the only place to connect.
 - [ ] Connect wallet on S3: wagmi `injected()` with EIP-6963 discovery; list every announced provider with its name and icon, plus legacy `window.ethereum` when not announced; no connect-modal library (decision recorded in PRD S3). "Install a wallet" link when none is detected.
@@ -299,7 +307,7 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
 
 
 **Phase 7b (10 Nov 2026, cmdkfi/app `d4e22f1`; `git diff HEAD -- docs tasks` empty at start and, apart from this phase's own edits, before this note).**
-- *Protocol re-check:* origin/main moved one commit past `47fd4fb`: `d4e22f1` (cloud/ only). The Worker now funds the agent key every minute, and `/agent/evidence/<file>` is cached for an hour. A failed agent read is tried twice with a 20 s limit, then answered with the last good copy and its `Age`. `Age` is not in `Access-Control-Expose-Headers`, so the browser cannot see that a copy is stale. The agent list's own `last_tick_unix` is what dates it. No change to ABIs, `scripts/relayer.py` or `agent/`.
+- *Protocol re-check:* origin/main moved one commit past `47fd4fb`: `d4e22f1` (cloud/ only). The Worker now funds the agent key every minute, and `/agent/evidence/<file>` is cached for an hour. A failed agent read is tried twice with a 20 s limit, then answered with the last good copy and its `Age`. `Age` is not in `Access-Control-Expose-Headers`, so the browser cannot see that a copy is stale. The agent list's own `last_tick_unix` is what dates it. No change to ABIs, `scripts/relayer.py` or `agent/`. *Correction (Phase 7c):* during the phase main moved on to `22a5191` (4171c10 agent NEAR RPC failover, 2c696b7 compose pin, 22a5191 manifest db4f5085 with v1 and v4 re-approved), and the refreshed manifest came from it; this note's "d4e22f1" was the commit at the start of the phase.
 - *Live finding:* during the phase the agent moved to image `4171c10` (boot 2286af92, compose `db4f5085`), as main's manifest says. The local `deployments/testnet.json` (gitignored) still had `216124c1` and was refreshed from main. The rehearsal vault v10 approved `216124c1`, so the running agent does not watch it; it still holds the previous boot's key, valid until 16 Nov.
 - *1 Agent status:* chain first. Order of checks:
   1. The vault's `approved` against the published manifest (agent/src/vaults.rs l.8-9, l.82-87).
@@ -330,3 +338,27 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - The rehearsal file's expectations follow the 7b wording, and its results table and recorded values come from the recorded run (blanks kept where nothing was recorded).
   - PRD S4 step 2 and 3 and S5 agent card text are aligned with the decisions above.
 - *Results:* typecheck, 142/142 unit tests, build, bundle boundary, 56/56 Playwright desktop. The onboarding, position, verification, performance and close specs passed 3× repeated (105/105, before the Outdated, Not approved and 1a tests were added).
+
+**Phase 7c (10 Nov 2026, cmdkfi/app `22a5191`; `git diff HEAD -- docs tasks` empty at start, and only this phase's own edits before this note).**
+- *Protocol re-check:* main is at `22a5191`, three commits past `d4e22f1`:
+  - `4171c10`: the agent's NEAR RPC failover (agent/src/near.rs, main.rs)
+  - `2c696b7`: the compose pin
+  - `22a5191`: manifest measurement db4f5085, with v1 and v4 re-approved by the test wallet; DEPLOY.md says v3, v6 and v10 are watched again once they approve.
+
+  No change to ABIs, `scripts/relayer.py` or `cloud/`. The local manifest equals main.
+- *Rule:* `approveAction` (flow/position.ts): only for an active position with no close running. Outdated offers "Approve current agent version"; Not approved offers "Approve agent". Unit test over every state and variant.
+- *Call:* `useApprove` (components/useApprove.ts) is a one-step chain on the shared runner. Its intent is `setupIntent`, now shared with S4 (runner.ts; S4's setup uses the same function), so it has the same `setupArgs` and the same 1a guard. With no lock, the guard also runs before the "already on chain" check, so a config behind the manifest never reads as Done.
+  - Done = the vault's `approved` equals the baked measurement, which the guard matched with the manifest right before signing.
+  - The record is kept in memory; the durable part is the owner lock (`lockKey`, method `approve`). After a reload the card rebuilds the step from the lock as Checking… and prompts nothing.
+  - Close position waits while a re-approval is pending, since there is one owner call per vault.
+- *Fix found by the browser test:* after Done, the card re-read the NEAR `get_state` answer that S5 shares for 5 s, from before the approval, so it still said Outdated. A chain's live `readVault` now replaces the shared answer (adapters/live/protocol.ts).
+- *S0:* `classifyVault` is unchanged. The PRD S0 row for an active position notes that re-approval happens on S5, and PRD S5's action line names the button.
+- *Fixture:* `vault({ agentKey })` and an old approved measurement.
+- *Browser tests:*
+  - Outdated → button → one `setup` signature (`approve: true`, the published measurement) → Done → Registering → Active after the agent registers
+  - Not approved → "Approve agent"; a relayer 503 → reload → Checking… again from the lock, one signature and one POST
+  - the 1a guard on S5
+- *Results:* typecheck, 143/143 unit tests, build, bundle boundary, 59/59 Playwright desktop; the 7c scenarios passed 3× (9/9).
+  - The first full run had 1 failure: "reload at each prompt step". Its snapshot shows "Checking your vaults…" after the 4th reload when the 30 s test timeout hit.
+  - The machine's load average was 35–45, with a VM at 160 % CPU. 12 repeats on 4 workers failed 2× the same way. Alone it passes in 16.2 s; in 7b it took 12.8 s.
+  - 7c adds no code to S4's reload path. The second full run passed 59/59. The test's 30 s budget for five reloads is tight under load; not changed.

@@ -114,6 +114,20 @@ export type OwnerSpec<Id extends string, R extends ChainRecord<Id>> = {
   doneNote?(v: VaultView, env: Env<Id, R>): string | undefined
 }
 
+/**
+ * The setup owner call's intent, shared by S4 setup and the S5 re-approval (Phase 7c). Phase 7b item 1a: approving a
+ * measurement the published manifest no longer names costs a signature and leaves the vault unwatched (v10, 9 Nov),
+ * so the measurement baked into config.json (the one setupArgs sends) is compared with the manifest right before the
+ * prompt; a mismatch pauses the step.
+ */
+export const CONFIG_BEHIND = 'This app\'s configuration is behind the published agent version; try again later.'
+
+export async function setupIntent<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, id: Id): Promise<OwnerIntent | null> {
+  if (await env.protocol.configMatchesPublished(env.app)) return { method: 'setup' }
+  env.patch(id, { status: 'paused', pause: { line: CONFIG_BEHIND, retry: 'check' } })
+  return null
+}
+
 type Outcome = boolean | 'resign'
 
 async function finishOwnerCall<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, spec: OwnerSpec<Id, R>, lock: OwnerLock): Promise<boolean> {

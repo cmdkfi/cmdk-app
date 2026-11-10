@@ -25,7 +25,7 @@ does not apply (for example `#position` without a position goes to `#start`).
 | `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, at most 20 % of collateral sold per rolling day, migration and exit allowed) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
 | `#connect` | **S3 Connect** — MetaMask, Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
 | `#progress` | **S4 Opening your position** — the onboarding steps with their status, and the agent verification panel in the right rail | The vault (NEAR `get_state` plus one Base snapshot) before every step, relayer jobs, Base receipts (two confirmations), NEAR time for message expiry, the open plan (feeds and liquidity) right before the open signature |
-| `#position` | **S5 Your position** — debt, collateral, LTV track, agent card, market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
+| `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
 
 S6 (close) and S7 (closed, Start over) are states of `#position`, not routes. The agent verification panel (PRD §6) opens
 from S5's "Verify the agent". There is no sandbox in any build yet: it is planned (Phase 6b) and every `#sandbox/…` hash
@@ -136,11 +136,11 @@ invent an address. Every address in the generated config comes from the manifest
 
 ```sh
 pnpm typecheck              # TypeScript
-pnpm test                   # 142 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 143 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm build                  # production build into dist/
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers and no "sandbox" string
 pnpm exec playwright install chromium
-pnpm test:browser           # 56 browser scenarios, desktop Chromium
+pnpm test:browser           # 59 browser scenarios, desktop Chromium
 ```
 
 The browser scenarios run the real app against `app/e2e/live-fixture.ts`: a fake MetaMask (EIP-1193 and EIP-6963) and
@@ -150,7 +150,8 @@ request to an unknown host or an unknown method fails the test. They cover the o
 at every prompt, rejections, gas refusals, lost jobs, a stale feed, low liquidity, the shortfall and faucet paths, the
 second close transfer, an account switch mid-flow, the creation guard, the verification rows, the request budget of one
 refresh, the browser caches, the NEAR fallback, a relayer 503 on an owner call, an agent list that lags the chain, a
-stale vault approval, a setup guard against a stale app configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
+stale vault approval and its re-approval from S5 (including a reload mid-call), a setup guard against a stale app
+configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
 transaction, and they do not replace a live signed rehearsal.
 
 Pull requests to `main` run `frontend quality` (build, unit tests, bundle boundary, browser scenarios); pushes to `main`
