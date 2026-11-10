@@ -1,6 +1,6 @@
 # Guided flow mockups
 
-Source files of the design canvas https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards, 9 Nov 2026). The canvas is the reviewed layout reference for `docs/prd-guided-flow.md` §7; these files are the same artboards so the implementation session does not depend on the link.
+Source files of the design canvas (a private design tool; the sources below are the record) (12 artboards, 9 Nov 2026). The canvas is the reviewed layout reference for `docs/prd-guided-flow.md` §7; these files are the same artboards so the implementation session does not depend on the link.
 
 Each `*.dc.html` is one screen. They share `cmdk.css`, whose tokens mirror `app/src/ui/prototype-controls.css` (dark theme). `canvas.json` is the canvas layout index. The files use the Design canvas format (`<x-dc>` wrapper, `support.js` head line); open the canvas to view them rendered, or read the markup directly for structure and copy.
 

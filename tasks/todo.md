@@ -2,22 +2,22 @@
 
 ## Start here (for the implementation session)
 1. Read `AGENTS.md` (protocol repo rule), `tasks/lessons.md`, then `docs/prd-guided-flow.md` in full, then this file.
-2. Mockups: canvas https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp, sources in `docs/mockups/` (see its README).
+2. Mockups: canvas (a private design tool; the sources below are the record), sources in `docs/mockups/` (see its README).
 2b. The previous app (`main` branch) is documentation only: read it for protocol facts and test vectors, never import from it (PRD §8b).
 3. Protocol repo cmdkfi/app is cloned at `/Users/vf/cmdk/app`; PRD facts were checked at commit `47fd4fb` (= origin/main on 9 Nov 2026). Run `git fetch` there and re-check before each phase (R12).
 4. Toolchain: Node 22, pnpm 11.7.0; `deployments/testnet.json` is fetched from cmdkfi/app main (gitignored) before `pnpm build`; see README "Development".
 5. Work on this branch (`feat/guided-flow`), one PR per phase. Do not commit or push without being asked. Ask before starting each phase.
 
-PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; two non-blocking questions for Vadim remain). One PR per phase into `feat/guided-flow`; the branch merges into `main` only after Phase 7.
+PRD: `docs/prd-guided-flow.md`. Phase 0 is closed (decisions D1–D11 resolved; two non-blocking questions for the protocol developer remain). One PR per phase into `feat/guided-flow`; the branch merges into `main` only after Phase 7.
 
 ## Phase 0 — Decisions and protocol confirmations (blocking)
 - [x] D1 wrap: inline "Wrap ETH → WETH" action on the deposit step (product owner, 9 Nov). WETH is mandatory: Morpho Blue markets are ERC-20 only, Executor takes no native value.
 - [x] D3 close: single "Close position" action with a manual USDC transfer to the position address when it is short (product owner, 9 Nov).
 - [x] D11 chaining: signatures are requested automatically in sequence, not as separate user steps (product owner, 9 Nov).
-- [x] Checked: migration between the two Morpho markets needs no borrow permission (`Executor.migrate` is atomic via flash loan). Cross-venue (Aave) or cross-chain moves would need a new bounded open-debt permission: protocol roadmap item for Vadim, not v1 frontend.
+- [x] Checked: migration between the two Morpho markets needs no borrow permission (`Executor.migrate` is atomic via flash loan). Cross-venue (Aave) or cross-chain moves would need a new bounded open-debt permission: protocol roadmap item for the protocol developer, not v1 frontend.
 - [x] D2: yes, borrowed USDC is withdrawn to the wallet as the last chained prompt (product owner, 9 Nov). D4–D10 on adopted defaults. Full flow confirmed: come → connect → create vault, deposit WETH, get USDC → repay → close.
 - [x] Gas model question withdrawn (product owner, 9 Nov): the app does not predict relayer refusals; it reacts to the relayer's 400 with a top-up step (FR-8, D7).
-- [ ] (non-blocking) Vadim: confirm `/agent/vaults` is the intended source for "registering / registered / active" and its latency bound (minutes to ~15 min observed in code).
+- [ ] (non-blocking) protocol developer: confirm `/agent/vaults` is the intended source for "registering / registered / active" and its latency bound (minutes to ~15 min observed in code).
 
 ## Phase 1 — Branch and skeleton
 - [x] `git checkout -b feat/guided-flow` from `main` (branch existed with the docs commit on top of `main` 61f71cc).
@@ -206,7 +206,7 @@ Added by the product owner after the 10 Nov live run (first in this phase): the 
 - [x] Five checks; commit, push; CI green; linux baselines from the `frontend quality` job. No deploy, no merge without the product owner's word.
 
 ## Mockups
-- [x] Screen mockups prepared 9 Nov 2026 as a Design canvas: https://claude.ai/artifact/88dCh3D6TAgkirFhEjRhmp (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
+- [x] Screen mockups prepared 9 Nov 2026 as a Design canvas (a private design tool; `docs/mockups/` holds the sources) (12 artboards: S0 entry and navigation, S1 choose, S2 settings, S3 connect + get ETH, S4 progress + verification, S5 position, S6 close + get USDC, S7 closed, S8 sandbox entry, S9 sandbox progress, S10 sandbox position, S11 leave sandbox). PRD §7 is the visual source; the canvas is the layout reference for Phases 2–6 and 6b.
 - [ ] The product owner reviews the mockups; layout changes go back into the canvas before Phase 2 starts.
 
 ## Terminology

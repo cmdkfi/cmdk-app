@@ -1,7 +1,7 @@
-# Правила работы с cmdk
+# Working rules for cmdk
 
-## Проверка репозитория протокола перед изменением логики
+## Check the protocol repository before changing any logic
 
-Репозиторий протокола — https://github.com/cmdkfi/app (где работал Vadim). Называть его репозиторием протокола, а не бэкендом.
+The protocol repository is https://github.com/cmdkfi/app. Call it the protocol repository, not the backend.
 
-Перед реализацией или изменением логики сверяться именно с соответствующим кодом в cmdkfi/app: контрактами, ABI, API, конфигурацией сети и развёртывания, порядком транзакций. При любой неоднозначности сначала обращаться к репозиторию протокола и принимать решение на основании проверенного кода. Не подменять отсутствующие данные предположениями или моками. Если код не даёт однозначного ответа — уточнять у разработчика.
+Before implementing or changing logic, check the corresponding code in cmdkfi/app: the contracts, ABIs, API, network and deployment configuration, and the order of transactions. On any ambiguity, go to the protocol repository first and decide on the basis of verified code. Never substitute assumptions or mocks for missing data. If the code gives no clear answer, ask the protocol developer.
