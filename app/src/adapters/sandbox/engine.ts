@@ -8,8 +8,16 @@
 // CorridorMath.repayToLtv (executor/src/CorridorMath.sol l.39-46) to the target, with no budget clamp and not counted
 // against the discretionary sell budget, as Executor.reduce's protective branch does (Executor.sol l.261-266, l.296).
 // Beside it the engine calculates what Morpho Blue would have done to the same loan without the agent (withoutAgent).
-import type { CrashStage, CrashStart } from '../types.ts'
+//
+// The Venue stress scene (docs/prd-sandbox-venue-stress.md) replays the recorded 5 Nov 2026 testnet event in three
+// stages the user advances; no price moves. Its third stage moves the sandbox position to the backup market with
+// Executor.migrate's semantics (executor/src/Executor.sol l.305-356): both corridors allow migration, at most two moves
+// per rolling 24 hours (_recordMove l.593-599, MAX_MOVES l.51), collateral conserved exactly, debt conserved (the sandbox
+// accrues one simple rate, so to the unit), and the destination not above its act line (l.350-352). The market figures,
+// timings and the judge's answer are the recorded ones (scenes/venue-stress.json); the markets' interest is not simulated.
+import type { CrashStage, CrashStart, VenueMove, VenueScene, VenueStart } from '../types.ts'
 import { parseBig, stringifyBig } from '../../flow/json.ts'
+import venueScene from './scenes/venue-stress.json' with { type: 'json' }
 
 type Hex = `0x${string}`
 
@@ -28,8 +36,8 @@ export const RATE_APR_WAD = 5n * 10n ** 16n
 const OWNER_CALL_GAS = 10n ** 13n
 const WALLET_TX_GAS = 2n * 10n ** 13n
 export const FLOAT_WEI = 5n * 10n ** 15n
-// v2: the market crash replaced the timed drop (Phase 11); a v1 state from an earlier tab is discarded
-export const STORAGE_KEY = 'cmdk.sandbox.engine.v2'
+// v3: the vault's market and the venue stress (venue stress PRD §5); a v2 state from an earlier tab is discarded
+export const STORAGE_KEY = 'cmdk.sandbox.engine.v3'
 /** The simulated market's liquidation LTV (the live market's 86%, PRD §1). */
 export const LLTV = 86n * 10n ** 16n
 /** The crash's price path as a share of the price when the run starts (PRD §8a.1): −30%, −45%, back to the start. */
@@ -39,10 +47,21 @@ export const CRASH_PATH = [70n, 55n, 100n] as const
 export const LIQUIDATION_CURSOR = 3n * 10n ** 17n
 export const MAX_LIQUIDATION_INCENTIVE_FACTOR = 115n * 10n ** 16n
 
+/** The recorded scene (cmdkfi/app evidence/scenes/venue-stress.json, the subset the card uses; verbatim). */
+export const VENUE_SCENE = venueScene as VenueScene
+/** Executor.sol MAX_MOVES (l.51) per rolling WINDOW of 24 hours. */
+export const MAX_MOVES = 2
+const MOVE_WINDOW_MS = 24 * 60 * 60 * 1000
+/** A recorded APR as the card shows it, in hundredths of a percent (0.027827 → 278, "2.78 %"). */
+export const aprHundredths = (apr: number): bigint => BigInt(Math.round(apr * 10_000))
+/** Interest for a year on `debt` at an APR in hundredths of a percent, simple (venue stress PRD §5). */
+export const interestForYear = (debt: bigint, hundredths: bigint): bigint => debt * hundredths / 10_000n
+
 export const SANDBOX_OWNER = '0x5a4d5a4d5a4d5a4d5a4d5a4d5a4d5a4d5a4d0001' as Hex
 export const SANDBOX_POSITION = '0x5a4d5a4d5a4d5a4d5a4d5a4d5a4d5a4d5a4d0b5e' as Hex
 
-export type Corridor = { target: bigint; act: bigint; floor: bigint; budget: bigint }
+/** `migrate`: the corridor's migrateAllowed, the same on both markets in the sandbox (config.app.json). */
+export type Corridor = { target: bigint; act: bigint; floor: bigint; budget: bigint; migrate: boolean }
 
 export type SimEvent = { name: string; actor: 'you' | 'agent' | 'transfer'; at: number; hash: Hex; logIndex: number; args: Record<string, unknown>; token?: 'weth' | 'usdc' }
 
@@ -65,6 +84,20 @@ export type SimVault = {
   borrowed: bigint
   /** The market crash of this position (PRD §8a.1): null until it is run; reset by every open (once per position). */
   crash: SimCrash | null
+  /** The market holding the position: live until the venue stress moves it (venue stress PRD §5); every open is on live. */
+  market: 'live' | 'backup'
+  /** The venue stress of this position: null until it is run; reset by every open (once per position). */
+  venue: SimVenue | null
+  /** Times (ms) of the Executor moves of this position address, for the two-per-24-hours limit. */
+  moves: number[]
+}
+
+export type SimVenue = {
+  status: 'running' | 'done'
+  stage: 1 | 2 | 3
+  start: VenueStart
+  /** The move of stage 3. */
+  move: VenueMove | null
 }
 
 export type SimCrash = {
@@ -78,7 +111,7 @@ export type SimCrash = {
 type Job = { kind: 'create' | 'owner'; createdAt: number; doneAt: number; applied: boolean; method?: string; args?: Record<string, string>; nonce?: number; receipts: Hex[]; failed?: string }
 
 export type State = {
-  v: 2
+  v: 3
   startedAt: number
   counter: number
   price: bigint
@@ -129,7 +162,7 @@ export function withoutAgent(collateral: bigint, debt: bigint, price: bigint, ll
 }
 
 function fresh(now: number): State {
-  return { v: 2, startedAt: now, counter: 0, price: START_PRICE, wallet: { eth: 10n * WAD, weth: 0n, usdc: 5_000n * 10n ** 6n }, vault: null, jobs: {}, txs: {}, events: [] }
+  return { v: 3, startedAt: now, counter: 0, price: START_PRICE, wallet: { eth: 10n * WAD, weth: 0n, usdc: 5_000n * 10n ** 6n }, vault: null, jobs: {}, txs: {}, events: [] }
 }
 
 function storage(): Storage | null {
@@ -147,7 +180,7 @@ export class SandboxEngine {
     this.clock = clock
     let restored: State | null = null
     if (load) try { const text = storage()?.getItem(STORAGE_KEY); restored = text ? parseBig<State>(text) : null } catch { restored = null }
-    this.s = restored && restored.v === 2 ? restored : fresh(this.clock())
+    this.s = restored && restored.v === 3 ? restored : fresh(this.clock())
   }
 
   dispose() { this.disposed = true }
@@ -208,7 +241,7 @@ export class SandboxEngine {
     job.applied = true
     const at = job.doneAt
     if (job.kind === 'create') {
-      this.s.vault = { createdAt: at, ownerNonce: 0, approved: false, setupAt: null, idle: { eth: FLOAT_WEI, weth: 0n, usdc: 0n }, collateral: 0n, principal: 0n, debtSince: at, openedAt: null, borrowed: 0n, crash: null }
+      this.s.vault = { createdAt: at, ownerNonce: 0, approved: false, setupAt: null, idle: { eth: FLOAT_WEI, weth: 0n, usdc: 0n }, collateral: 0n, principal: 0n, debtSince: at, openedAt: null, borrowed: 0n, crash: null, market: 'live', venue: null, moves: [] }
       return
     }
     const v = this.s.vault!
@@ -238,7 +271,8 @@ export class SandboxEngine {
         const collateralIn = BigInt(args.collateral_in), target = BigInt(args.target_ltv)
         v.idle.weth -= collateralIn; v.collateral += collateralIn
         const borrowed = valueOf(v.collateral, this.s.price) * target / WAD
-        v.principal = borrowed; v.debtSince = at; v.idle.usdc += borrowed; v.openedAt = at; v.borrowed = borrowed; v.crash = null
+        // the guided flow opens on the live market (PRD S4 step 5); both scenes are offered again on the new position
+        v.principal = borrowed; v.debtSince = at; v.idle.usdc += borrowed; v.openedAt = at; v.borrowed = borrowed; v.crash = null; v.market = 'live'; v.venue = null
         this.event({ name: 'Opened', actor: 'you', at, hash: receipt, args: { market: 'live', collateralIn, borrowed, ltv: target } })
         break
       }
@@ -253,7 +287,8 @@ export class SandboxEngine {
         v.idle.usdc -= debt; v.principal = 0n; v.debtSince = at
         const out = v.collateral
         v.idle.weth += out; v.collateral = 0n; v.openedAt = null
-        this.event({ name: 'Closed', actor: 'you', at, hash: receipt, args: { market: 'live', repaid: debt, collateralOut: out } })
+        // the close repays on whichever market holds the loan (venue stress PRD §2)
+        this.event({ name: 'Closed', actor: 'you', at, hash: receipt, args: { market: v.market, repaid: debt, collateralOut: out } })
         break
       }
     }
@@ -272,7 +307,7 @@ export class SandboxEngine {
     const sold = repaid * ORACLE_SCALE / this.s.price
     v.collateral -= sold; v.principal = debt - repaid; v.debtSince = at
     const after = ltvOf(v.principal, valueOf(v.collateral, this.s.price)) ?? 0n
-    this.event({ name: 'Reduced', actor: 'agent', at, args: { market: 'live', repaid, collateralSold: sold, ltvBefore: before, ltvAfter: after, protective: true } })
+    this.event({ name: 'Reduced', actor: 'agent', at, args: { market: v.market, repaid, collateralSold: sold, ltvBefore: before, ltvAfter: after, protective: true } })
     return { repaid, sold, ltvBefore: before }
   }
 
@@ -295,7 +330,67 @@ export class SandboxEngine {
     })
   }
 
+  /** Executor moves of this position in the 24 hours before `at` (Executor.sol _recordMove l.593-599). */
+  movesInWindow(at = this.now()): number {
+    return (this.s.vault?.moves ?? []).filter(t => at < t + MOVE_WINDOW_MS).length
+  }
+
+  /** Why Executor.migrate would revert for live → backup now, or null (Executor.sol l.307-309, l.596, l.350-352). */
+  private migrateRefusal(at: number): string | null {
+    const v = this.s.vault!
+    if (!v.corridorSet || !this.corridor.migrate) return 'MigrateDisabled: migration is not allowed on both markets.'
+    if (this.movesInWindow(at) >= MAX_MOVES) return 'MoveLimit: two moves in the last 24 hours.'
+    const debt = this.debt(at), ltv = ltvOf(debt, valueOf(v.collateral, this.s.price))
+    if (ltv === null || ltv > this.corridor.act) return 'AboveActLine: the position would land above the backup market\'s act line.'
+    return null
+  }
+
+  /**
+   * Stage 3 of the venue stress: the agent's migrate of the whole position (fraction 1e18) from live to backup. Collateral
+   * and debt move unchanged; nothing is sold and the price does not move; the move is counted in the window.
+   */
+  private migrate(at: number): VenueMove {
+    const refusal = this.migrateRefusal(at)
+    if (refusal) throw new Error(refusal)
+    const v = this.s.vault!
+    const collateralBefore = v.collateral, debtBefore = this.debt(at)
+    v.principal = debtBefore; v.debtSince = at; v.market = 'backup'; v.moves.push(at)
+    const debtAfter = this.debt(at)
+    this.event({ name: 'Migrated', actor: 'agent', at, args: { from: 'live', to: 'backup', fraction: WAD, debtMoved: debtAfter, collateralMoved: v.collateral } })
+    const p = VENUE_SCENE.phases
+    return {
+      collateralBefore, collateralAfter: v.collateral, debtBefore, debtAfter,
+      interestLive: interestForYear(debtAfter, aprHundredths(p.after_borrow.markets.live.borrow_apr)),
+      interestBackup: interestForYear(debtAfter, aprHundredths(p.after.markets.backup.borrow_apr)),
+    }
+  }
+
   // ---- operations the adapters expose -------------------------------------------------------------------------------
+
+  /** Run the venue stress (venue stress PRD §2): once per open position, on the live market; stage 1 shows at once. */
+  venueRun() {
+    this.advance()
+    const v = this.s.vault
+    if (!v || v.openedAt === null || v.collateral === 0n) throw new Error('No open simulated position.')
+    if (v.venue) throw new Error('The venue stress has already run for this position.')
+    if (v.market !== 'live') throw new Error('The position is not on the live market.')
+    const now = this.now(), refusal = this.migrateRefusal(now)
+    if (refusal) throw new Error(refusal)
+    const debt = this.debt(now)
+    v.venue = { status: 'running', stage: 1, start: { collateral: v.collateral, debt, ltv: ltvOf(debt, valueOf(v.collateral, this.s.price)) }, move: null }
+    this.save()
+  }
+
+  /** The next venue stage, advanced by the user: stage 2 (the judge), stage 3 (the move), then Done. */
+  venueNext() {
+    this.advance()
+    const c = this.s.vault?.venue
+    if (!c || c.status === 'done') throw new Error('No venue stress is running.')
+    if (c.stage === 3) c.status = 'done'
+    else if (c.stage === 2) { c.move = this.migrate(this.now()); c.stage = 3 }
+    else c.stage = 2
+    this.save()
+  }
 
   state(): State { return this.advance() }
 
@@ -313,13 +408,15 @@ export class SandboxEngine {
 
   /**
    * Start over in the sandbox (PRD §8a.1, product owner 11 Nov): the price returns to $3,210 before the new position
-   * opens, so every crash run reproduces the §8a.1 stages. Refused while a position is open.
+   * opens, so every crash run reproduces the §8a.1 stages, and the position returns to the live market with both scenes
+   * offered again (venue stress PRD §2). Refused while a position is open.
    */
   resetPrice() {
     this.advance()
     const v = this.s.vault
     if (v && (v.collateral > 0n || v.principal > 0n)) throw new Error('A simulated position is still open.')
     this.s.price = START_PRICE
+    if (v) { v.market = 'live'; v.venue = null; v.crash = null }
     this.save()
   }
 

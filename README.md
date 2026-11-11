@@ -46,7 +46,11 @@ under `#sandbox/…` on a simulated wallet and a simulated protocol (`app/src/ad
 timers and the agent registers after 5 s. The price never moves on a timer: on S5 the **Market crash** card (Phase 11,
 PRD §8a.1) plays a scripted price path the user advances in three stages (−30%, −45%, back to the start) and shows a
 calculated "without the agent" outcome (Morpho Blue's liquidation, from `Morpho.sol` `liquidate`) beside the sandbox
-position, where the agent's protective reduce uses the protocol's own `repayToLtv`. A banner marks every sandbox screen, explorer links are
+position, where the agent's protective reduce uses the protocol's own `repayToLtv`. Under it, the **Venue stress** card
+(`docs/prd-sandbox-venue-stress.md`) replays the recorded 5 Nov 2026 testnet event from cmdkfi/app
+`evidence/scenes/venue-stress.md` and `venue-stress.json` (subset in `app/src/adapters/sandbox/scenes/venue-stress.json`,
+source commit and SHA-256 recorded): the live market's liquidity drained, the judge's recorded answer, and the agent's
+migrate, which moves the sandbox position to the backup market with collateral and debt unchanged. A banner marks every sandbox screen, explorer links are
 disabled and tagged "simulated", and verification rows read "Simulated (not checked)". The previous app removed demo
 balances and demo routes; this sandbox is acceptable because it is isolated and labelled: it never instantiates the
 live adapters, makes no network request of its own (a read the live screens had already started can still complete after "Try in sandbox" is pressed from a live screen; a sandbox entered fresh makes none) and never writes localStorage (its state lives in sessionStorage and is

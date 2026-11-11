@@ -19,8 +19,9 @@ const artboardHeights: Record<string, [number, number]> = {
   's3-wallets': [1000, 1100], 's3-connected': [1300, 1500], 's3a-get-eth': [1400, 2200],
   's4-progress': [1900, 3400], 's5-position': [1900, 3200], 's5-liquidated': [1900, 3000],
   's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
-  'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2300, 3800],
-  'sandbox-s5-crash-stage3': [2700, 5200], 'phone-notice': [900, 844],
+  'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2600, 4100],
+  'sandbox-s5-crash-stage3': [3000, 5500], 'phone-notice': [900, 844],
+  'sandbox-s5-venue-ready': [2600, 4100], 'sandbox-s5-venue-stage2': [3400, 5900], 'sandbox-s5-venue-stage3': [3800, 6800],
 }
 test.use({ timezoneId: 'UTC', locale: 'en-US' })
 test.beforeEach(async ({ page }, info) => {
@@ -249,7 +250,7 @@ function sandboxOpenPosition(): string {
   const pct = (n: number) => BigInt(n) * 10n ** 16n
   let now = (NOW + 20) * 1000 - 30_000
   // the corridor only steers the agent's reduce, which runs in the page's own engine (built from sandboxConfig)
-  const engine = new SandboxEngine({ target: pct(50), act: pct(70), floor: pct(30), budget: pct(20) }, () => now, false)
+  const engine = new SandboxEngine({ target: pct(50), act: pct(70), floor: pct(30), budget: pct(20), migrate: true }, () => now, false)
   const deposit = 5n * E / 10n
   engine.createVault(); now += STAGE_MS
   engine.ownerCall('setup', {}, 1); now += STAGE_MS
@@ -282,5 +283,32 @@ test('Sandbox S5: Market crash at stage 3', async ({ page, context, fx }) => {
   await expect(card.locator('.crash-summary')).toContainText('$596.14 with the agent, $81.94 without')
   await expect(page.locator('.event').filter({ hasText: 'Reduced' })).toHaveCount(1)
   await shot(page, 'sandbox-s5-crash-stage3')
+})
+
+// Venue stress (docs/prd-sandbox-venue-stress.md §6): the card before the run, at stage 2 (the judge) and at stage 3 (the move)
+test('Sandbox S5: Venue stress before the run', async ({ page, context, fx }) => {
+  await sandboxPosition(page, context, fx)
+  await expect(page.getByRole('button', { name: 'Run venue stress' })).toBeVisible()
+  await shot(page, 'sandbox-s5-venue-ready')
+})
+
+test('Sandbox S5: Venue stress at stage 2, the judge', async ({ page, context, fx }) => {
+  await sandboxPosition(page, context, fx)
+  const card = page.getByRole('region', { name: 'Venue stress' })
+  await card.getByRole('button', { name: 'Run venue stress' }).click()
+  await card.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(card.locator('.venue-reasons li')).toHaveCount(5)
+  await shot(page, 'sandbox-s5-venue-stage2')
+})
+
+test('Sandbox S5: Venue stress at stage 3, the move to the backup market', async ({ page, context, fx }) => {
+  await sandboxPosition(page, context, fx)
+  const card = page.getByRole('region', { name: 'Venue stress' })
+  await card.getByRole('button', { name: 'Run venue stress' }).click()
+  await card.getByRole('button', { name: 'Next', exact: true }).click()
+  await card.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(card.locator('.venue-summary')).toBeVisible()
+  await expect(page.locator('.event').filter({ hasText: 'from the live to the backup market' })).toHaveCount(1)
+  await shot(page, 'sandbox-s5-venue-stage3')
 })
 

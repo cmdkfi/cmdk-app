@@ -189,6 +189,22 @@ export function useCrashStep() {
   })
 }
 
+/** Sandbox only (venue stress PRD): the venue stress of the open position; disabled on the live adapter, which has no `venue`. */
+export function useVenue(vaultId: string | undefined) {
+  const { kind, protocol } = useAdapters()
+  return useQuery({ queryKey: ['venue', kind, vaultId ?? null], enabled: !!protocol.venue && !!vaultId, queryFn: () => protocol.venue!.read(), retry: false })
+}
+
+/** Runs the venue stress or advances it one stage, then re-reads what the move changes (hero, market, agent, actions, close plan). */
+export function useVenueStep() {
+  const { kind, protocol } = useAdapters()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (step: 'run' | 'next') => (step === 'run' ? protocol.venue!.run() : protocol.venue!.next()),
+    onSettled: () => Promise.all(['venue', 'position', 'agent', 'activity', 'close-plan'].map(key => queryClient.invalidateQueries({ queryKey: [key, kind] }))),
+  })
+}
+
 /**
  * Start over's sandbox step (PRD §8a.1): the simulated price back to the start before the new position opens, and the
  * quote re-read so S1 shows it. On the live adapter (no `crash`) it does nothing.
@@ -199,7 +215,7 @@ export function useSandboxPriceReset() {
   return async () => {
     if (!protocol.crash) return
     await protocol.crash.resetPrice()
-    await queryClient.invalidateQueries({ queryKey: ['quote', kind] })
+    await Promise.all(['quote', 'crash', 'venue'].map(key => queryClient.invalidateQueries({ queryKey: [key, kind] })))
   }
 }
 
