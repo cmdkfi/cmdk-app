@@ -251,20 +251,18 @@ Anything far outside these, write it down with the time.
 
 - Wallet address: `0x11B7…0A52`
 - Vault id: `v10.factory.prime-measure-1792736012.testnet` Position address: `0xf09ceca0825211b1863f14708ac71f336d42a9fa`
-- Relayer job ids: create ____ · setup ____ · open ____ · withdraw ____ · close `87fe4d6b9182472b` (second attempt) · withdraw WETH ____ · withdraw USDC ____
-- Wallet tx hashes: wrap ____ · WETH transfer ____ · USDC transfer ____ · second USDC transfer (if any) ____ · gas top-up (if any) ____
-- Base tx hashes from jobs: setup ____ · open ____ · withdraw ____ · close ____ · withdraw WETH ____ · withdraw USDC ____
-- Gas used (BaseScan "Gas Used"): wrap ____ · transfer ____ · setup ____ · open ____ · close ____ · USDC transfer ____
-- Times: Create position click ____ → position screen ____ (total ____ min); Start closing ____ → Position closed ____ (total ____ min)
+- Relayer job ids: create, setup, open and withdraw not recorded at the time; close `87fe4d6b9182472b` (second attempt); the two return jobs not recorded. The Base transactions below were recovered from the chain on 11 Nov (Blockscout and the receipts); the job ids are not on chain.
+- Wallet tx hashes (Base Sepolia, wallet `0x11b774eaf1a3a55d33cc8b9885d57ce454300a52`): wrap + WETH transfer in one batched call `0x5f22d55627eb813517f286ce1b975937e09a9acf54617b98a6bc442e81610de8` (21:48:16, 186,727 gas) · USDC transfer for the close `0xbb8b72e74190b590ab7112821c98cb9aa5bf9695beee5ea19b1d3e250b124978` (22:14:41, 10.722897 USDC, 202,924 gas) · no second USDC transfer · no gas top-up by the wallet: the position's gas float came from the relayer, `0x5ddecab2d5d6f23986045d7b7670c0a8268f3569959003b129899d84242a504d` (21:47:07, 0x0B7Ed66f… → position, 21,000 gas).
+- Base tx hashes from jobs (sent by the position address `0xf09ceca0825211b1863f14708ac71f336d42a9fa`): setup = USDC approve `0x98d5de63fab9c11cb65d8aa85fbed406913e2f1cbe6d0725fbc23bff95f87c7e` (21:47:30, 55,785 gas), WETH approve `0x54846ca79da3e615a77f96726b4895200df84f0f932055a4756b0019a96336ad` (21:47:31, 46,343), Morpho `setAuthorization` `0xefc1e3ebb260cc3fc29ff78a4962237968bc990f865d3e4286a3722eca70c937` (21:47:32, 47,250), `setCorridor` live `0x73dc0bfb837c5fb213dc518b43fd4de1f9f834b6efd7d89b6d1d612815af94f0` (21:47:33, 84,133), `setCorridor` backup `0xe56763350cda5b6d419415b52d52ce270e37031a2becf6705f18d09de61a0c97` (21:47:35, 84,133) · open `0x847d9f649fdad68dd4b8ffe476e5386c750b3c62a1f3150a8c99d49af3a6d8d5` (21:48:39, 285,149) · withdraw USDC `0xd791f7ded7bffe053d26e6b494cbab81ad2f59c0f65533166558eafc9f4ee549` (21:49:03, 57,359) · close `0x6b85314c40749c7c5b5f82a3bdcf9e9037b982f4e637dbd61389d53cd0ba89cd` (22:25:43, 186,621) · withdraw WETH `0xe7265afac4e159a4a7f12eefbeb6596a26f3d7afe0679936fd29b9aa22317cea` (22:26:09, 46,521) · withdraw USDC `0x59314c7faba47bca1009cb942441c2f09291dede976dcdce96ddcda523e3d84f` (22:26:45, 40,259). All status 1.
+- Gas used: listed with each transaction above.
+- Times: Create position click ~21:46 → position screen after the withdraw at 21:49:03 (about 3 min); Start closing 22:14:41 → Position closed 22:26:45 (12 min, of which about 10 waiting out the first close attempt's expiry after the relayer 503).
 - Agent registration: setup Done 21:47:35 → registered on chain 22:01:42 UTC (14 min; the agent's list caught up about 22:05)
 - Opened LTV 49.9 %; debt at open 10.61 USDC; USDC sent for the close 10.722897 USDC; leftover USDC returned 0.106167
 
 **Surprises** (anything unexpected, confusing, slow, or worded wrongly — one line each, with the screen and the time;
 these go back to the agent as the fix list):
 
-1. ____
-2. ____
-3. ____
+The surprises are listed under each recorded run below (they became the Phase 7b and Phase 8 fixes).
 
 ## Recorded results — product owner, 9–10 Nov 2026 (live on testnet.cmdk.fi, preview deploy from feat/guided-flow at a36e63f)
 
