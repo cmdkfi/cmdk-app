@@ -42,12 +42,22 @@ jobs:
         run: |
           npx wrangler versions upload --message "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} ${GITHUB_SHA::7}" | tee upload.log
           url=$(grep -o 'https://[a-z0-9.-]*\.workers\.dev' upload.log | head -1)
-          test -n "$url" || { echo "no preview URL in wrangler's output (are preview URLs enabled for the worker?)"; exit 1; }
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Preview of \`${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}: $url (layout and sandbox; live relayer calls are refused from a preview origin)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$url" ]; then
+            # wrangler prints the URL only once preview URLs are enabled on the worker; the URL itself is fixed by the version id
+            id=$(grep -o 'Worker Version ID: [0-9a-f-]*' upload.log | cut -d' ' -f4); test -n "$id"
+            url="https://${id%%-*}-cmdk-app-testnet.fffilimonov.workers.dev"
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 "$url/")
+          if [ "$code" = 200 ]; then
+            note="layout and the sandbox; live relayer calls are refused from a preview origin, so the live flow is reviewed on testnet.cmdk.fi after the merge"
+          else
+            note="not reachable yet (HTTP $code): preview URLs are not enabled on the worker; they switch on at the next deploy of main with preview_urls: true, or in the Cloudflare dashboard for cmdk-app-testnet"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"; echo "note=$note" >> "$GITHUB_OUTPUT"
+          echo "Preview of \`${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}: $url ($note)" >> "$GITHUB_STEP_SUMMARY"
       - name: Comment on the pull request
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "Preview of ${GITHUB_SHA::7}: ${{ steps.upload.outputs.url }} (layout and the sandbox; live relayer calls are refused from a preview origin, so the live flow is reviewed on testnet.cmdk.fi after the merge)"
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "Preview of ${GITHUB_SHA::7}: ${{ steps.upload.outputs.url }} (${{ steps.upload.outputs.note }})"
