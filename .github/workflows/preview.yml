@@ -49,4 +49,5 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "Preview of ${GITHUB_SHA::7}: ${{ steps.upload.outputs.url }} (layout and the sandbox; live relayer calls are refused from a preview origin, so the live flow is reviewed on testnet.cmdk.fi after the merge)"
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "Preview of ${GITHUB_SHA::7}: ${{ steps.upload.outputs.url }} (layout and the sandbox; live relayer calls are refused from a preview origin, so the live flow is reviewed on testnet.cmdk.fi after the merge)"
