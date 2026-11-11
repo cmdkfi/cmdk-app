@@ -83,7 +83,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
             {guided && ` · minimum ${guided.minDepositText} ETH`} · wallet balance shown after connecting
           </>}
         </p>
-        <div className="notice notice--good"><strong>Your agent acts inside fixed limits.</strong><p>Review the full limits on the next screen.</p></div>
+        <div className="notice notice--good"><strong>Your agent acts inside fixed limits.</strong><p>It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.</p><p>Review the full limits on the next screen.</p></div>
       </div>
       <div className="surface stack-20 loan-summary">
         <h2>Loan summary</h2>

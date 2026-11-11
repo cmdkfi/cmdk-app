@@ -3,6 +3,7 @@ import { test, expect, OWNER, vault } from './live-fixture.ts'
 
 async function chooseAndAcknowledge(page: Page, amount = '0.1') {
   await page.goto('/#start')
+  await expect(page.getByText('It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.')).toBeVisible()
   await page.getByLabel('Amount to deposit').fill(amount)
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('checkbox').check()
