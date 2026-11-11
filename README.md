@@ -167,7 +167,7 @@ invent an address. Every address in the generated config comes from the manifest
 ```sh
 pnpm typecheck              # TypeScript
 pnpm build                  # production build into dist/; run it first: it generates public/config.json, which one unit test reads
-pnpm test                   # 162 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
+pnpm test                   # 174 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers (the sandbox ships, PRD §8a)
 pnpm exec playwright install --with-deps chromium   # --with-deps also installs Chromium's system libraries on Linux (as CI does)
 pnpm test:browser           # desktop and mobile Chromium scenarios, including screenshot comparisons, against a production build served by vite preview
