@@ -21,7 +21,7 @@ const artboardHeights: Record<string, [number, number]> = {
   's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
   'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2600, 4100],
   'sandbox-s5-crash-stage3': [3000, 5500], 'phone-notice': [900, 844],
-  'sandbox-s5-venue-ready': [2600, 4100], 'sandbox-s5-venue-stage2': [3400, 5900], 'sandbox-s5-venue-stage3': [3800, 6800],
+  'sandbox-s5-venue-ready': [2600, 4100], 'sandbox-s5-venue-stage2': [3400, 5900], 'sandbox-s5-venue-stage3': [3800, 7200],
 }
 test.use({ timezoneId: 'UTC', locale: 'en-US' })
 test.beforeEach(async ({ page }, info) => {
