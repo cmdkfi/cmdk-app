@@ -30,7 +30,7 @@ Run `pnpm build`, `pnpm test`, `pnpm test:bundle-boundary` and `pnpm test:browse
 
 A fixture pass validates UI and protocol sequencing, not a real mobile wallet or device. Rehearse signing, switching networks and returning after app suspension in a mobile wallet browser before release.
 
-The implementation was checked with 162 unit tests, 179 Linux Chromium desktop/mobile scenarios, TypeScript, a production build and the bundle-boundary check. The 36 Linux visual baselines were refreshed and reviewed. Native macOS browser automation was unavailable in this session; the Darwin baselines still describe the previous design and must be refreshed on macOS before running local visual comparisons there.
+The implementation was checked with 162 unit tests, 179 Linux Chromium desktop/mobile scenarios, TypeScript, a production build and the bundle-boundary check. The fixed-artboard refresh passed all 36 scenarios on Linux x86_64 Chromium and all 36 on native macOS Chromium. Both platform baseline sets now cover desktop and mobile. The macOS refresh was run by the owner outside the agent sandbox; its local HTML report records 36 expected, zero unexpected and zero skipped tests.
 
 ## Coordinated release
 
