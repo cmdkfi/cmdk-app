@@ -181,7 +181,7 @@ steps as CI; its artifact `visual-baselines-linux` is downloaded with `gh run do
 before they are committed.
 
 Pull requests to `main` run `frontend quality` (build, unit tests, bundle boundary, browser scenarios); pushes to `main`
-deploy to testnet.cmdk.fi. The `deploy testnet` workflow can also be run by hand on a branch for a preview.
+deploy to testnet.cmdk.fi. The `deploy testnet` workflow can also be run by hand on a branch, which replaces the live app with that branch until the next push to `main`. For a look that leaves the live app alone, the `preview` workflow (every pull request, or by hand on a branch) uploads a Worker version with its own `*.workers.dev` URL and posts it on the pull request; a preview serves the layout and the sandbox, while live relayer calls are refused from a preview origin by the relayer's CORS list.
 
 ## Responsive design review
 
