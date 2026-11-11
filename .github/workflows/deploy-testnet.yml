@@ -31,7 +31,10 @@ jobs:
       - run: pnpm test:bundle-boundary
         working-directory: app
       - name: Install test browser
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          # GitHub's Azure runners intermittently fail to resolve Ubuntu's package mirrors (11 Nov 2026: three deploy
+          # attempts in a row); --with-deps runs apt, so retry the whole install a few times before giving up
+          for i in 1 2 3 4; do pnpm exec playwright install --with-deps chromium && break; echo "browser install attempt $i failed; retrying in 60 s"; sleep 60; [ $i = 4 ] && exit 1; done
         working-directory: app
       - name: Desktop browser scenarios
         run: pnpm test:browser
