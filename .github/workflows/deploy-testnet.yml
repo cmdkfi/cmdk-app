@@ -30,12 +30,17 @@ jobs:
         working-directory: app
       - run: pnpm test:bundle-boundary
         working-directory: app
+      - name: Playwright browser cache
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml') }}
       - name: Install test browser
-        run: |
-          # The browser comes from Playwright's CDN; the system libraries come with the runner image (it ships Google
-          # Chrome). apt behind --with-deps failed all afternoon on 11 Nov 2026 (mirror DNS), so it is only an extra here.
-          pnpm exec playwright install chromium
-          pnpm exec playwright install-deps chromium || echo "apt unavailable on this runner; relying on the image's libraries"
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        # Only the browser binary, from Playwright's CDN; the runner image ships Google Chrome, so the system
+        # libraries are already there. No apt: its mirrors were unreachable from the runners all afternoon on 11 Nov 2026.
+        run: pnpm exec playwright install chromium
         working-directory: app
       - name: Desktop browser scenarios
         run: pnpm test:browser
