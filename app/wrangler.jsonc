@@ -5,6 +5,8 @@
   // https://cmdk.fi stays the landing. The relayer's CORS allows this origin.
   "name": "cmdk-app-testnet",
   "compatibility_date": "2026-11-01",
+  // Branch previews: .github/workflows/preview.yml uploads a version, which needs a preview URL on the worker.
+  "preview_urls": true,
   "routes": [{ "pattern": "testnet.cmdk.fi", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
