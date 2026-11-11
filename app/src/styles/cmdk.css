@@ -146,6 +146,8 @@
 .network-help a{text-decoration:underline;text-underline-offset:3px}
 .show-usdc__result{margin-left:8px;color:var(--muted)}
 .position--stale .cols-3,.position--stale .agent-market{opacity:.72}
+/* Full wallet addresses use the bundled app font so system monospace metrics cannot change sheet wrapping. */
+.sheet code{font-family:inherit;font-size:inherit}
 dialog.sheet{margin:auto}dialog.sheet[open]{display:grid}
 dialog.sheet::backdrop{background:#17211b66;backdrop-filter:blur(3px)}
 .token-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#627eea}
