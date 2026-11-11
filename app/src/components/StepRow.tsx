@@ -56,7 +56,6 @@ export function StepRow({ title, why, index, step, explorer, onAct, now, extra, 
     <span className="n" aria-hidden="true">{done ? '✓' : index}</span>
     <div className="body">
       <strong>{title}</strong>
-      {kind === 'live' && step.status === 'prompting' && <p className="mobile-wallet-hint">Confirm this {prompt} in {wallet}. If you switch apps, return to this page afterwards. A submitted request still needs confirmation.</p>}
       {step.note && <p className="note">{step.note}</p>}
       {step.status === 'checking' && step.check && <CheckLine check={step.check} now={now} />}
       {step.topUp && step.topUp.status !== 'needed' && <p className="note">Gas top-up: {formatUnits(BigInt(step.topUp.amountWei), 18, 6)} ETH · {step.topUp.status === 'done' ? 'confirmed' : step.topUp.status === 'confirming' ? 'confirming…' : `waiting for ${wallet}…`}</p>}

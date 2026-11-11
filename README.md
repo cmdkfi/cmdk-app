@@ -10,10 +10,17 @@ cites the file and line it comes from. Check that repository before changing tra
 requirements are in [`docs/prd-guided-flow.md`](docs/prd-guided-flow.md); the build plan and review notes per phase are
 in [`tasks/todo.md`](tasks/todo.md).
 
-Desktop, with an experimental mobile layout inside a wallet browser (real-device signing rehearsal pending). The same app stays mounted at every width, including when rotating a phone or resizing a window. Any
+**The testnet flow is desktop-only: it runs on a desktop browser with a wallet extension.** Below 960 px the live
+routes (`#start`, `#settings`, `#connect`, `#progress`, `#position`) show one notice instead of their screen, with "Try in
+sandbox" as its only action, and make no wallet call, no relayer call and no NEAR or Base read. The reason (decision of 11
+Nov 2026): inside MetaMask Mobile's in-app browser the first signature (`personal_sign` for setup) fails with -32602 "must
+provide an Ethereum address" (MetaMask Mobile 8.18, per-network site permissions;
+[MetaMask/metamask-mobile#39052](https://github.com/MetaMask/metamask-mobile/issues/39052)), and the live flow is not
+supported on phones before the submission. The sandbox runs on phones: the app stays mounted at every width, and
+`#sandbox/…` works the same way from 320 px up. At 960 px and above any
 injected browser wallet works (every wallet announced through EIP-6963, plus `window.ethereum` when it is not
 announced; no connect-modal library); plain accounts and EIP-7702 delegated accounts are supported, contract wallets are
-not (the vault verifies owner messages with ecrecover). On mobile, use the wallet’s built-in browser; ordinary Safari/Chrome without an injected provider show wallet-browser guidance and a sandbox entry. WalletConnect/QR pairing is not configured. The header shows the wallet slot only once connected; connecting
+not (the vault verifies owner messages with ecrecover). WalletConnect/QR pairing is not configured. The header shows the wallet slot only once connected; connecting
 happens on S3. A wallet that reports another chain is asked to switch to Base Sepolia right after connecting, and every
 action that needs the chain asks again; the step says "Switch to Base Sepolia in your wallet." until it does.
 
@@ -26,7 +33,7 @@ does not apply (for example `#position` without a position goes to `#start`).
 | Route | Screen | What it reads |
 |---|---|---|
 | `#start` | **S1 Choose** — collateral, borrow asset and venue (only ETH → USDC on Morpho Base is selectable), the deposit amount (0.01 ETH by default), the estimate | The live market every 30 s: Morpho market params and the Executor's market config (once per session), market totals, oracle price and IRM borrow rate (each poll). Value, borrow at the 50 % target, simple APR, and a liquidity warning with the largest deposit that still opens at 50 % |
-| `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, at most 20 % of collateral sold per rolling day, migration and exit allowed) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
+| `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, migration and exit allowed, at most 20 % of collateral sold per rolling day at the agent's discretion; protective sales above 70 % and an allowed exit are not limited by that budget) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
 | `#connect` | **S3 Connect** — the wallets in this browser (EIP-6963), Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
 | `#progress` | **S4 Opening your position** — the onboarding steps with their status, and the agent verification panel in the right rail | The vault (NEAR `get_state` plus one Base snapshot) before every step, relayer jobs, Base receipts (two confirmations), NEAR time for message expiry, the open plan (feeds and liquidity) right before the open signature |
 | `#position` | **S5 Your position** — debt, collateral, LTV track, agent card (with **Approve current agent version** / **Approve agent** when an open position's vault does not approve the published agent version, Phase 7c; **Revoke agent** with a confirm sheet while the vault approves a version or holds the agent key, Phase 12), market card, recent actions, idle balances; **Close position** (S6) and the closed state with **Start over** (S7) | Every 30 s: the position at one Base block (one block read and two Multicall3 rounds) and the agent card (`/agent/vaults`, the vault's NEAR key list). Once: recent actions from Base logs in 10,000-block windows, the close plan (again on Close position) |
@@ -185,13 +192,14 @@ deploy to testnet.cmdk.fi. The `deploy testnet` workflow can also be run by hand
 
 ## Responsive design review
 
-The first screen keeps the available ETH → USDC route visible on phones and expands the asset catalogue on request.
-Setup steps remain visible before connecting. Transaction progress puts the active step first on phones; confirmation,
-revoke and sandbox dialogs become scrollable bottom sheets. Position metrics stack, long addresses wrap, and sandbox
-crash comparisons stack without horizontal scrolling. Resizing never remounts the adapters or clears a flow.
+The live screens are laid out for desktop; below 960 px they are replaced by the notice above, and widening the window
+brings the live shell back (the live adapters are created again, as after a reload). The sandbox, which runs the same
+screens on phones, keeps the responsive layout: the available ETH → USDC route stays visible and the asset catalogue
+expands on request, progress puts the active step first, confirmation and sandbox dialogs become scrollable bottom
+sheets, position metrics stack, long addresses wrap, and the sandbox scene comparisons stack without horizontal scrolling.
 
 Amounts, rates, balances, agent states and verification results still come from the existing adapters. No illustrative
 mockup values enter live screens. Protocol messages, transaction ordering and recovery checks are unchanged.
-The browser suite exercises both viewports against the existing fixtures; mobile tests additionally cover the compact
-catalogue, no-wallet guidance, confirmations and layout widths from 320 to 1024 px. Real mobile wallet signing still
-needs a device rehearsal; a browser fixture is not a wallet integration test.
+The desktop browser project runs every scenario at 1280 px; the mobile project (390 px) runs the phone notice on every
+live route (no wallet call, no request but the app's own), the sandbox end to end and its screenshots, and layout widths
+from 320 to 1024 px. Signing on a phone is not supported.
