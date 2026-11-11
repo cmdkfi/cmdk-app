@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useAppConfig, useMarketQuote } from '../components/data.ts'
 import { DiscoveryBanner, go, useSessionValue, type ScreenProps } from './common.tsx'
 
@@ -33,11 +34,11 @@ export function Settings({ mode, href, banner }: ScreenProps) {
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Your protection, in one picture</h1>
-      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells collateral to bring it back to {c.target}%. Below {c.act}% it may sell at its own discretion, at most {c.budget}% of your collateral per rolling day. A protective sale that started above {c.act}% can continue below it, back toward {c.target}%, for up to 24 hours.</p>
+      <p className="muted">These limits are preset in the testnet flow. Review what the agent may do before connecting your wallet.</p>
     </div>
 
     <figure className="surface corridor" style={{ margin: 0 }} aria-label="Loan-to-value corridor">
-      <div className="ltv-track" aria-hidden="true" style={{ marginTop: 36 }}>
+      <div className="ltv-track" aria-hidden="true" style={{ marginTop: 36, '--target': scale(c.target), '--act': scale(c.act) } as CSSProperties}>
         <div className="ltv-fill" style={{ width: scale(c.target), background: 'var(--line)' }} />
         {points.filter(p => p.at !== null).map(p => <span key={p.key} className={`tick ${p.key}`} style={{ left: scale(p.at!) }} />)}
         <span className="cur" style={{ left: scale(c.target) }} />
@@ -46,6 +47,10 @@ export function Settings({ mode, href, banner }: ScreenProps) {
         {points.map(p => <div key={p.key}><dt><i className={p.key} />{p.label}</dt><dd className="small muted" style={{ fontSize: 13 }}>{p.text}</dd></div>)}
       </dl>
     </figure>
+
+    <details className="surface rule-details"><summary>How protective selling works</summary>
+      <p className="muted">Fixed for this prototype. You borrow at {c.target}% of your collateral's value. If the price falls and the ratio climbs past {c.act}%, the agent sells collateral to bring it back to {c.target}%. Below {c.act}% it may sell at its own discretion, at most {c.budget}% of your collateral per rolling day. A protective sale that started above {c.act}% can continue below it, back toward {c.target}%, for up to 24 hours.</p>
+    </details>
 
     <div className="cols-3" aria-label="What the agent may do">
       <section className="surface stack" aria-labelledby="rules-will">

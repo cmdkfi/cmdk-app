@@ -84,7 +84,8 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     body = <p className="notice" role={app.isError ? 'alert' : 'status'}>{app.isError ? 'The app configuration could not be loaded.' : 'Loading…'}</p>
   } else if (state.status === 'disconnected' && wallets.length === 0) {
     body = <section className="surface stack-20" style={{ maxWidth: 640 }}>
-      <p>No browser wallet was found. This testnet app works with a wallet extension on desktop, such as MetaMask, Rabby, Coinbase Wallet, Brave or OKX.</p>
+      <p>No browser wallet was found. On a phone, open this site in your wallet’s built-in browser. On desktop, use a browser wallet extension.</p>
+      <p className="muted small">Copy this page’s address from your browser and paste it into the browser inside your wallet. WalletConnect and QR pairing are not available in this build.</p>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <a className="btn primary" href={guided.help.metamaskInstall} target="_blank" rel="noreferrer">Install a wallet</a>
         {SANDBOX && mode === 'live' && <TryInSandbox />}
@@ -188,7 +189,7 @@ export function Connect({ mode, href, banner, discovery }: ScreenProps & { disco
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <h1 id="screen-title">Connect wallet</h1>
-      <p className="muted">A desktop browser wallet on Base Sepolia. The app switches the network for you, or adds it, with your wallet's own confirmation.</p>
+      <p className="muted">Use a browser wallet on Base Sepolia. On mobile, open cmdk inside your wallet’s browser. Your wallet confirms every network change, signature and transaction.</p>
     </div>
     {body}
     {error && <p className="notice notice--warning" role="alert">{error}</p>}

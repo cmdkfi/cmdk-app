@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Address } from 'viem'
 import { useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
@@ -69,7 +69,7 @@ function LtvTrack({ m }: { m: PositionMarket }) {
   ]
   return <section className="surface" aria-labelledby="corridor-title">
     <div className="card-head"><h3 id="corridor-title">Risk corridor</h3></div>
-    <div className="ltv-track" aria-hidden="true">
+    <div className="ltv-track" aria-hidden="true" style={m.corridor.set ? { '--target': `${pctNum(m.corridor.target)}%`, '--act': `${pctNum(m.corridor.act)}%` } as CSSProperties : { background: 'var(--raised)' }}>
       {m.ltv !== null && <div className="ltv-fill" style={{ width: `${Math.min(100, pctNum(m.ltv))}%` }} />}
       {marks.filter(x => x.at !== null).map(x => <span key={x.key} className={`tick ${x.key}`} style={{ left: `${pctNum(x.at!)}%` }} />)}
       {m.ltv !== null && <span className="cur" style={{ left: `${Math.min(100, pctNum(m.ltv))}%` }} />}

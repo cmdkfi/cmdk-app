@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AdapterProvider, useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { WalletState } from '../adapters/types.ts'
 import { afterConnect, guard, landing, type EntryInput, type Resolution, type WalletEntry } from '../flow/entry.ts'
@@ -11,12 +11,11 @@ import { Progress } from '../screens/Progress.tsx'
 import { loadCloseRecord, loadRecord } from '../flow/onboarding-record.ts'
 import { Settings } from '../screens/Settings.tsx'
 import { useAppConfig, useDeploymentStatic, useDiscovery } from './data.ts'
-import { DesktopGate } from './DesktopGate.tsx'
+import { SetupProgress } from './SetupProgress.tsx'
 import { WalletSlot } from './WalletSlot.tsx'
 import { LeaveSandboxSheet, SandboxBanner, TryInSandbox } from './Sandbox.tsx'
 
 const BASE_SEPOLIA = 84532
-const DESKTOP = '(min-width: 960px)'
 const BEFORE_WALLET: Route[] = ['start', 'settings', 'connect']
 
 function useHash() {
@@ -32,14 +31,6 @@ function useHash() {
     setHash(next)
   }, [])
   return [hash, replace] as const
-}
-
-/** FR-16 / D9: below 960 px the shell (adapters, silent reconnect, reads) is not mounted at all. */
-function useDesktop() {
-  return useSyncExternalStore(
-    listener => { const query = window.matchMedia(DESKTOP); query.addEventListener('change', listener); return () => query.removeEventListener('change', listener) },
-    () => window.matchMedia(DESKTOP).matches,
-  )
 }
 
 function walletEntry(state: WalletState): WalletEntry {
@@ -102,6 +93,13 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   else resolution = guard(route, input)
 
   const target = resolution.kind === 'route' ? resolution.route : null
+  useEffect(() => {
+    if (!target) return
+    const heading = document.getElementById('screen-title')
+    heading?.setAttribute('tabindex', '-1')
+    heading?.focus({ preventScroll: true })
+    window.scrollTo({ top: 0 })
+  }, [target])
   const settled = pending === 'entry' ? resolution.kind === 'route' : pending === 'connect' ? afterConnect(route, input) !== null : false
   useEffect(() => {
     if (settled) setPending(null)
@@ -123,14 +121,16 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     case 'position': screen = <Position mode={mode} href={href} variant={resolution.variant} discovery={discovery} />; break
   }
 
-  // docs/mockups: S1–S3 in the 960 px column, S4–S7 in the 1120 px one
+  // Keep the screen variant available to the shared responsive layout.
   const wide = resolution.kind === 'route' && (resolution.route === 'progress' || resolution.route === 'position')
   const sandbox = SANDBOX && mode === 'sandbox'
   return <div className="shell">
     {sandbox && <SandboxBanner onLeave={() => setLeaving(true)} />}
     {leaving && <LeaveSandboxSheet onStay={() => setLeaving(false)} />}
+    <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus() }}>Skip to content</a>
     <header className="header">
-      <a className="brand" href={href('start')} aria-label="cmdk home">⌘K</a>
+      <div className="header-inner">
+      <a className="brand" href={href('start')} aria-label="cmdk home">⌘K cmdk</a>
       <div className="header-actions">
         <WalletSlot
           kind={mode}
@@ -144,28 +144,30 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
         {SANDBOX && mode === 'live' && state.status === 'disconnected' && <TryInSandbox variant="link" />}
         <span className="chip">{mode === 'live' && state.status === 'disconnected' ? 'Testnet · Base Sepolia · no real funds' : 'Testnet · no real funds'}</span>
       </div>
+      </div>
     </header>
-    <main className={`main${wide ? ' wide' : ''}`}>{screen}</main>
+    <main id="main-content" tabIndex={-1} className={`main${wide ? ' wide' : ''}`}>
+      {resolution.kind === 'route' && <SetupProgress route={resolution.route} />}
+      {screen}
+    </main>
     <footer className="footer">
-      <span>Unaudited testnet prototype. Agent protection is risk management, not insurance.</span>
+      <span>Runs on NEAR testnet and Base Sepolia. Unaudited. No real money.<br />Agent protection is risk management, not insurance.</span>
       <a href="https://github.com/cmdkfi/app" target="_blank" rel="noreferrer">Protocol source</a>
     </footer>
   </div>
 }
 
 export function App() {
-  const desktop = useDesktop()
   const [hash, replace] = useHash()
   const { place, canonical, entry } = parseHash(hash)
   // Read the hash again here: the Shell's guard (a child effect, run first) may already have replaced it in this
   // commit, and the canonical form of the stale hash would undo that (#sandbox/close → #sandbox/position → #sandbox/start).
   useEffect(() => {
-    if (!desktop || entry) return
+    if (entry) return
     const current = window.location.hash
     const next = parseHash(current).canonical
     if (next !== current) replace(next)
-  }, [desktop, entry, canonical, hash, replace])
-  if (!desktop) return <div className="vault-app"><DesktopGate /></div>
+  }, [entry, canonical, hash, replace])
   return <div className="vault-app">
     <AdapterProvider kind={place.mode} key={place.mode}>
       <Shell mode={place.mode} route={place.route} entry={entry} replace={replace} />

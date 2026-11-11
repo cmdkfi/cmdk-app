@@ -19,7 +19,7 @@ test('S1: estimates come from the live market read', async ({ page, context, fx 
   await expect(page.getByText('about 160 USDC')).toBeVisible()
   await expect(page.getByText(/^5\.0% APR$/)).toBeVisible()
   await expect(page.getByText('Collateral yield')).toBeVisible()
-  for (const name of ['BTC', 'NEAR', 'Gold', 'AAPL', 'Rhea · NEAR', 'Aave · Ethereum', 'Kamino · Solana']) await expect(page.locator('.tile').filter({ has: page.getByText(name, { exact: true }) })).toHaveAttribute('aria-disabled', 'true')
+  for (const name of ['BTC', 'NEAR', 'Gold', 'Tokenized stocks', 'Rhea · NEAR', 'Aave · Ethereum', 'Kamino · Solana']) await expect(page.locator('.tile').filter({ has: page.getByText(name, { exact: true }) })).toHaveAttribute('aria-disabled', 'true')
   expect(fx.ethCalls).toEqual(expect.arrayContaining(['idToMarketParams', 'config', 'market', 'price', 'borrowRateView', 'decimals']))
 })
 
@@ -29,7 +29,7 @@ test('S1: failed oracle and IRM reads are shown as unavailable, never as numbers
   await page.getByLabel('Amount to deposit').fill('0.1')
   await expect(page.getByText('rate unavailable')).toBeVisible()
   await expect(page.locator('#deposit-hint')).toContainText('Value unavailable')
-  await expect(page.locator('.estimate')).not.toContainText('USDC')
+  await expect(page.locator('.loan-estimate')).toHaveText('unavailable')
 })
 
 test('S1: when the market cannot lend the full amount, a warning replaces the estimate (R2)', async ({ page, context, fx }) => {

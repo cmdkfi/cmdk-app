@@ -12,9 +12,11 @@ const E = 10n ** 18n
 const VAULT = 'v10.factory.fixture.testnet'
 const SHARES = 160_080_000n
 
-// A tall fixed viewport instead of fullPage: a full-page capture resizes the viewport, and the app unmounts its shell
-// below 960 px (FR-16), which would reset the screen being captured.
-test.use({ timezoneId: 'UTC', locale: 'en-US', viewport: { width: 1280, height: 2200 } })
+// Both artboards exercise the same real screens. Capture full pages so lower mobile controls are reviewed too.
+test.use({ timezoneId: 'UTC', locale: 'en-US' })
+test.beforeEach(async ({ page }, info) => {
+  await page.setViewportSize(info.project.name === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 900 })
+})
 
 async function frozen(page: Page) {
   // the fixture's NOW plus 20 s: block times, feed ages and "N s ago" lines are fixed
@@ -22,8 +24,9 @@ async function frozen(page: Page) {
 }
 
 async function shot(page: Page, name: string) {
-  await page.evaluate(() => document.fonts.ready)
-  await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.01 })
+  await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0) })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal page overflow').toBe(true)
+  await expect(page).toHaveScreenshot(`${test.info().project.name === 'mobile' ? 'mobile-' : ''}${name}.png`, { fullPage: await page.locator('dialog[open]').count() === 0, animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.01 })
 }
 
 async function connect(page: Page) {
@@ -114,7 +117,7 @@ test('S0 header: connected, wallet menu open', async ({ page, context, fx }) => 
   await page.getByRole('button', { name: /· Base Sepolia/ }).click()
   await expect(page.getByRole('menu')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Close position' })).toBeEnabled()
-  await expect(page).toHaveScreenshot('s0-wallet-menu.png', { clip: { x: 0, y: 0, width: 1280, height: 280 }, animations: 'disabled', maxDiffPixelRatio: 0.01 })
+  await expect(page).toHaveScreenshot(`${test.info().project.name === 'mobile' ? 'mobile-' : ''}s0-wallet-menu.png`, { clip: { x: 0, y: 0, width: page.viewportSize()!.width, height: 400 }, animations: 'disabled', maxDiffPixelRatio: 0.01 })
 })
 
 test('S6 Close: wallet short of USDC, Get test USDC', async ({ page, context, fx }) => {
