@@ -29,7 +29,7 @@ function storage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefi
 const queryClient = new QueryClient()
 const persister = createSyncStoragePersister({ storage: storage(), key: QUERY_CACHE_KEY, serialize: stringifyBig, deserialize: parseBig })
 
-document.documentElement.dataset.theme = 'dark'
+document.documentElement.dataset.theme = 'light'
 createRoot(document.getElementById('root')!).render(
   <PersistQueryClientProvider
     client={queryClient}

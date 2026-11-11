@@ -33,7 +33,7 @@ async function onboard(page: Page, s3Button: 'Create position' | 'Deposit') {
 }
 
 const crashCard = (page: Page) => page.getByRole('region', { name: 'Market crash' })
-const stageCell = (page: Page, stage: string, column: 'without' | 'with') => crashCard(page).locator(`tr[data-stage="${stage}"] [data-column="${column}"]`)
+const stageCell = (page: Page, stage: string, column: 'without' | 'with') => crashCard(page).locator(`tr[data-stage="${stage}"] [data-column="${column}"] .crash-value`)
 const heroLtv = (page: Page) => page.locator('.figure').filter({ hasText: 'LTV' }).locator('.big')
 /** A hero figure as one line, e.g. "320.99 USDC" (the number and its unit are separate elements). */
 const hero = async (page: Page, label: 'Debt' | 'Collateral' | 'LTV') => (await page.locator('.figure').filter({ hasText: label }).locator('.big').innerText()).replace(/\s+/g, ' ').trim()

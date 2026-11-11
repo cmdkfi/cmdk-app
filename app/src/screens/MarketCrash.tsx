@@ -33,8 +33,8 @@ export function MarketCrash({ vaultId }: { vaultId: string }) {
       <tbody>
         {copy.rows.map(row => <tr key={row.key} data-stage={row.key}>
           <th scope="row">{row.title}<span>{row.price}</span></th>
-          <td data-column="without">{text(row.without)}</td>
-          <td data-column="with">{text(row.with)}</td>
+          <td data-column="without"><span className="crash-mobile-label">{WITHOUT_HEAD}</span><span className="crash-value">{text(row.without)}</span></td>
+          <td data-column="with"><span className="crash-mobile-label">{WITH_HEAD}</span><span className="crash-value">{text(row.with)}</span></td>
         </tr>)}
       </tbody>
     </table>}

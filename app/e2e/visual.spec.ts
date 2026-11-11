@@ -12,9 +12,20 @@ const E = 10n ** 18n
 const VAULT = 'v10.factory.fixture.testnet'
 const SHARES = 160_080_000n
 
-// A tall fixed viewport instead of fullPage: a full-page capture resizes the viewport, and the app unmounts its shell
-// below 960 px (FR-16), which would reset the screen being captured.
-test.use({ timezoneId: 'UTC', locale: 'en-US', viewport: { width: 1280, height: 2200 } })
+// Fixed artboard heights keep the lower controls in view without fullPage's platform-dependent rounding.
+// The fit assertion below fails if content grows beyond an artboard instead of silently cropping it.
+const artboardHeights: Record<string, [number, number]> = {
+  's1-choose': [1700, 2000], 's2-settings': [1600, 2600],
+  's3-wallets': [1000, 1100], 's3-connected': [1300, 1500], 's3a-get-eth': [1400, 2200],
+  's4-progress': [1900, 3400], 's5-position': [1900, 3200], 's5-liquidated': [1900, 3000],
+  's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
+  'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2300, 3800],
+  'sandbox-s5-crash-stage3': [2700, 5200],
+}
+test.use({ timezoneId: 'UTC', locale: 'en-US' })
+test.beforeEach(async ({ page }, info) => {
+  await page.setViewportSize(info.project.name === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 900 })
+})
 
 async function frozen(page: Page) {
   // the fixture's NOW plus 20 s: block times, feed ages and "N s ago" lines are fixed
@@ -22,8 +33,17 @@ async function frozen(page: Page) {
 }
 
 async function shot(page: Page, name: string) {
-  await page.evaluate(() => document.fonts.ready)
-  await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.01 })
+  const mobile = test.info().project.name === 'mobile'
+  const dialog = page.locator('dialog[open]')
+  const modal = await dialog.count() > 0
+  if (!modal) {
+    expect(artboardHeights[name], `fixed artboard defined for ${name}`).toBeTruthy()
+    await page.setViewportSize({ width: mobile ? 390 : 1280, height: artboardHeights[name]![mobile ? 1 : 0] })
+  }
+  await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0) })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal page overflow').toBe(true)
+  if (!modal) expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'all page content fits the artboard').toBe(true)
+  await expect(page).toHaveScreenshot(`${mobile ? 'mobile-' : ''}${name}.png`, { fullPage: false, animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.01 })
 }
 
 async function connect(page: Page) {
@@ -114,7 +134,7 @@ test('S0 header: connected, wallet menu open', async ({ page, context, fx }) => 
   await page.getByRole('button', { name: /· Base Sepolia/ }).click()
   await expect(page.getByRole('menu')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Close position' })).toBeEnabled()
-  await expect(page).toHaveScreenshot('s0-wallet-menu.png', { clip: { x: 0, y: 0, width: 1280, height: 280 }, animations: 'disabled', maxDiffPixelRatio: 0.01 })
+  await expect(page).toHaveScreenshot(`${test.info().project.name === 'mobile' ? 'mobile-' : ''}s0-wallet-menu.png`, { clip: { x: 0, y: 0, width: page.viewportSize()!.width, height: 400 }, animations: 'disabled', maxDiffPixelRatio: 0.01 })
 })
 
 test('S6 Close: wallet short of USDC, Get test USDC', async ({ page, context, fx }) => {

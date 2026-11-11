@@ -8,13 +8,13 @@ test('shell: S1 renders with header, wallet slot and footer; only the app and th
   await fx.install(context)
   await page.goto('/')
   await expect(page).toHaveURL(/#start$/)
-  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveText('⌘K')
+  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveText('⌘K cmdk')
   // Phase 8 (PRD S0, 10 Nov): no Connect button in the header; the wallet slot appears only once connected
   // the only header control while disconnected is the sandbox entry (Phase 6b, product owner 10 Nov)
   await expect(page.getByRole('banner').getByRole('button')).toHaveText(['Try in sandbox'])
   await expect(page.locator('.wallet-slot')).toHaveCount(0)
   await expect(page.getByText('Testnet · Base Sepolia · no real funds', { exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Borrow USDC against ETH. Keep risk on autopilot.')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Borrow against what you hold.')
   await expect(page.getByRole('contentinfo')).toContainText('Agent protection is risk management, not insurance.')
   await expect(page.getByText('5.0% APR')).toBeVisible()
   // Without a wallet: no NEAR, no relayer, no GitHub; the market read is the only external call.
@@ -108,16 +108,17 @@ test('Phase 8: a browser without any wallet shows "Install a wallet" and nothing
   await expect(page.getByRole('list', { name: 'Wallets in this browser' })).toHaveCount(0)
 })
 
-test('desktop gate: below 960px the shell is not mounted, so no wallet call or read happens', async ({ page, context, fx }) => {
+test('responsive shell: changing width keeps the amount and does not prompt a wallet', async ({ page, context, fx }) => {
   await fx.install(context)
-  await page.setViewportSize({ width: 900, height: 900 })
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Open cmdk on a desktop browser' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveCount(0)
-  await page.waitForTimeout(500)
-  expect(fx.walletCalls, 'no silent reconnect below 960px').toEqual([])
-  expect([...fx.hosts]).toEqual([APP])
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await expect(page.getByRole('heading', { name: 'Open cmdk on a desktop browser' })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'cmdk home' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Borrow against what you hold.' })).toBeVisible()
+  await page.getByLabel('Amount to deposit').fill('0.123')
+  for (const width of [768, 1280, 360]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(page.getByLabel('Amount to deposit')).toHaveValue('0.123')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  expect(fx.walletCalls.filter(method => !['eth_accounts', 'eth_chainId'].includes(method))).toEqual([])
+  expect(fx.signs).toEqual([]); expect(fx.posts).toEqual([]); expect(fx.txs).toEqual([])
 })

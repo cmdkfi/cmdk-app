@@ -10,7 +10,7 @@ cites the file and line it comes from. Check that repository before changing tra
 requirements are in [`docs/prd-guided-flow.md`](docs/prd-guided-flow.md); the build plan and review notes per phase are
 in [`tasks/todo.md`](tasks/todo.md).
 
-Desktop and mobile: the same app stays mounted at every width, including when rotating a phone or resizing a window. Any
+Desktop, with an experimental mobile layout inside a wallet browser (real-device signing rehearsal pending). The same app stays mounted at every width, including when rotating a phone or resizing a window. Any
 injected browser wallet works (every wallet announced through EIP-6963, plus `window.ethereum` when it is not
 announced; no connect-modal library); plain accounts and EIP-7702 delegated accounts are supported, contract wallets are
 not (the vault verifies owner messages with ecrecover). On mobile, use the wallet’s built-in browser; ordinary Safari/Chrome without an injected provider show wallet-browser guidance and a sandbox entry. WalletConnect/QR pairing is not configured. The header shows the wallet slot only once connected; connecting
@@ -174,7 +174,7 @@ stale vault approval and its re-approval from S5 (including a reload mid-call), 
 configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
 transaction, and they do not replace a live signed rehearsal.
 
-The screens follow the approved **A Light** desktop/mobile proposal (`../design-proposals/full-light-v3/` in the design workspace), synchronized with the landing design. `app/src/styles/cmdk.css` contains the shared palette, panels, responsive layouts and phone bottom sheets. The older `docs/mockups/` files remain historical references. `app/e2e/visual.spec.ts` compares desktop and mobile screenshots per screen state against baselines in
+The **A Light** design shares the landing’s warm canvas, white panels, charcoal typography and green accents. `app/src/styles/cmdk.css` contains the shared palette, panels, responsive layouts and phone bottom sheets. The older `docs/mockups/` files remain historical references. `app/e2e/visual.spec.ts` compares desktop and mobile screenshots per screen state against baselines in
 `app/e2e/__screenshots__/{darwin,linux}/`; CI and the deploy workflow use the linux set. A deliberate visual change
 updates darwin with `pnpm test:visual:update` and linux with the `frontend quality` workflow run by hand with `visual_baselines: true` (same runner and
 steps as CI; its artifact `visual-baselines-linux` is downloaded with `gh run download`); the new images are reviewed

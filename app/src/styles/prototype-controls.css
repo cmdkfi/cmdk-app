@@ -1,7 +1,7 @@
 /* Values from the final “x.ai reference elements” layer in the original prototype. */
 @font-face{font-family:CmdkReference;src:url('/prototype/xvf-reference.woff2') format('woff2');font-weight:200 800;font-style:normal;font-display:swap}
 .vault-app{--bg:#0a0a0a;--ink:#fff;--muted:#a3a3a3;--surface:#1a1a1a;--raised:#202020;--hover:#303030;--selected:#3b3b3b;--line:#303030;--accent:#fff;--accent-ink:#0a0a0a;font-family:CmdkReference,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:var(--ink)}
-:root[data-theme=light] .vault-app{--bg:#fff;--ink:#0a0a0a;--muted:#73716d;--surface:#f9f8f6;--raised:#f2f1ef;--hover:#e8e7e4;--selected:#e2e1de;--line:#e7e5e1;--accent:#0a0a0a;--accent-ink:#fff}
+:root[data-theme=light] .vault-app{--bg:#f6f7f5;--ink:#17211b;--muted:#5d675f;--surface:#fff;--raised:#f1f3f0;--hover:#e7f1e8;--selected:#e7f1e8;--line:#dde2dc;--accent:#17211b;--accent-ink:#fff;--green:#2f7654;--green-soft:#e7f1e8;--warning:#986110;--danger:#a43c3c}
 .prototype-button,.prototype-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--raised);color:var(--ink);border-radius:9999px;min-height:44px;font-size:14px;font-weight:500;padding:12px 20px;touch-action:manipulation}
 .prototype-button.is-primary{background:var(--accent);color:var(--accent-ink)}
 .prototype-button:disabled{opacity:.45;cursor:not-allowed}
