@@ -10,10 +10,10 @@ cites the file and line it comes from. Check that repository before changing tra
 requirements are in [`docs/prd-guided-flow.md`](docs/prd-guided-flow.md); the build plan and review notes per phase are
 in [`tasks/todo.md`](tasks/todo.md).
 
-Desktop only: below 960 px wide the app is not mounted (a notice is shown, no wallet or network call is made). Any
+Desktop and mobile: the same app stays mounted at every width, including when rotating a phone or resizing a window. Any
 injected browser wallet works (every wallet announced through EIP-6963, plus `window.ethereum` when it is not
 announced; no connect-modal library); plain accounts and EIP-7702 delegated accounts are supported, contract wallets are
-not (the vault verifies owner messages with ecrecover). The header shows the wallet slot only once connected; connecting
+not (the vault verifies owner messages with ecrecover). On mobile, use the wallet’s built-in browser; ordinary Safari/Chrome without an injected provider show wallet-browser guidance and a sandbox entry. WalletConnect/QR pairing is not configured. The header shows the wallet slot only once connected; connecting
 happens on S3. A wallet that reports another chain is asked to switch to Base Sepolia right after connecting, and every
 action that needs the chain asks again; the step says "Switch to Base Sepolia in your wallet." until it does.
 
@@ -149,7 +149,7 @@ pnpm dev
 ```
 
 Open http://localhost:5173. The strict port is intentional: the relayer's CORS configuration permits that origin. The
-app configuration (`public/config.json`) is generated from the published deployment manifest `deployments/testnet.json`
+app configuration (`public/config.json`) is generated from the published deployment manifest `deployments/testnet.json` (a copy beside the repository if present, otherwise fetched from `cmdkfi/app` `main`)
 (CI downloads it from cmdkfi/app `main`; locally, place it at the repository root) and `app/config.app.json`; never
 invent an address. Every address in the generated config comes from the manifest.
 
@@ -159,7 +159,7 @@ pnpm build                  # production build into dist/; run it first: it gene
 pnpm test                   # 162 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers (the sandbox ships, PRD §8a)
 pnpm exec playwright install --with-deps chromium   # --with-deps also installs Chromium's system libraries on Linux (as CI does)
-pnpm test:browser           # 88 browser scenarios, desktop Chromium (18 of them screenshot comparisons), against a production build served by vite preview
+pnpm test:browser           # desktop and mobile Chromium scenarios, including screenshot comparisons, against a production build served by vite preview
 pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
 
@@ -174,8 +174,7 @@ stale vault approval and its re-approval from S5 (including a reload mid-call), 
 configuration and the wallet's watch-asset request. They do not use a real extension, a live RPC or an on-chain
 transaction, and they do not replace a live signed rehearsal.
 
-The screens' markup and CSS follow the mockups in `docs/mockups/` (`app/src/styles/cmdk.css` is their `cmdk.css`, in the
-app's colour tokens). `app/e2e/visual.spec.ts` compares one screenshot per screen state against baselines in
+The screens follow the approved **A Light** desktop/mobile proposal (`../design-proposals/full-light-v3/` in the design workspace), synchronized with the landing design. `app/src/styles/cmdk.css` contains the shared palette, panels, responsive layouts and phone bottom sheets. The older `docs/mockups/` files remain historical references. `app/e2e/visual.spec.ts` compares desktop and mobile screenshots per screen state against baselines in
 `app/e2e/__screenshots__/{darwin,linux}/`; CI and the deploy workflow use the linux set. A deliberate visual change
 updates darwin with `pnpm test:visual:update` and linux with the `frontend quality` workflow run by hand with `visual_baselines: true` (same runner and
 steps as CI; its artifact `visual-baselines-linux` is downloaded with `gh run download`); the new images are reviewed
@@ -183,3 +182,16 @@ before they are committed.
 
 Pull requests to `main` run `frontend quality` (build, unit tests, bundle boundary, browser scenarios); pushes to `main`
 deploy to testnet.cmdk.fi. The `deploy testnet` workflow can also be run by hand on a branch for a preview.
+
+## Responsive design review
+
+The first screen keeps the available ETH → USDC route visible on phones and expands the asset catalogue on request.
+Setup steps remain visible before connecting. Transaction progress puts the active step first on phones; confirmation,
+revoke and sandbox dialogs become scrollable bottom sheets. Position metrics stack, long addresses wrap, and sandbox
+crash comparisons stack without horizontal scrolling. Resizing never remounts the adapters or clears a flow.
+
+Amounts, rates, balances, agent states and verification results still come from the existing adapters. No illustrative
+mockup values enter live screens. Protocol messages, transaction ordering and recovery checks are unchanged.
+The browser suite exercises both viewports against the existing fixtures; mobile tests additionally cover the compact
+catalogue, no-wallet guidance, confirmations and layout widths from 320 to 1024 px. Real mobile wallet signing still
+needs a device rehearsal; a browser fixture is not a wallet integration test.
