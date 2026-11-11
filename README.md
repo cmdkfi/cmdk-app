@@ -42,7 +42,7 @@ calculated "without the agent" outcome (Morpho Blue's liquidation, from `Morpho.
 position, where the agent's protective reduce uses the protocol's own `repayToLtv`. A banner marks every sandbox screen, explorer links are
 disabled and tagged "simulated", and verification rows read "Simulated (not checked)". The previous app removed demo
 balances and demo routes; this sandbox is acceptable because it is isolated and labelled: it never instantiates the
-live adapters, never contacts a network host and never writes localStorage (its state lives in sessionStorage and is
+live adapters, makes no network request of its own (a read the live screens had already started can still complete after "Try in sandbox" is pressed from a live screen; a sandbox entered fresh makes none) and never writes localStorage (its state lives in sessionStorage and is
 cleared by Leave sandbox or by closing the tab), which `e2e/sandbox.spec.ts` checks, and it makes no claim about the
 live protocol.
 
