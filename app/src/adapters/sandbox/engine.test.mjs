@@ -3,10 +3,10 @@
 // the close. A fake clock drives it; no storage, no network.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isHealthy, liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, REGISTER_MS, repayToLtv, SandboxEngine, STAGE_MS, START_PRICE, valueOf, WAD, withoutAgent } from './engine.ts'
+import { aprHundredths, interestForYear, isHealthy, liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, MAX_MOVES, REGISTER_MS, repayToLtv, SandboxEngine, STAGE_MS, START_PRICE, STORAGE_KEY, valueOf, VENUE_SCENE, WAD, withoutAgent } from './engine.ts'
 
 const pct = n => BigInt(n) * 10n ** 16n
-const CORRIDOR = { target: pct(50), act: pct(70), floor: pct(30), budget: pct(20) }
+const CORRIDOR = { target: pct(50), act: pct(70), floor: pct(30), budget: pct(20), migrate: true }
 
 function engineAt(t0 = 1_000_000) {
   let now = t0
@@ -226,3 +226,153 @@ test('sandbox revoke_agent (Phase 12): clears the approval and the key, keeps th
   s.tick(REGISTER_MS)
   assert.ok(s.e.registeredAt())
 })
+
+// ---- Venue stress (docs/prd-sandbox-venue-stress.md): three user-advanced stages; stage 3 is Executor.migrate ----------
+
+/** Close the open position from wherever it sits (the close repays on the vault's market), then Start over's reset. */
+function closeAndReset(s, nonce) {
+  const debt = s.e.debt()
+  s.e.walletTx({ kind: 'transfer', token: 'usdc', amount: debt + debt / 100n + 10n ** 6n })
+  s.e.ownerCall('close', { market: s.e.state().vault.market }, nonce); s.tick(STAGE_MS)
+  s.e.resetPrice()
+}
+
+/** Start over on the same vault: send the released WETH home, wrap and transfer again, open (as S4 runs it after Start over). */
+function reopen(s, nonce, deposit = 5n * 10n ** 17n) {
+  s.e.ownerCall('withdraw', { token: 'weth', amount: s.e.state().vault.idle.weth.toString() }, nonce); s.tick(STAGE_MS)
+  s.e.walletTx({ kind: 'wrap', amount: deposit }); s.e.walletTx({ kind: 'transfer', token: 'weth', amount: deposit })
+  s.e.ownerCall('open', { collateral_in: deposit.toString(), target_ltv: pct(50).toString() }, nonce + 1); s.tick(STAGE_MS)
+}
+
+test('sandbox venue stress: stages 1 and 2 move nothing; stage 3 moves the position to backup, collateral identical and debt equal, no sale and no price move', () => {
+  const s = engineAt()
+  openPosition(s)
+  const v0 = s.e.state().vault
+  assert.equal(v0.market, 'live'); assert.equal(v0.venue, null); assert.equal(s.e.movesInWindow(), 0)
+  const debt0 = s.e.debt()
+  s.e.venueRun()
+  let v = s.e.state().vault
+  assert.deepEqual({ status: v.venue.status, stage: v.venue.stage }, { status: 'running', stage: 1 })
+  assert.deepEqual(v.venue.start, { collateral: 5n * 10n ** 17n, debt: debt0, ltv: ltvOf(debt0, valueOf(5n * 10n ** 17n, START_PRICE)) })
+  s.e.venueNext()
+  v = s.e.state().vault
+  assert.equal(v.venue.stage, 2)
+  // the judge's stage changes nothing: same market, collateral, debt; no event; no price move
+  assert.equal(v.market, 'live'); assert.equal(v.collateral, 5n * 10n ** 17n); assert.equal(s.e.debt(), debt0)
+  assert.equal(s.e.state().events.filter(e => e.actor === 'agent').length, 0)
+  const idle = { ...v.idle }, before = s.e.state().events.length
+  s.e.venueNext()
+  v = s.e.state().vault
+  assert.equal(v.venue.stage, 3); assert.equal(v.market, 'backup')
+  // Executor.migrate: collateral conserved exactly, debt conserved (to the unit; the sandbox has one accrual, so exactly)
+  assert.equal(v.collateral, 5n * 10n ** 17n)
+  assert.equal(v.venue.move.collateralBefore, v.venue.move.collateralAfter)
+  assert.equal(v.venue.move.debtBefore, v.venue.move.debtAfter)
+  assert.equal(s.e.debt(), debt0)
+  assert.equal(s.e.price(), START_PRICE)
+  assert.deepEqual(v.idle, idle) // no sale: nothing reaches the position address
+  const added = s.e.state().events.slice(before)
+  assert.deepEqual(added.map(e => [e.name, e.actor]), [['Migrated', 'agent']])
+  assert.deepEqual(added[0].args, { from: 'live', to: 'backup', fraction: WAD, debtMoved: debt0, collateralMoved: 5n * 10n ** 17n })
+  assert.equal(s.e.movesInWindow(), 1)
+  s.e.venueNext()
+  assert.equal(s.e.state().vault.venue.status, 'done')
+  assert.throws(() => s.e.venueNext(), /No venue stress is running/)
+  assert.throws(() => s.e.venueRun(), /already run/)
+})
+
+test('sandbox venue stress: the summary\'s interest for a year is debt × the recorded APR as shown (2.78 %, 0.92 %), simple', () => {
+  const p = VENUE_SCENE.phases
+  assert.equal(aprHundredths(p.after_borrow.markets.live.borrow_apr), 278n)
+  assert.equal(aprHundredths(p.after.markets.backup.borrow_apr), 92n)
+  // the §8a.1 position's debt, 802.5 USDC: 22.3095 and 7.383 USDC (the card truncates to cents in the hero's format: $22.3, $7.38)
+  assert.equal(interestForYear(802_500_000n, 278n), 22_309_500n)
+  assert.equal(interestForYear(802_500_000n, 92n), 7_383_000n)
+  const s = engineAt()
+  openPosition(s)
+  s.e.venueRun(); s.e.venueNext(); s.e.venueNext()
+  const m = s.e.state().vault.venue.move
+  assert.equal(m.debtAfter, 802_500_000n)
+  assert.deepEqual([m.interestLive, m.interestBackup], [22_309_500n, 7_383_000n])
+})
+
+test('sandbox venue stress: Close position from the backup market repays there and releases all collateral; Start over returns to live with both scenes offered', () => {
+  const s = engineAt()
+  openPosition(s)
+  s.e.venueRun(); s.e.venueNext(); s.e.venueNext()
+  assert.throws(() => s.e.resetPrice(), /still open/)
+  s.tick(60_000)
+  const debt = s.e.debt()
+  closeAndReset(s, 3)
+  const closed = s.e.state().events.filter(e => e.name === 'Closed')
+  assert.equal(closed.length, 1)
+  assert.equal(closed[0].args.market, 'backup')
+  assert.ok(closed[0].args.repaid >= debt)
+  let v = s.e.state().vault
+  assert.equal(v.collateral, 0n); assert.equal(s.e.debt(), 0n); assert.equal(v.idle.weth, 5n * 10n ** 17n)
+  // Start over's reset: back on live, no scene state; a new open offers both again
+  assert.equal(v.market, 'live'); assert.equal(v.venue, null); assert.equal(v.crash, null)
+  reopen(s, 4)
+  v = s.e.state().vault
+  assert.equal(v.market, 'live')
+  assert.equal(s.e.state().events.filter(e => e.name === 'Opened').at(-1).args.market, 'live')
+  s.e.venueRun(); s.e.crashRun()
+})
+
+test('sandbox: both scenes run on one position in either order, each once; after the move the agent reduces on the backup market', () => {
+  // crash first (finished at $3,210, LTV about 35%), then the venue stress moves the reduced position
+  const a = engineAt()
+  openPosition(a)
+  a.e.crashRun(); a.e.crashNext(); a.e.crashNext(); a.e.crashNext()
+  const coll = a.e.state().vault.collateral, debt = a.e.debt()
+  a.e.venueRun(); a.e.venueNext(); a.e.venueNext(); a.e.venueNext()
+  assert.equal(a.e.state().vault.market, 'backup')
+  assert.equal(a.e.state().vault.collateral, coll); assert.equal(a.e.debt(), debt)
+  assert.throws(() => a.e.crashRun(), /already run/); assert.throws(() => a.e.venueRun(), /already run/)
+  // venue first, then the crash: the protective reduce acts on the market that holds the loan
+  const b = engineAt()
+  openPosition(b)
+  b.e.venueRun(); b.e.venueNext(); b.e.venueNext(); b.e.venueNext()
+  b.e.crashRun()
+  const reduced = b.e.state().events.filter(e => e.name === 'Reduced')
+  assert.equal(reduced.length, 1)
+  assert.equal(reduced[0].args.market, 'backup')
+  assert.equal(b.e.state().vault.market, 'backup')
+})
+
+test('sandbox venue stress: Executor.migrate preconditions — migration allowed on both corridors, at most two moves per 24 hours', () => {
+  const off = (t0 = 1_000_000) => { let now = t0; const e = new SandboxEngine({ ...CORRIDOR, migrate: false }, () => now, false); return { e, tick: ms => { now += ms } } }
+  const d = off()
+  openPosition(d)
+  assert.throws(() => d.e.venueRun(), /MigrateDisabled/)
+  assert.equal(d.e.state().vault.venue, null)
+  // MAX_MOVES (Executor.sol l.51) in a rolling 24 hours (_recordMove l.593-599): the third run within the window is refused
+  assert.equal(MAX_MOVES, 2)
+  const s = engineAt()
+  openPosition(s)
+  s.e.venueRun(); s.e.venueNext(); s.e.venueNext(); s.e.venueNext()
+  closeAndReset(s, 3); reopen(s, 4)
+  s.e.venueRun(); s.e.venueNext(); s.e.venueNext()
+  assert.equal(s.e.movesInWindow(), 2)
+  closeAndReset(s, 6); reopen(s, 7)
+  assert.throws(() => s.e.venueRun(), /MoveLimit/)
+  s.tick(24 * 60 * 60 * 1000)
+  assert.equal(s.e.movesInWindow(), 0)
+  s.e.venueRun()
+})
+
+test('sandbox storage: STORAGE_KEY is v3; a v2 state from an earlier tab is discarded', () => {
+  assert.equal(STORAGE_KEY, 'cmdk.sandbox.engine.v3')
+  const store = new Map()
+  const previous = globalThis.window
+  globalThis.window = { sessionStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) } }
+  try {
+    store.set(STORAGE_KEY, JSON.stringify({ v: 2, startedAt: 1, counter: 9, price: '1', wallet: {}, vault: { market: undefined }, jobs: {}, txs: {}, events: [] }))
+    const e = new SandboxEngine(CORRIDOR, () => 5_000)
+    assert.equal(e.state().vault, null)
+    assert.equal(e.state().v, 3)
+  } finally {
+    globalThis.window = previous
+  }
+})
+

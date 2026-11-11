@@ -4,7 +4,7 @@
 import type { Hex } from 'viem'
 import { ProtocolError, type Adapters, type AgentFacts, type ProtocolAdapter, type VaultView, type WalletAdapter, type WalletOption, type WalletState } from '../types.ts'
 import { SANDBOX_VAULT, SIM, sandboxConfig } from './config.ts'
-import { liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, WAD } from './engine.ts'
+import { liquidationIncentiveFactor, LIST_LAG_MS, LLTV, ltvOf, RATE_APR_WAD, SANDBOX_OWNER, SANDBOX_POSITION, SandboxEngine, STAGE_MS, valueOf, VENUE_SCENE, WAD } from './engine.ts'
 
 const NO_WALLETS: WalletOption[] = []
 const CONNECTED: WalletState = { status: 'connected', address: SANDBOX_OWNER, chainId: 84532, walletName: 'Sandbox wallet' }
@@ -37,6 +37,9 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
   const c = app.guided.corridor
   const block = () => engine.blockAt(engine.now())
   const vault = () => engine.state().vault
+  /** The position's collateral and debt on each market: all of it on the vault's market (live, or backup after the venue stress). */
+  const onMarket = (v: { market: 'live' | 'backup'; collateral: bigint }, market: 'live' | 'backup', debt: bigint) => (v.market === market ? { collateral: v.collateral, debt } : { collateral: 0n, debt: 0n })
+  const simId = (market: unknown) => (market === 'live' ? SIM.live : market === 'backup' ? SIM.backup : market)
 
   const vaultView = (): VaultView => {
     const v = vault()
@@ -46,7 +49,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       accountId: SANDBOX_VAULT, number: 10, owner: SANDBOX_OWNER, baseAddress: SANDBOX_POSITION, ownerNonce: v.ownerNonce,
       agentPublicKey: engine.registeredAt() ? 'ed25519:sandbox' : null, setupComplete: v.approved, measurementApproved: v.approved, approvesAny: v.approved, policyMatches: true,
       idle: { ...v.idle },
-      markets: [{ id: SIM.live, collateral: v.collateral, borrowShares: v.principal, debt }, { id: SIM.backup, collateral: 0n, borrowShares: 0n, debt: 0n }],
+      markets: (['live', 'backup'] as const).map(m => { const p = onMarket(v, m, debt); return { id: simId(m) as `0x${string}`, collateral: p.collateral, borrowShares: p.debt > 0n ? v.principal : 0n, debt: p.debt } }),
       setup: null,
     }
   }
@@ -112,7 +115,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
         blockNumber: block(), blockTime: BigInt(Math.floor(now / 1000)),
         vault: { accountId: SANDBOX_VAULT, number: 10, owner: SANDBOX_OWNER, baseAddress: SANDBOX_POSITION },
         morpho: SIM.morpho,
-        markets: [market(SIM.live, v.collateral, debt, value), market(SIM.backup, 0n, 0n, 0n)],
+        markets: (['live', 'backup'] as const).map(m => { const p = onMarket(v, m, debt); return market(simId(m) as `0x${string}`, p.collateral, p.debt, p.collateral > 0n ? value : 0n) }),
         idle: { ...v.idle },
         sellBudgets: [{ executor: SIM.executor, token: SIM.weth, activeCollateral: v.collateral, sold: 0n, budgetWad: pct(c.budget), remaining }],
       }
@@ -134,7 +137,7 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const from = fromBlock !== undefined && fromBlock > engine.firstBlock() ? fromBlock : engine.firstBlock()
       const items = s.events.map(e => ({ e, block: engine.blockAt(e.at) })).filter(({ block: b }) => b >= from && b <= to)
         .sort((a, b) => b.e.at - a.e.at || b.e.logIndex - a.e.logIndex)
-        .map(({ e, block: b }) => ({ name: e.name, actor: e.actor, blockNumber: b, time: BigInt(Math.floor(e.at / 1000)), transactionHash: e.hash, logIndex: e.logIndex, args: { ...e.args, market: e.args.market === 'live' ? SIM.live : e.args.market === 'backup' ? SIM.backup : e.args.market }, token: e.token === 'weth' ? SIM.weth : e.token === 'usdc' ? SIM.usdc : undefined }))
+        .map(({ e, block: b }) => ({ name: e.name, actor: e.actor, blockNumber: b, time: BigInt(Math.floor(e.at / 1000)), transactionHash: e.hash, logIndex: e.logIndex, args: { ...e.args, market: simId(e.args.market), ...(e.name === 'Migrated' ? { from: simId(e.args.from), to: simId(e.args.to) } : {}) }, token: e.token === 'weth' ? SIM.weth : e.token === 'usdc' ? SIM.usdc : undefined }))
       return { from, to, head, items, reachedStart: from === engine.firstBlock() }
     },
     readClosePlan: async () => {
@@ -144,7 +147,8 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       const holds = v.collateral > 0n || debtNow > 0n
       return {
         blockNumber: block(), blockTime: BigInt(Math.floor(now / 1000)),
-        markets: holds ? [{ id: SIM.live, borrowShares: v.principal, collateral: v.collateral, debtNow, debtAhead }] : [],
+        // one close on the market that holds the loan (live, or backup after the venue stress)
+        markets: holds ? [{ id: v.market === 'backup' ? SIM.backup : SIM.live, borrowShares: v.principal, collateral: v.collateral, debtNow, debtAhead }] : [],
         debtNow, debtAhead, needNow: debtNow + debtNow / 100n, needAhead: debtAhead + debtAhead / 100n,
         collateral: v.collateral, idle: { ...v.idle }, walletUsdc: engine.state().wallet.usdc,
       }
@@ -162,11 +166,22 @@ export function createSandboxProtocol(engine: SandboxEngine): ProtocolAdapter {
       next: async () => engine.crashNext(),
       resetPrice: async () => engine.resetPrice(),
     },
+    venue: {
+      read: async () => {
+        const v = vault()
+        if (!v || (!v.venue && (v.openedAt === null || v.collateral === 0n))) return null
+        const run = v.venue
+        return { status: run ? run.status : 'ready', stage: run ? run.stage : 0, start: run ? run.start : null, move: run ? run.move : null, scene: VENUE_SCENE }
+      },
+      run: async () => engine.venueRun(),
+      next: async () => engine.venueNext(),
+    },
   }
 }
 
 export function createSandboxAdapters(): Adapters {
-  const engine = new SandboxEngine({ target: pct(sandboxConfig().guided.corridor.target), act: pct(sandboxConfig().guided.corridor.act), floor: pct(sandboxConfig().guided.corridor.floor), budget: pct(sandboxConfig().guided.corridor.budget) })
+  const c = sandboxConfig().guided.corridor
+  const engine = new SandboxEngine({ target: pct(c.target), act: pct(c.act), floor: pct(c.floor), budget: pct(c.budget), migrate: c.migrate })
   return { kind: 'sandbox', wallet: createSandboxWallet(engine), protocol: createSandboxProtocol(engine) }
 }
 

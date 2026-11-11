@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { Address } from 'viem'
 import { useWalletLabel, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { ClosePlan, PositionMarket, PositionView } from '../adapters/types.ts'
-import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition, useSandboxPriceReset } from '../components/data.ts'
+import { SESSION_START, useActivity, useAgent, useAppConfig, useClosePlan, useDiscovery, usePosition, useSandboxPriceReset, useVenue } from '../components/data.ts'
 import { ShowUsdcButton } from '../components/ShowUsdc.tsx'
 import { ExtLink } from '../components/Sandbox.tsx'
 import { StepRow } from '../components/StepRow.tsx'
@@ -20,6 +20,8 @@ import { clearCloseRecord } from '../flow/onboarding-record.ts'
 import { actionRows, agentState, approveAction, backupStatus, budgetFor, canRevoke, currentMarket, positionVariant, type AgentState, type Variant } from '../flow/position.ts'
 import { Unavailable, useSessionValue, type ScreenProps } from './common.tsx'
 import { MarketCrash } from './MarketCrash.tsx'
+import { VenueStress } from './VenueStress.tsx'
+import { venueAgentNote } from '../flow/venue.ts'
 import { VerificationPanel } from './VerificationPanel.tsx'
 
 const BASE_SEPOLIA = 84532
@@ -110,7 +112,7 @@ function RevokeSheet({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
   </dialog>
 }
 
-function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, revoke, explorer, onApprove, onRevoke, corridor }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; revoke: Revoke; explorer: string; onApprove: (() => void) | null; onRevoke: (() => void) | null; corridor: { migrate: boolean; exit: boolean } }) {
+function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, closing, approve, revoke, explorer, onApprove, onRevoke, corridor, scene }: { vaultId: string; market: PositionMarket | null; view: PositionView; now: number; verifying: boolean; onVerify: () => void; variant: Variant; closing: boolean; approve: Approve; revoke: Revoke; explorer: string; onApprove: (() => void) | null; onRevoke: (() => void) | null; corridor: { migrate: boolean; exit: boolean }; scene: string | null }) {
   const agent = useAgent(vaultId)
   const status = agent.isError && !agent.data ? agentState(null, now) : agent.data ? agentState(agent.data, now) : null
   const approveStep = approve.record?.steps.approve, revokeStep = revoke.record?.steps.revoke
@@ -128,6 +130,8 @@ function AgentCard({ vaultId, market, view, now, verifying, onVerify, variant, c
   return <section className="surface stack card" aria-labelledby="agent-title">
     <div className="card-head"><h3 id="agent-title">Agent</h3><span className={`tag${status ? AGENT_TAG[status.state] : ''}`} role="status">{status ? status.state : 'Reading…'}</span></div>
     {status?.detail && <p className="muted small agent-detail">{status.detail}</p>}
+    {/* sandbox only: the venue stress replay's screen and judge (venue stress PRD §2) */}
+    {scene && <p className="small venue-agent" role="status">{scene}</p>}
     <dl className="rows">
       {/* PRD fact 7: the agent's key is limited to reduce, migrate and exit; it cannot increase debt (protocol README: a move may add up to two loan-token units of rounding) */}
       {row2('May do', `Reduce${corridor.migrate ? ' · migrate to backup' : ''}${corridor.exit ? ' · exit' : ''} · never increases your debt (a move may round it up by up to 0.000002 USDC)`)}
@@ -309,6 +313,7 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
   const plan = useClosePlan(vaultId, owner, routeVariant !== 'closed', closing)
   const [, setAmount] = useSessionValue(mode, 'amount', defaultDeposit(mode))
   const resetSandboxPrice = useSandboxPriceReset()
+  const venue = useVenue(mode === 'sandbox' ? vaultId : undefined)
 
   if (!app || !vaultId) return <section className="page page--tight" aria-labelledby="screen-title"><h1 id="screen-title">Your position</h1><p className="muted small" role="status">Reading your vault…</p></section>
   if (!view) {
@@ -405,7 +410,8 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
     <section className="cols-3" aria-label="Balances">
       {figure('Debt', debtN, debtU, `with interest accrued to block ${view.blockNumber.toString()}`)}
       {figure('Collateral', collN, collU, value !== null ? `≈ ${dollarText(value)} at the market oracle` : <Unavailable>value unavailable</Unavailable>)}
-      {figure('LTV', market?.ltv != null ? formatWadPercent(market.ltv) : debt > 0n && collateral === 0n ? 'unbounded' : <Unavailable />, null, null)}
+      {/* sandbox: the market holding the position, live or backup after the venue stress (venue stress PRD §2, §5) */}
+      {figure('LTV', market?.ltv != null ? formatWadPercent(market.ltv) : debt > 0n && collateral === 0n ? 'unbounded' : <Unavailable />, null, mode === 'sandbox' && market ? `Market: ${app.config.marketLabels[market.id.toLowerCase()] ?? 'unknown'}` : null)}
     </section>
     {market && <LtvTrack m={market} />}
 
@@ -416,10 +422,13 @@ export function Position({ mode, href, variant: routeVariant, discovery }: Omit<
 
     {/* PRD §8a.1: the sandbox's Market crash card above the Agent and Market cards, on an open position not being closed */}
     {mode === 'sandbox' && variant === 'active' && !closing && <MarketCrash vaultId={vaultId} />}
+    {/* venue stress PRD §1: the Venue stress card directly under the Market crash card, same conditions */}
+    {mode === 'sandbox' && variant === 'active' && !closing && <VenueStress vaultId={vaultId} />}
 
     <section className="cols-2 agent-market" aria-label="Agent and market">
       <AgentCard vaultId={vaultId} market={market} view={view} now={now} verifying={verifying} onVerify={() => setVerifying(v => !v)}
         variant={variant} closing={closing} approve={approve} revoke={revoke} explorer={explorer} corridor={app.guided.corridor}
+        scene={mode === 'sandbox' && variant === 'active' ? venueAgentNote(venue.data) : null}
         onApprove={owner && closeVault && !restored && !stale && !revokePending ? () => approve.begin(newApproveRecord(owner, closeVault, Date.now())) : null}
         onRevoke={owner && closeVault && !restored && !stale ? () => setRevoking(true) : null} />
       <MarketCard app={app} view={view} market={market} chainNow={chainNow} />

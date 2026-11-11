@@ -159,13 +159,65 @@ export type CrashView = {
   act: bigint
   liquidationIncentive: bigint
 }
+/**
+ * Sandbox only (docs/prd-sandbox-venue-stress.md §5): the recorded scene the Venue stress card replays, the subset of
+ * cmdkfi/app evidence/scenes/venue-stress.json kept in adapters/sandbox/scenes/venue-stress.json (keys as in the source).
+ */
+export type VenueMarketFigures = { utilization: number; free_liquidity_units: string; borrow_apr: number }
+export type VenuePhase = { block: number; ts: number; utc: string; markets: { live: VenueMarketFigures; backup: VenueMarketFigures } }
+export type VenueTranscript = {
+  name: string
+  sha256: string
+  time_utc: string
+  trigger: { kind: string; new_screens: string[] }
+  screens: string[]
+  judge: null | { outcome: string; accepted: boolean; answer: { risk: string; action: string; market: string; reasons: string[] } }
+  decisions: { market: string; action: string; to: string | null; fraction: string; amount: string; protective: boolean; basis: string }[]
+  proposal?: { method: string; sent: boolean; base_tx: string; base_block: number }
+}
+export type VenueScene = {
+  source: { repository: string; path: string; commit: string; sha256: string }
+  scene: string
+  market: string
+  destination: string
+  phases: { before: VenuePhase; after_borrow: VenuePhase; after: VenuePhase }
+  comparison: { collateral_identical: boolean; debt_equal: boolean; debt_equal_within_units: number }
+  actions: { block: number; kind: string; tx: string; by: string; from: string; to: string; fraction: string; debt_moved_units: string; collateral_moved_wei: string }[]
+  transcripts: VenueTranscript[]
+}
+/** The sandbox position when the venue stress was run, on the live market. */
+export type VenueStart = { collateral: bigint; debt: bigint; ltv: bigint | null }
+/**
+ * The sandbox position's move at stage 3 (Executor.migrate semantics) and the summary's interest for a year, debt ×
+ * APR simple, at the recorded live APR after the borrow and the recorded backup APR after the move (as shown, two decimals).
+ */
+export type VenueMove = { collateralBefore: bigint; collateralAfter: bigint; debtBefore: bigint; debtAfter: bigint; interestLive: bigint; interestBackup: bigint }
+export type VenueView = {
+  /** ready: an open position that has not run it; running: stages 1–3; done: finished (once per position). */
+  status: 'ready' | 'running' | 'done'
+  stage: 0 | 1 | 2 | 3
+  start: VenueStart | null
+  move: VenueMove | null
+  scene: VenueScene
+}
+/** The sandbox's venue stress controls (venue stress PRD §5 "venue.run() and venue.next()"); the live adapter has none. */
+export interface VenueControl {
+  /** null when there is no open position to run it on. */
+  read(): Promise<VenueView | null>
+  run(): Promise<void>
+  next(): Promise<void>
+}
+
 /** The sandbox's market crash controls (PRD §8a.1 "crash.run(), crash.next()"); the live adapter has none. */
 export interface CrashControl {
   /** null when there is no open position to run it on. */
   read(): Promise<CrashView | null>
   run(): Promise<void>
   next(): Promise<void>
-  /** Start over: the price back to the start before the new position opens (§8a.1); refused while a position is open. */
+  /**
+   * Start over: the price back to the start before the new position opens (§8a.1), and the position back on the live
+   * market (venue stress PRD §2); refused while a position is open.
+   */
   resetPrice(): Promise<void>
 }
 
@@ -349,6 +401,8 @@ export interface ProtocolAdapter {
   // ---- Phase 11 (§8a.1) ----------------------------------------------------------------------------------------
   /** Sandbox only: the user-run market crash. Absent on the live adapter. */
   readonly crash?: CrashControl
+  /** Sandbox only: the user-run venue stress replay (docs/prd-sandbox-venue-stress.md). Absent on the live adapter. */
+  readonly venue?: VenueControl
 }
 
 export type Adapters = { kind: AdapterKind; wallet: WalletAdapter; protocol: ProtocolAdapter }

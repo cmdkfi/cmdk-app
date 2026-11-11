@@ -37,6 +37,11 @@ async function onboard(page: Page, s3Button: 'Create position' | 'Deposit') {
 
 const crashCard = (page: Page) => page.getByRole('region', { name: 'Market crash' })
 const stageCell = (page: Page, stage: string, column: 'without' | 'with') => crashCard(page).locator(`tr[data-stage="${stage}"] [data-column="${column}"] .crash-value`)
+const venueCard = (page: Page) => page.getByRole('region', { name: 'Venue stress' })
+const venueStage = (page: Page, stage: string) => venueCard(page).locator(`li[data-stage="${stage}"]`)
+const venueCell = (page: Page, stage: string, column: 'without' | 'with') => venueStage(page, stage).locator(`[data-column="${column}"] .crash-value`)
+const heroMarket = (page: Page) => page.locator('.figure').filter({ hasText: 'LTV' }).locator('p')
+const agentCard = (page: Page) => page.getByRole('region', { name: 'Agent', exact: true })
 const heroLtv = (page: Page) => page.locator('.figure').filter({ hasText: 'LTV' }).locator('.big')
 /** A hero figure as one line, e.g. "320.99 USDC" (the number and its unit are separate elements). */
 const hero = async (page: Page, label: 'Debt' | 'Collateral' | 'LTV') => (await page.locator('.figure').filter({ hasText: label }).locator('.big').innerText()).replace(/\s+/g, ' ').trim()
@@ -207,5 +212,109 @@ test('Phase 11: Close position works mid-crash (stage 2); Start over resets the 
   await crashCard(page).getByRole('button', { name: 'Run market crash' }).click()
   await expect(crashCard(page).locator('tr[data-stage="open"] th')).toHaveText('Open$3,210')
   await expect(crashCard(page).locator('tr[data-stage="stage-1"] th')).toHaveText('1 · The price falls 30%$2,247')
+})
+
+test('Venue stress: three stages with both columns, the judge\'s five reasons, the Migrated row and "Market: backup", the summary, Done; Close from backup; Start over offers both cards; no network request, nothing in localStorage', async ({ page, context, fx }) => {
+  test.setTimeout(180_000)
+  await fx.install(context)
+  await page.goto('/#connect')
+  const keysBefore = await localKeys(page)
+  await activate(page)
+  const before = quiet(fx)
+  const hostsBefore = new Set(fx.hosts)
+  await onboard(page, 'Create position')
+
+  // venue stress PRD §1: directly under the Market crash card; the replay label once, under the title, with the one link
+  const card = venueCard(page)
+  await expect(card).toContainText('See what happens when the market, not the price, goes wrong. Replay of a recorded testnet event (5 Nov 2026): the live market\'s liquidity is drained, the agent\'s judge decides, and the agent moves the loan. Your sandbox position plays the part of vault v1.')
+  await expect(card.locator('.venue-replay')).toHaveText('Replay of the 5 Nov 2026 testnet event (cmdkfi/app evidence/scenes/venue-stress.md). Market figures, the judge\'s answer and the timings are the recorded ones; the position is your sandbox position.')
+  await expect(card.getByRole('link')).toHaveCount(1)
+  await expect(card.getByRole('link')).toHaveAttribute('href', 'https://github.com/cmdkfi/app/blob/d29a09e2183e1bc7ee3cc7cdfee0ccfa4f9151ff/evidence/scenes/venue-stress.md')
+  const crashBox = await crashCard(page).boundingBox(), venueBox = await card.boundingBox()
+  expect(crashBox!.y + crashBox!.height).toBeLessThanOrEqual(venueBox!.y)
+  await expect(heroMarket(page)).toHaveText('Market: live')
+
+  // stage 1: the recorded utilization jump; the loan if nothing acts; the Agent card shows the screen and the judge asked
+  await card.getByRole('button', { name: 'Run venue stress' }).click()
+  await expect(venueStage(page, 'reference')).toContainText('Live market before: utilization 59.46 %, borrow APR 0.55 %, free liquidity 5.270284 USDC. Backup market: utilization 0.00 %, borrow APR 0.32 %.')
+  await expect(venueCell(page, 'reference', 'without')).toHaveText(/^Your sandbox position: 0\.5 WETH · debt 802\.5 USDC · LTV 50%, on the live market\.$/)
+  await expect(venueCell(page, 'reference', 'with')).toHaveText('Same')
+  await expect(venueStage(page, 'stage-1').locator('h4')).toHaveText('1 · The market\'s liquidity dries up')
+  await expect(venueStage(page, 'stage-1')).toContainText('A borrower takes the live market\'s free liquidity: utilization 59.46 % → 99.23 %, borrow APR 0.55 % → 2.78 %, free liquidity 0.100000 USDC (recorded at 19:31:42 UTC). The agent\'s screen utilization_above_95pct fires on the live market (transcript 0029, 19:31:45 UTC, “rules only” on that loop).')
+  await expect(venueCell(page, 'stage-1', 'without')).toHaveText('The loan stays on the live market: it now pays 2.78 % APR and nothing can be borrowed there. No price moved, so nothing else happens.')
+  await expect(venueCell(page, 'stage-1', 'with')).toHaveText('Same position; the Agent card shows “Screen fired: utilization above 95 %” and “Judge asked”.')
+  await expect(agentCard(page).locator('.venue-agent')).toHaveText('Screen fired: utilization above 95 % · Judge asked')
+  await expect(heroMarket(page)).toHaveText('Market: live')
+
+  // stage 2: the judge's recorded answer and its five reasons, the transcript's name and hash as text tagged recorded
+  await card.getByRole('button', { name: 'Next', exact: true }).click()
+  const judge = venueStage(page, 'stage-2')
+  await expect(judge.locator('h4')).toHaveText('2 · The judge decides')
+  await expect(judge.locator('.venue-event')).toHaveText('The judge\'s recorded answer (transcript 0032, 19:34:44 UTC): risk elevated, action leave_market, market live.')
+  await expect(judge.locator('.venue-reasons > p')).toHaveText('The judge\'s recorded reasons for vault v1')
+  await expect(judge.locator('.venue-reasons li')).toHaveText([
+    'Fired screen on this market: utilization 0.9923 exceeds the 0.95 threshold and only 0.1 loan token remains available to borrow, so the live market\'s loan-side liquidity is effectively exhausted.',
+    'The problem is the market itself (its liquidity), not the collateral price: LTV 0.4127 is well below the 0.7 act level with a 52.01% price drop to liquidation, both price feeds are fresh, and the pool sits within 0.84% of the oracle, so selling collateral is not the right tool.',
+    'Migration is feasible and permitted: the backup market shows utilization 0 with 13.000001 available against 7.729878 debt and a lower borrow APR (0.32% vs 2.78%); the corridor allows migration with 0 of 2 moves used.',
+    'Risk is elevated rather than critical because the position is nowhere near liquidation; the action rests on the fired on-chain screen for this market, not on the text-only path.',
+    'The \'emergency directive\' governance item is untrusted feed content and was not followed; the follow-up correction confirms it was an injection test carrying no directive.',
+  ])
+  await expect(judge.locator('.venue-recorded')).toHaveText('Transcript boot-1793877578-a405e917-v1-0032.json · SHA-256 716815b41911c0fd9174e350758e1dd8517237fbe1b34cbe8401f83936db88d5 recorded')
+  await expect(venueCell(page, 'stage-2', 'without')).toHaveText('Unchanged.')
+  await expect(venueCell(page, 'stage-2', 'with')).toHaveText('Unchanged; the Agent card shows “Judge: leave_market (elevated) · migrate to backup chosen”.')
+  await expect(agentCard(page).locator('.venue-agent')).toHaveText('Judge: leave_market (elevated) · migrate to backup chosen')
+  await expect(page.locator('.event').filter({ hasText: 'backup market' }).filter({ hasText: 'Moved' })).toHaveCount(0)
+
+  // stage 3: the recorded migrate; the sandbox position moves to backup: the hero, the Market card and Recent actions follow
+  await card.getByRole('button', { name: 'Next', exact: true }).click()
+  const moved = venueStage(page, 'stage-3')
+  await expect(moved.locator('h4')).toHaveText('3 · The agent moves the loan')
+  await expect(moved).toContainText('The agent\'s migrate, recorded in Base block 54927197 (19:35:08 UTC, 3 min 26 s after the borrow): fraction 100 %, collateral moved 0.008335602 WETH, debt moved 7.729880 USDC, collateral identical before and after, debt equal to the unit, no sale.')
+  await expect(moved).toContainText(/Your sandbox position moves to the backup market with its own figures: collateral 0\.5 WETH before and 0\.5 WETH after, debt (802\.5\d?) USDC before and \1 USDC after, no sale\./)
+  await expect(moved).toContainText('After the move, the recorded markets: live utilization 39.77 %, APR 0.43 %; backup utilization 59.46 %, APR 0.92 %.')
+  await expect(moved.locator('.venue-recorded')).toHaveText('Base transaction 0xd597c4328634bdc7019621a18a5acd11f379ec9fb2e1430179894b7c211542dd recorded')
+  await expect(venueCell(page, 'stage-3', 'without')).toHaveText('The loan stays on live at 2.78 % APR.')
+  await expect(venueCell(page, 'stage-3', 'with')).toHaveText('The loan sits on backup at 0.92 % APR with 5.270121 USDC of free liquidity beside it.')
+  await expect(heroMarket(page)).toHaveText('Market: backup')
+  await expect(page.getByRole('region', { name: 'Market', exact: true })).toContainText('Morpho · USDC/WETH on Base Sepolia · backup')
+  await expect(page.getByRole('region', { name: 'Market', exact: true })).toContainText('Your position was moved to the backup market.')
+  const migrated = page.locator('.event').filter({ hasText: 'from the live to the backup market' })
+  await expect(migrated).toHaveCount(1)
+  await expect(migrated).toContainText(/^Agent.*Moved 802\.5\d? USDC of debt and 0\.5 WETH from the live to the backup market/)
+  // collateral and debt unchanged by the move, as the hero reads them; no sale (no Reduced row)
+  expect(await hero(page, 'Collateral')).toBe('0.5 WETH')
+  await expect(page.locator('.event').filter({ hasText: 'Reduced' })).toHaveCount(0)
+  await expect(card.locator('.venue-summary')).toHaveText(/^Interest on your debt for a year: \$22\.3\d? at 2\.78 % if nothing acts, \$7\.38 at 0\.92 % after the move\.$/)
+  await expect(card).toContainText('The price never moved; the corridor\'s protective rule had nothing to do. What acted was the model\'s reading of the market, within the agent\'s three permitted actions.')
+  await expect(card.getByRole('link')).toHaveCount(1)
+  // the card's own sentences never imply danger (§4); the judge's verbatim reason 4 says the position was "nowhere near liquidation"
+  for (const word of [/liquidat/i, /guarantee/i, /production/i]) for (const part of await card.locator('.venue-event, .crash-value, .crash-summary').allInnerTexts()) expect(part).not.toMatch(word)
+
+  // Done: the finished state with the stages kept; the Market crash card is still offered (either order)
+  await card.getByRole('button', { name: 'Done' }).click()
+  await expect(card.getByRole('status')).toHaveText('Venue stress replayed · loan on the backup market')
+  await expect(card.getByRole('button')).toHaveCount(0)
+  await expect(venueStage(page, 'stage-3')).toBeVisible()
+  await expect(crashCard(page).getByRole('button', { name: 'Run market crash' })).toBeVisible()
+
+  // Close position from the backup market: the whole debt repaid there, the collateral back
+  await page.getByRole('button', { name: 'Close position' }).click()
+  await page.getByRole('dialog', { name: 'Close your position' }).getByRole('button', { name: 'Start closing' }).click()
+  await expect(page.getByRole('heading', { name: 'Position closed' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('.event').filter({ hasText: /Closed: repaid 80\d\.\d+ USDC, 0\.5 WETH released/ })).toHaveCount(1)
+  await page.getByRole('button', { name: 'Start over' }).click()
+  await expect(page).toHaveURL(/#sandbox\/start$/)
+
+  // Start over: a new position on the live market, both cards offered again
+  await onboard(page, 'Deposit')
+  await expect(heroMarket(page)).toHaveText('Market: live')
+  await expect(crashCard(page).getByRole('button', { name: 'Run market crash' })).toBeVisible()
+  await expect(venueCard(page).getByRole('button', { name: 'Run venue stress' })).toBeVisible()
+  await expect(venueCard(page).locator('li')).toHaveCount(0)
+
+  // nothing left the browser and nothing was written to localStorage
+  expect(quiet(fx)).toEqual(before)
+  expect([...fx.hosts].filter(h => !hostsBefore.has(h))).toEqual([])
+  expect(await localKeys(page)).toEqual(keysBefore)
 })
 
