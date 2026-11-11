@@ -6,10 +6,21 @@ const root = resolve(import.meta.dirname, '../..')
 const source = resolve(root, 'deployments/testnet.json')
 const appValues = JSON.parse(await readFile(resolve(import.meta.dirname, '../config.app.json'), 'utf8'))
 let deployment = null
+let deploymentSource = source
 try {
   deployment = JSON.parse(await readFile(source, 'utf8'))
 } catch (error) {
   if (error.code !== 'ENOENT') throw error
+  // A fresh clone has no local copy: read the published manifest (the same URL the app reads at run time).
+  // Without network, the config is generated without a deployment, as before.
+  try {
+    const response = await fetch(appValues.help.manifest)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    deployment = await response.json()
+    deploymentSource = appValues.help.manifest
+  } catch (fetchError) {
+    console.warn(`No deployments/testnet.json beside the repository and the published manifest could not be fetched (${fetchError.message})`)
+  }
 }
 
 // Deployment values must come from the published manifest, never a guessed address.
@@ -59,4 +70,4 @@ if (factory && (!config.createVault || config.createVault.markets.some(market =>
 ))) throw new Error('Published deployment manifest is incomplete for vault creation')
 await mkdir(resolve(root, 'app/public'), { recursive: true })
 await writeFile(output, `${JSON.stringify(config, null, 2)}\n`)
-console.log(factory ? 'Generated app config from deployment manifest' : 'Generated app config; NEAR factory deployment pending')
+console.log(factory ? `Generated app config from the deployment manifest (${deploymentSource})` : 'Generated app config without a deployment manifest: no local deployments/testnet.json and the published one could not be fetched')
