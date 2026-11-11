@@ -22,8 +22,9 @@ export function Settings({ mode, href, banner }: ScreenProps) {
   const lltv = quote.data ? Number(quote.data.lltv / 10n ** 14n) / 100 : null
   // docs/mockups/S2-Settings: the track ends at the liquidation LTV (floor 30 → 34.9 % of the width at 86 %)
   const scale = (at: number) => `${Math.min(100, (at / (lltv ?? 100)) * 100)}%`
+  // the floor's text follows the protocol README's corridor row (Floor, cmdkfi/app 31ecee2): an allowed exit is not sized by it
   const points = [
-    { key: 'floor', at: c.floor, label: `Floor ${c.floor}%`, text: 'Sales are sized to stop at this line; a fill better than the oracle price can end a few hundredths of a point under it.' },
+    { key: 'floor', at: c.floor, label: `Floor ${c.floor}%`, text: 'Sales are sized to stop at this line; a fill better than the oracle price can end a few hundredths of a point under it. An exit, if allowed, repays all debt and is not sized by this line.' },
     { key: 'target', at: c.target, label: `Target ${c.target}%`, text: 'You open here. The agent brings you back here.' },
     { key: 'act', at: c.act, label: `Reduce above ${c.act}%`, text: 'The agent sells collateral to repay part of the debt.' },
     { key: 'liq', at: lltv, label: lltv === null ? 'Liquidation unavailable' : `Liquidation ${lltv}%`, text: "Morpho's rule, not ours. Protection is not a guarantee." },

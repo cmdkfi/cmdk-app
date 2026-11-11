@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AdapterProvider, useAdapters, useWalletState } from '../adapters/AdapterProvider.tsx'
 import type { WalletState } from '../adapters/types.ts'
 import { afterConnect, guard, landing, type EntryInput, type Resolution, type WalletEntry } from '../flow/entry.ts'
@@ -13,10 +13,21 @@ import { Settings } from '../screens/Settings.tsx'
 import { useAppConfig, useDeploymentStatic, useDiscovery } from './data.ts'
 import { SetupProgress } from './SetupProgress.tsx'
 import { WalletSlot } from './WalletSlot.tsx'
+import { Footer } from './Footer.tsx'
+import { PhoneNotice } from './PhoneNotice.tsx'
 import { LeaveSandboxSheet, SandboxBanner, TryInSandbox } from './Sandbox.tsx'
 
 const BASE_SEPOLIA = 84532
 const BEFORE_WALLET: Route[] = ['start', 'settings', 'connect']
+/** The live testnet flow is desktop-only (product owner, 11 Nov 2026); narrower, live routes show PhoneNotice. */
+const DESKTOP = '(min-width: 960px)'
+
+function useDesktop() {
+  return useSyncExternalStore(
+    listener => { const query = window.matchMedia(DESKTOP); query.addEventListener('change', listener); return () => query.removeEventListener('change', listener) },
+    () => window.matchMedia(DESKTOP).matches,
+  )
+}
 
 function useHash() {
   const [hash, setHash] = useState(() => window.location.hash)
@@ -150,14 +161,12 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
       {resolution.kind === 'route' && <SetupProgress route={resolution.route} />}
       {screen}
     </main>
-    <footer className="footer">
-      <span>Runs on NEAR testnet and Base Sepolia. Unaudited. No real money.<br />Agent protection is risk management, not insurance.</span>
-      <a href="https://github.com/cmdkfi/app" target="_blank" rel="noreferrer">Protocol source</a>
-    </footer>
+    <Footer />
   </div>
 }
 
 export function App() {
+  const desktop = useDesktop()
   const [hash, replace] = useHash()
   const { place, canonical, entry } = parseHash(hash)
   // Read the hash again here: the Shell's guard (a child effect, run first) may already have replaced it in this
@@ -168,6 +177,9 @@ export function App() {
     const next = parseHash(current).canonical
     if (next !== current) replace(next)
   }, [entry, canonical, hash, replace])
+  // Below 960 px a live route shows the notice and mounts no adapter (no wallet call, no read); the sandbox works at
+  // every width. Only the live shell is replaced: the app itself stays mounted, and widening brings the live shell back.
+  if (place.mode === 'live' && !desktop) return <div className="vault-app"><PhoneNotice /></div>
   return <div className="vault-app">
     <AdapterProvider kind={place.mode} key={place.mode}>
       <Shell mode={place.mode} route={place.route} entry={entry} replace={replace} />

@@ -20,12 +20,17 @@ const artboardHeights: Record<string, [number, number]> = {
   's4-progress': [1900, 3400], 's5-position': [1900, 3200], 's5-liquidated': [1900, 3000],
   's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
   'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2300, 3800],
-  'sandbox-s5-crash-stage3': [2700, 5200],
+  'sandbox-s5-crash-stage3': [2700, 5200], 'phone-notice': [900, 844],
 }
 test.use({ timezoneId: 'UTC', locale: 'en-US' })
 test.beforeEach(async ({ page }, info) => {
   await page.setViewportSize(info.project.name === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 900 })
 })
+
+/** The testnet flow is desktop-only (11 Nov 2026): on the mobile project the live screens are the phone notice, shot once below. */
+function liveOnly() {
+  test.skip(test.info().project.name === 'mobile', 'live screens are desktop-only; a phone shows the notice')
+}
 
 async function frozen(page: Page) {
   // the fixture's NOW plus 20 s: block times, feed ages and "N s ago" lines are fixed
@@ -65,6 +70,7 @@ function position(fx: LiveFixture, overrides: Parameters<typeof vault>[0] = {}) 
 }
 
 test('S1 Choose', async ({ page, context, fx }) => {
+  liveOnly()
   await fx.install(context); await frozen(page)
   await page.goto('/#start')
   await expect(page.getByText('5.0% APR')).toBeVisible()
@@ -72,6 +78,7 @@ test('S1 Choose', async ({ page, context, fx }) => {
 })
 
 test('S2 Settings', async ({ page, context, fx }) => {
+  liveOnly()
   await fx.install(context); await frozen(page)
   await page.goto('/#settings')
   await expect(page.getByText('Liquidation 86%')).toBeVisible()
@@ -79,6 +86,7 @@ test('S2 Settings', async ({ page, context, fx }) => {
 })
 
 test('S3 Connect: the wallets in this browser', async ({ page, context, fx }) => {
+  liveOnly()
   fx.walletSet = ['metamask', 'rabby']
   await fx.install(context); await frozen(page)
   await page.goto('/#connect')
@@ -87,6 +95,7 @@ test('S3 Connect: the wallets in this browser', async ({ page, context, fx }) =>
 })
 
 test('S3 Connect: connected, funded, Create position', async ({ page, context, fx }) => {
+  liveOnly()
   fx.factoryCount = 9
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -96,6 +105,7 @@ test('S3 Connect: connected, funded, Create position', async ({ page, context, f
 })
 
 test('S3a Get Base Sepolia ETH', async ({ page, context, fx }) => {
+  liveOnly()
   fx.factoryCount = 9
   fx.wallet.eth = 4n * 10n ** 15n
   await fx.install(context); await frozen(page)
@@ -105,6 +115,7 @@ test('S3a Get Base Sepolia ETH', async ({ page, context, fx }) => {
 })
 
 test('S4 Progress: a declined prompt, with the verification rail', async ({ page, context, fx }) => {
+  liveOnly()
   fx.factoryCount = 9
   fx.rejectOnce.add('setup')
   await fx.install(context); await frozen(page)
@@ -116,6 +127,7 @@ test('S4 Progress: a declined prompt, with the verification rail', async ({ page
 })
 
 test('S5 Position', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx)
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -127,6 +139,7 @@ test('S5 Position', async ({ page, context, fx }) => {
 })
 
 test('S0 header: connected, wallet menu open', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx)
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -138,6 +151,7 @@ test('S0 header: connected, wallet menu open', async ({ page, context, fx }) => 
 })
 
 test('S6 Close: wallet short of USDC, Get test USDC', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx, { idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 0n } })
   fx.wallet.usdc = 100_000_000n
   await fx.install(context); await frozen(page)
@@ -149,6 +163,7 @@ test('S6 Close: wallet short of USDC, Get test USDC', async ({ page, context, fx
 })
 
 test('S6 review sheet', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx, { idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 0n } })
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -158,6 +173,7 @@ test('S6 review sheet', async ({ page, context, fx }) => {
 })
 
 test('S5 Revoke the agent sheet', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx)
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -167,6 +183,7 @@ test('S5 Revoke the agent sheet', async ({ page, context, fx }) => {
 })
 
 test('S7 Position closed, Start over', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx, { idle: { eth: 5n * 10n ** 15n, weth: 0n, usdc: 200_000_000n } })
   await fx.install(context); await frozen(page)
   await connect(page)
@@ -178,6 +195,7 @@ test('S7 Position closed, Start over', async ({ page, context, fx }) => {
 })
 
 test('S5 liquidated', async ({ page, context, fx }) => {
+  liveOnly()
   position(fx, { collateral: 0n })
   fx.logs = []
   await fx.install(context); await frozen(page)
@@ -185,6 +203,15 @@ test('S5 liquidated', async ({ page, context, fx }) => {
   await expect(page.getByRole('heading', { name: 'Position liquidated' })).toBeVisible()
   await expect(page.getByText('No actions in this range.')).toBeVisible()
   await shot(page, 's5-liquidated')
+})
+
+// Desktop-only testnet flow (11 Nov 2026): a phone sees one notice on every live route, with the sandbox as its action
+test('Phone: the live routes show the notice', async ({ page, context, fx }) => {
+  test.skip(test.info().project.name !== 'mobile', 'the notice is shown below 960 px')
+  await fx.install(context); await frozen(page)
+  await page.goto('/#start')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The testnet flow runs on a desktop browser with a wallet extension.')
+  await shot(page, 'phone-notice')
 })
 
 // Phase 6b sandbox (docs/mockups S8, S11, the banner of S8–S11)

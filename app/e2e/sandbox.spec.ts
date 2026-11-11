@@ -5,6 +5,9 @@ import type { Page } from '@playwright/test'
 import { test, expect, type LiveFixture } from './live-fixture.ts'
 
 const banner = (page: Page) => page.getByRole('status').filter({ hasText: 'Sandbox · simulated data' })
+/** The mobile project (390 px): live routes show the desktop-only notice, whose one action is "Try in sandbox" (11 Nov 2026). */
+const phone = () => test.info().project.name === 'mobile'
+const NOTICE = 'The testnet flow runs on a desktop browser with a wallet extension.'
 
 async function localKeys(page: Page) {
   return page.evaluate(() => Object.keys(window.localStorage).sort())
@@ -47,7 +50,8 @@ test('Phase 6b/11: the sandbox runs open, the market crash (three stages, with a
   await fx.install(context)
   await page.clock.install()
   await page.goto('/#connect')
-  await expect(page.getByRole('button', { name: 'MetaMask', exact: true })).toBeVisible()
+  if (phone()) await expect(page.getByRole('heading', { level: 1 })).toHaveText(NOTICE)
+  else await expect(page.getByRole('button', { name: 'MetaMask', exact: true })).toBeVisible()
   const keysBefore = await localKeys(page)
   await activate(page)
   const before = quiet(fx)
@@ -153,13 +157,16 @@ test('Phase 6b/11: the sandbox runs open, the market crash (three stages, with a
   expect((await localKeys(page)).filter(k => /sandbox/i.test(k))).toEqual([])
 })
 
-test('Phase 6b: "Try in sandbox" in the header while no wallet is connected, and on S3 when no wallet is installed; a reload stays in the sandbox', async ({ page, context, fx }) => {
+test('Phase 6b: "Try in sandbox" in the header while no wallet is connected, and on S3 when no wallet is installed (on a phone: the notice); a reload stays in the sandbox', async ({ page, context, fx }) => {
   fx.walletSet = []
   await fx.install(context)
   await page.goto('/#start')
-  await expect(page.getByRole('banner').getByRole('button', { name: 'Try in sandbox' })).toBeVisible()
+  if (phone()) {
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(NOTICE)
+    await expect(page.getByRole('banner').getByRole('button')).toHaveCount(0)
+  } else await expect(page.getByRole('banner').getByRole('button', { name: 'Try in sandbox' })).toBeVisible()
   await page.goto('/#connect')
-  await expect(page.getByText('No browser wallet was found.')).toBeVisible()
+  await expect(page.getByText(phone() ? NOTICE : 'No browser wallet was found.')).toBeVisible()
   await activate(page)
   await page.reload()
   await expect(page).toHaveURL(/#sandbox\/start$/)

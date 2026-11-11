@@ -533,3 +533,9 @@ Per NEAR call (get_state, view_access_key_list): fastnear 0.08–0.15 s, drpc 0.
   - Noted in PRD §8a.1.
 - *Left as is:* a stage row is a snapshot. If the user waits minutes, the live hero's debt can move past the snapshot's last cent.
 
+**Phase 13 — phones: only the sandbox (product owner, 11 Nov 2026).**
+- *Decision:* the testnet flow is desktop-only again; on a phone the app offers the sandbox. Inside MetaMask Mobile's in-app browser the first `personal_sign` (setup) fails with -32602 "must provide an Ethereum address" (MetaMask Mobile 8.18, per-network site permissions; MetaMask/metamask-mobile#39052).
+- *Built:* below 960 px a live route renders `components/PhoneNotice.tsx` instead of the live shell: the notice's two sentences and "Try in sandbox". No `AdapterProvider` is mounted there, so no wallet call, relayer call or NEAR/Base read happens (browser-tested on every live route). `#sandbox/…` is unchanged at every width; at 960 px and above nothing changes. The old DesktopGate is not restored: the app stays mounted and the sandbox runs on phones.
+- *Copy:* Connect's help and no-wallet text say desktop with a wallet extension; the phone wallet hint on progress steps and the wallet-browser paragraph are removed; README and `docs/responsive-design.md` state the decision. With it, S2's floor legend gains "An exit, if allowed, repays all debt and is not sized by this line." (protocol README corridor row) and the README's S2 row names the discretionary budget.
+- *Tests:* the mobile project runs `mobile.spec.ts` (notice on every live route with no request, the sandbox entry, 320–1024 px), `sandbox.spec.ts` end to end and the sandbox screenshots; live screenshots run on desktop only. Mobile live baselines removed; `mobile-phone-notice` added; s2, s3 and s8 baselines refreshed.
+

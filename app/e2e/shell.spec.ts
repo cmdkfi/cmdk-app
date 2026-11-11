@@ -108,13 +108,28 @@ test('Phase 8: a browser without any wallet shows "Install a wallet" and nothing
   await expect(page.getByRole('list', { name: 'Wallets in this browser' })).toHaveCount(0)
 })
 
-test('responsive shell: changing width keeps the amount and does not prompt a wallet', async ({ page, context, fx }) => {
+test('desktop-only testnet flow: below 960 px a live route shows the notice and no wallet call or read happens; the sandbox stays available', async ({ page, context, fx }) => {
   await fx.install(context)
-  await page.setViewportSize({ width: 390, height: 844 })
+  await page.setViewportSize({ width: 900, height: 900 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('The testnet flow runs on a desktop browser with a wallet extension.')
+  await expect(page.getByText('On a phone, try the sandbox: a simulated wallet and protocol, nothing touches Base Sepolia or NEAR.')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('button')).toHaveText(['Try in sandbox'])
+  await page.waitForTimeout(500)
+  expect(fx.walletCalls, 'no silent reconnect below 960px').toEqual([])
+  expect([...fx.hosts]).toEqual([APP])
+  // from 960 px the live screen is mounted again
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Borrow against what you hold.')
+  await expect(page.getByText('5.0% APR')).toBeVisible()
+})
+
+test('responsive shell: changing width from 960 px up keeps the amount and does not prompt a wallet', async ({ page, context, fx }) => {
+  await fx.install(context)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Borrow against what you hold.' })).toBeVisible()
   await page.getByLabel('Amount to deposit').fill('0.123')
-  for (const width of [768, 1280, 360]) {
+  for (const width of [960, 1024, 1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await expect(page.getByLabel('Amount to deposit')).toHaveValue('0.123')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
