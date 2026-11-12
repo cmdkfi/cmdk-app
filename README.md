@@ -144,7 +144,7 @@ Measured live on 9 Nov 2026 (vault v9, two markets, the app's own adapter):
 
 | | Before the performance pass | After batching and caching (NEAR rpc.testnet.near.org) | After the NEAR switch (FastNEAR) |
 |---|---|---|---|
-| One S5 refresh | 39 requests, 3.8–4.0 s | 6 requests, 3.5–4.5 s | 6 requests, 0.44–0.70 s |
+| One S5 refresh | 39 requests, 3.8–4.0 s | 6 requests, 3.5–4.5 s | 6 requests, 0.44–0.70 s (the browser test allows up to 8) |
 | First full S5 after connect | 85 requests, 13.0 s | 17 requests, 10.0 s | 17 requests, 1.8 s (return visit 1.05 s) |
 
 Per NEAR call: FastNEAR 0.08–0.15 s, drpc 0.10–0.32 s, rpc.testnet.near.org 3.1–3.2 s. Base answered in 0.1–0.25 s.

@@ -70,7 +70,7 @@ export function Settings({ mode, href, banner }: ScreenProps) {
           <li>Increase your debt on this venue (a move may round it up by up to 0.000002 USDC).</li>
           {/* Executor.sol l.261-266, l.296: a protective session starts above the act line, sells toward target for up to 24 h (also below the act line) and is not budget-limited */}
           <li>Sell at its own discretion more than {c.budget}% of your collateral per rolling day (once the ratio passes {c.act}%, it sells what is needed to return to {c.target}%, for up to 24 hours).</li>
-          <li>Send funds anywhere except repaying your loan.</li>
+          <li>Send funds anywhere: it can only repay your loan, and an exit you allowed leaves the remaining collateral at your vault's own address.</li>
           <li>Change these limits.</li>
         </ul>
         <p className="muted small">Enforced by the vault's key restrictions and the Executor contract, not by the agent's good will.</p>
