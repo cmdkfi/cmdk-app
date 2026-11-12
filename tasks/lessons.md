@@ -92,6 +92,6 @@
 
 
 ## Copy promises are checked against the protocol README's claims, not against intent (Phase 12, 11 Nov 2026)
-**Mistake:** three app sentences promised more than the protocol does ("never reduces below this", "never increase your debt") and were caught by the AI screening of 10 Nov, not by us. The protocol README's corridor table and claims table already carried the exact limits (a fill better than the oracle can end under the floor; a move may add one loan-token unit).
+**Mistake:** three app sentences promised more than the protocol does ("never reduces below this", "never increase your debt") and were caught by an external review of 10 Nov, not by us. The protocol README's corridor table and claims table already carried the exact limits (a fill better than the oracle can end under the floor; a move may add one loan-token unit).
 **Rule:** every sentence that states what the agent will or will never do is matched word for word against the protocol README's corridor and claims tables, with the table cited in a code comment; when the README changes, the sentences change with it.
 **Also:** a browser suite that passes alone and fails in parallel has a shared resource; find it before raising timeouts. Here it was the Vite dev server, replaced by a prebuilt bundle served by `vite preview`.
