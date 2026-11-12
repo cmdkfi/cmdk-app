@@ -4,7 +4,7 @@ Status: implemented on `feat/guided-flow` through Phase 10 (10 Nov 2026; Phases 
 
 This document describes a new, deliberately narrow frontend that replaces the current cockpit on https://testnet.cmdk.fi. It keeps the current visual identity and tech stack, reuses the proven protocol client modules, and exposes one guided path: choose collateral and debt → accept fixed agent settings → connect a wallet → sign and fund → watch progress → see one position → repay and close → start over.
 
-Companion action plan: `tasks/todo.md`.
+Companion action plan: kept in the team's private notes.
 
 ---
 

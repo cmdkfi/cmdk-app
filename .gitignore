@@ -1,3 +1,5 @@
 deployments/
 app/playwright-report/
 app/test-results/
+tasks/todo.md
+tasks/lessons.md

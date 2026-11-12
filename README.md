@@ -8,7 +8,7 @@ The protocol source of truth is [cmdkfi/app](https://github.com/cmdkfi/app) (con
 was written against cmdkfi/app `47fd4fb` and rechecked against `22a5191` (10 Nov); every ABI fragment, owner-message format and relayer rule in `app/src/protocol/`
 cites the file and line it comes from. Check that repository before changing transaction logic. The product
 requirements are in [`docs/prd-guided-flow.md`](docs/prd-guided-flow.md); the build plan and review notes per phase are
-in [`tasks/todo.md`](tasks/todo.md).
+kept in the team's private notes.
 
 **The testnet flow is desktop-only: it runs on a desktop browser with a wallet extension.** Below 960 px the live
 routes (`#start`, `#settings`, `#connect`, `#progress`, `#position`) show one notice instead of their screen, with "Try in
