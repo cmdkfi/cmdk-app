@@ -84,7 +84,7 @@ requested until Continue.
 | # | Step | Prompt |
 |---|---|---|
 | 1 | Create your vault | none — the relayer creates it (`POST /create-vault`). Discovery is re-read immediately before every create request, and a vault the wallet already owns is adopted instead |
-| 2 | Approve agent and rules (`setup`) | 1 signature — approves the Executor for WETH and USDC, authorizes it on Morpho, sets the corridor on both markets, approves the published agent measurement (only what Base does not already show) |
+| 2 | Approve agent and rules (`setup`) | 1 signature — approves the Executor for WETH and USDC, authorizes it on Morpho, sets the corridor on both markets, approves the published agent measurement (the Morpho authorization and the corridors only where Base does not already show them; the token approvals are sent every time, which the vault allows) |
 | 3 | Wrap ETH → WETH | 1 wallet transaction (`WETH.deposit`) for the missing WETH only; skipped when the wallet holds enough |
 | 4 | Send WETH to your position address | 1 wallet transaction (`WETH.transfer`) |
 | 5 | Open position (`open`) | 1 signature — supplies the WETH at the position address and borrows to 50 % LTV, or to what the market can lend after a 1 % margin (paused with the new figure when that is more than 2 points below what S1 showed) |
@@ -169,7 +169,7 @@ pnpm typecheck              # TypeScript
 pnpm build                  # production build into dist/; run it first: it generates public/config.json, which one unit test reads
 pnpm test                   # 174 Node unit tests (protocol math, messages, flow rules), with protocol test vectors
 pnpm test:bundle-boundary   # dist/ carries no test fixture or wallet-control markers (the sandbox ships, PRD §8a)
-pnpm exec playwright install --with-deps chromium   # --with-deps also installs Chromium's system libraries on Linux (as CI does)
+pnpm exec playwright install chromium   # as CI does; on a bare Linux box add --with-deps for Chromium's system libraries
 pnpm test:browser           # desktop and mobile Chromium scenarios, including screenshot comparisons, against a production build served by vite preview
 pnpm test:visual:update     # rewrite the darwin screenshot baselines on purpose (linux: `frontend quality` run by hand with visual_baselines)
 ```
