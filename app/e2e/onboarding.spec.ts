@@ -274,7 +274,7 @@ test('a vault without the published Executor: discovery skips it and setup refus
   await fx.install(context)
   await createPosition(page) // S3 shows "None for this wallet": v10 is skipped
   const setup = step(page, 'Approve agent and rules')
-  await expect(setup).toContainText("This vault's markets or Executor differ from the published deployment, so no signature is requested.", { timeout: 20_000 })
+  await expect(setup).toContainText("This vault's markets, tokens, Executor, slice limit or cooldown differ from the published deployment, so no signature is requested.", { timeout: 20_000 })
   expect(fx.posts.map(p => p.path)).toEqual(['/create-vault'])
   expect(prompts(fx)).toEqual([])
 })

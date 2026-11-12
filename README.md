@@ -160,7 +160,7 @@ pnpm dev
 ```
 
 Open http://localhost:5173. The strict port is intentional: the relayer's CORS configuration permits that origin. The
-app configuration (`public/config.json`) is generated from the published deployment manifest `deployments/testnet.json` (a copy beside the repository if present, otherwise fetched from `cmdkfi/app` `main`)
+app configuration (`public/config.json`) is generated from the published deployment manifest `deployments/testnet.json` (a gitignored copy at `deployments/testnet.json` inside this repository if present, otherwise fetched from `cmdkfi/app` `main`)
 (CI downloads it from cmdkfi/app `main`; locally, place it at the repository root) and `app/config.app.json`; never
 invent an address. Every address in the generated config comes from the manifest.
 
