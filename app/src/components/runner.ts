@@ -134,7 +134,7 @@ export type OwnerSpec<Id extends string, R extends ChainRecord<Id>> = {
  * is refused before the prompt.
  */
 export const CONFIG_BEHIND = 'This app\'s configuration is behind the published agent version; try again later.'
-export const POLICY_MISMATCH = 'This vault\'s markets or Executor differ from the published deployment, so no signature is requested. Anyone can create a vault for any address; this app sets up only vaults with the published settings.'
+export const POLICY_MISMATCH = 'This vault\'s markets, tokens, Executor, slice limit or cooldown differ from the published deployment, so no signature is requested. Anyone can create a vault for any address; this app sets up only vaults with the published settings.'
 
 export async function setupIntent<Id extends string, R extends ChainRecord<Id>>(env: Env<Id, R>, id: Id, v: VaultView): Promise<OwnerIntent | null> {
   if (!v.policyMatches) { env.patch(id, { status: 'paused', pause: { line: POLICY_MISMATCH } }); return null }
