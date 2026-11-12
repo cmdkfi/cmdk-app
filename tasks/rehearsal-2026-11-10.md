@@ -285,7 +285,7 @@ Wallet 0x11B7…0A52 (fresh MetaMask account). Vault **v10**, position address `
 | S6 step 4 return leftover USDC | pass | 22:26:45 | 0.106167 USDC |
 | S7 closed + Start over | pass | — | gas float 0.004994 ETH (0.005 − ~0.000006 for the whole open and close) |
 
-Surprises → fixes (tasks/todo.md Phase 7b): agent status trusted the agent's list over the chain; "Checking…" gave no reason or ETA; POST timeout too short for a slow relayer; internal Morpho transfer legs shown as separate rows; static verification rows tagged "Not checked"; duplicated disclaimer; amounts with six decimals; "no active corridor" copy after close; no "Show USDC in MetaMask"; registration_tx absent in the agent's list after it adopted the on-chain key.
+Surprises → fixes (Phase 7b): agent status trusted the agent's list over the chain; "Checking…" gave no reason or ETA; POST timeout too short for a slow relayer; internal Morpho transfer legs shown as separate rows; static verification rows tagged "Not checked"; duplicated disclaimer; amounts with six decimals; "no active corridor" copy after close; no "Show USDC in MetaMask"; registration_tx absent in the agent's list after it adopted the on-chain key.
 
 ## Recorded results — second run, product owner, 10 Nov 2026 (live on testnet.cmdk.fi, preview deploy of d8d2fe6, agent compose db4f5085)
 
