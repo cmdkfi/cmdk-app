@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { TokenIcon } from '../components/TokenIcon.tsx'
+import { ProtectionStage } from '../components/ProtectionStage.tsx'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
 import { useMarketQuote, useAppConfig } from '../components/data.ts'
 import { checkDeposit, defaultDeposit } from '../flow/amount.ts'
@@ -67,6 +68,7 @@ export function Choose({ mode, href, banner }: ScreenProps) {
       <h1 id="screen-title">Borrow against what you hold.</h1>
       <p className="muted">Start with ETH. Borrow USDC. Review the agent’s limits before you sign.</p>
     </div>
+    <ProtectionStage />
     <Catalogue />
     {app.isError && <p className="notice notice--warning" role="alert">The app configuration could not be loaded, so no estimate can be shown.</p>}
     <section className="split-11 amount-summary" aria-label="Amount">

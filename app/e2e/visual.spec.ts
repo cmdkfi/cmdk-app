@@ -15,11 +15,11 @@ const SHARES = 160_080_000n
 // Fixed artboard heights keep the lower controls in view without fullPage's platform-dependent rounding.
 // The fit assertion below fails if content grows beyond an artboard instead of silently cropping it.
 const artboardHeights: Record<string, [number, number]> = {
-  's1-choose': [1700, 2000], 's2-settings': [1600, 2600],
+  's1-choose': [1900, 2000], 's2-settings': [1600, 2600],
   's3-wallets': [1000, 1100], 's3-connected': [1300, 1500], 's3a-get-eth': [1400, 2200],
   's4-progress': [1900, 3400], 's5-position': [1900, 3200], 's5-liquidated': [1900, 3000],
   's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
-  'sandbox-s1': [1800, 2100], 'sandbox-s5-crash-ready': [2600, 4100],
+  'sandbox-s1': [1960, 2600], 'sandbox-s5-crash-ready': [2600, 4100],
   'sandbox-s5-crash-stage3': [3000, 5500], 'phone-notice': [900, 844],
   'sandbox-s5-venue-ready': [2600, 4100], 'sandbox-s5-venue-stage2': [3400, 5900], 'sandbox-s5-venue-stage3': [3800, 7200],
 }
@@ -31,6 +31,12 @@ test.beforeEach(async ({ page }, info) => {
 /** The testnet flow is desktop-only (11 Nov 2026): on the mobile project the live screens are the phone notice, shot once below. */
 function liveOnly() {
   test.skip(test.info().project.name === 'mobile', 'live screens are desktop-only; a phone shows the notice')
+}
+
+// The start screen's protection illustration plays once when scrolled into view; under reduced motion it shows its
+// final frame, so its screenshots are the same on every run.
+async function still(page: Page) {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
 }
 
 async function frozen(page: Page) {
@@ -72,7 +78,7 @@ function position(fx: LiveFixture, overrides: Parameters<typeof vault>[0] = {}) 
 
 test('S1 Choose', async ({ page, context, fx }) => {
   liveOnly()
-  await fx.install(context); await frozen(page)
+  await fx.install(context); await frozen(page); await still(page)
   await page.goto('/#start')
   await expect(page.getByText('5.0% APR')).toBeVisible()
   await shot(page, 's1-choose')
@@ -225,7 +231,7 @@ test('S8 Try in sandbox sheet', async ({ page, context, fx }) => {
 })
 
 test('Sandbox S1 with the banner', async ({ page, context, fx }) => {
-  await fx.install(context); await frozen(page)
+  await fx.install(context); await frozen(page); await still(page)
   await page.goto('/#connect')
   await page.getByRole('button', { name: 'Try in sandbox' }).last().click()
   await page.getByRole('dialog', { name: 'Try in sandbox' }).getByRole('button', { name: 'Activate sandbox' }).click()

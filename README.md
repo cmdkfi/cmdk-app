@@ -32,7 +32,7 @@ does not apply (for example `#position` without a position goes to `#start`).
 
 | Route | Screen | What it reads |
 |---|---|---|
-| `#start` | **S1 Choose** — collateral, borrow asset and venue (only ETH → USDC on Morpho Base is selectable), the deposit amount (0.01 ETH by default), the estimate | The live market every 30 s: Morpho market params and the Executor's market config (once per session), market totals, oracle price and IRM borrow rate (each poll). Value, borrow at the 50 % target, simple APR, and a liquidity warning with the largest deposit that still opens at 50 % |
+| `#start` | **S1 Choose** — a labelled illustration of a protective sale, collateral, borrow asset and venue (only ETH → USDC on Morpho Base is selectable), the deposit amount (0.01 ETH by default), the estimate | The live market every 30 s: Morpho market params and the Executor's market config (once per session), market totals, oracle price and IRM borrow rate (each poll). Value, borrow at the 50 % target, simple APR, and a liquidity warning with the largest deposit that still opens at 50 % |
 | `#settings` | **S2 Settings** — the fixed protection rules (target 50 %, agent acts above 70 %, floor 30 %, migration and exit allowed, at most 20 % of collateral sold per rolling day at the agent's discretion; protective sales above 70 % and an allowed exit are not limited by that budget) and the testnet/not-insurance acknowledgement | The rules come from `config.app.json`; the liquidation LTV (86 %) comes from the same live market read as S1 |
 | `#connect` | **S3 Connect** — the wallets in this browser (EIP-6963), Base Sepolia (switch, or add with the values in `config.app.json`), account type, wallet funding, the existing vault, then **Create position** (or **Deposit** on a ready vault, or **Continue where you left off**) | Account code (`eth_getCode`), wallet ETH/WETH and the cost of a wrap and a transfer including Base's L1 fee, the owner's vault (NEAR), relayer health. A Get Base Sepolia ETH panel opens when the wallet is short |
 | `#progress` | **S4 Opening your position** — the onboarding steps with their status, and the agent verification panel in the right rail | The vault (NEAR `get_state` plus one Base snapshot) before every step, relayer jobs, Base receipts (two confirmations), NEAR time for message expiry, the open plan (feeds and liquidity) right before the open signature |
@@ -203,7 +203,11 @@ expands on request, progress puts the active step first, confirmation and sandbo
 sheets, position metrics stack, long addresses wrap, and the sandbox scene comparisons stack without horizontal scrolling.
 
 Amounts, rates, balances, agent states and verification results still come from the existing adapters. No illustrative
-mockup values enter live screens. Protocol messages, transaction ordering and recovery checks are unchanged.
+mockup values enter live screens, with one labelled exception: S1 opens with an animated illustration of a protective
+sale ("Illustration · no live position or transaction": ETH falls from $2,500 to $1,750, LTV rises from 50 % to 71 %,
+the agent sells collateral to repay debt, LTV returns to 50 %), kept apart from the live estimate below it. It plays
+once when in view and shows its last frame under reduced motion. It is built with the Stageshow kit by Benji Taylor
+(https://github.com/benjitaylor/skills, MIT), copied into `app/src/stageshow-kit/` with its licence. Protocol messages, transaction ordering and recovery checks are unchanged.
 The desktop browser project runs every scenario at 1280 px; the mobile project (390 px) runs the phone notice on every
 live route (no wallet call, no request but the app's own), the sandbox end to end and its screenshots, and layout widths
 from 320 to 1024 px. Signing on a phone is not supported.
