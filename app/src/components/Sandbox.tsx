@@ -39,7 +39,7 @@ export function SandboxSheet({ onClose }: { onClose: () => void }) {
       <div className="row"><dt className="k">Agent</dt><dd className="v">Simulated; acts in the market crash you run</dd></div>
     </dl>
     <button type="button" className="btn primary" onClick={activate}>Activate sandbox</button>
-    <button type="button" className="btn ghost" style={{ justifySelf: 'start', paddingLeft: 0 }} onClick={onClose}>Back</button>
+    <button type="button" className="btn ghost" onClick={onClose}>Back</button>
   </Sheet>
 }
 

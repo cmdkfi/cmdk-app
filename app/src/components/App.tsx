@@ -142,7 +142,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus() }}>Skip to content</a>
     <header className="header">
       <div className="header-inner">
-      <a className="brand" href={href('start')} aria-label="cmdk home">{designFlow ? <><span className="brand-key"><img src="/brand/command.svg" alt="" /></span><span className="brand-key"><img src="/brand/k.svg" alt="" /></span></> : '⌘K cmdk'}</a>
+      <a className="brand" href={href('start')} aria-label="cmdk home"><span className="brand-key"><img src="/brand/command.svg" alt="" /></span><span className="brand-key"><img src="/brand/k.svg" alt="" /></span></a>
       <div className="header-actions">
         <WalletSlot
           kind={mode}
