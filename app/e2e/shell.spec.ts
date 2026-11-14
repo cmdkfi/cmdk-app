@@ -8,7 +8,7 @@ test('shell: S1 renders with header, wallet slot and footer; only the app and th
   await fx.install(context)
   await page.goto('/')
   await expect(page).toHaveURL(/#start$/)
-  await expect(page.getByRole('link', { name: 'cmdk home' })).toHaveText('⌘K cmdk')
+  await expect(page.getByRole('link', { name: 'cmdk home' }).locator('img')).toHaveCount(2)
   // Phase 8 (PRD S0, 10 Nov): no Connect button in the header; the wallet slot appears only once connected
   // the only header control while disconnected is the sandbox entry (Phase 6b, product owner 10 Nov)
   await expect(page.getByRole('banner').getByRole('button')).toHaveText(['Try in sandbox'])
