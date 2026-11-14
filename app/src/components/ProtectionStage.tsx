@@ -37,8 +37,9 @@ export function ProtectionStage() {
               <div><span className="protection-stage__label">ETH price</span><strong>{state.step === 0 ? '$2,500' : '$1,750'}</strong></div>
               <div><span className="protection-stage__label">Loan-to-value</span><strong>{state.step === 1 || state.step === 2 ? '71%' : '50%'}</strong></div>
             </div>
-            <div className="protection-stage__scale"><div className="protection-stage__risk" /><span className="protection-stage__marker" /></div>
-            <div className="protection-stage__thresholds"><span>Target 50%</span><span>Agent acts at 70%</span><span>Liquidation 86%</span></div>
+            <div className="protection-stage__scale"><div className="protection-stage__risk" /><span className="protection-stage__act">Agent acts at 70%</span><span className="protection-stage__marker" /></div>
+            {/* Labels sit at their LTV on the 0–100 % bar; the act line goes above it so the 70 % and 86 % labels never collide on a phone */}
+            <div className="protection-stage__thresholds"><span style={{ left: '50%' }}>Target 50%</span><span style={{ left: '86%' }}>Liquidation 86%</span></div>
             <div className="protection-stage__event">
               <span className="protection-stage__event-icon">{state.step === 3 ? '✓' : state.step === 0 ? '○' : '↘'}</span>
               <div><strong>{state.step === 0 ? 'Monitoring your position' : state.step === 1 ? 'Risk threshold reached' : state.step === 2 ? 'Reducing debt' : 'Position back at target'}</strong>
