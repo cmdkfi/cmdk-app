@@ -52,6 +52,10 @@ function walletEntry(state: WalletState): WalletEntry {
 type Pending = 'entry' | 'connect' | null
 
 function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entry: boolean; replace: (hash: string) => void }) {
+  const [flowVariant, setFlowVariant] = useState(() => {
+    const value = Number(new URLSearchParams(window.location.search).get('v'))
+    return value >= 1 && value <= 3 ? value : 1
+  })
   const { wallet } = useAdapters()
   const state = useWalletState()
   const app = useAppConfig()
@@ -135,13 +139,20 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
   // Keep the screen variant available to the shared responsive layout.
   const wide = resolution.kind === 'route' && (resolution.route === 'progress' || resolution.route === 'position')
   const sandbox = SANDBOX && mode === 'sandbox'
-  return <div className="shell">
+  const designFlow = resolution.kind === 'route' && BEFORE_WALLET.includes(resolution.route)
+  const chooseVariant = (variant: number) => {
+    setFlowVariant(variant)
+    const url = new URL(window.location.href)
+    url.searchParams.set('v', String(variant))
+    window.history.replaceState(window.history.state, '', url)
+  }
+  return <div className={`shell${designFlow ? ` design-flow flow-variant-${flowVariant}` : ''}`}>
     {sandbox && <SandboxBanner onLeave={() => setLeaving(true)} />}
     {leaving && <LeaveSandboxSheet onStay={() => setLeaving(false)} />}
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus() }}>Skip to content</a>
     <header className="header">
       <div className="header-inner">
-      <a className="brand" href={href('start')} aria-label="cmdk home">⌘K cmdk</a>
+      <a className="brand" href={href('start')} aria-label="cmdk home">{designFlow ? <><span className="brand-key"><img src="/brand/command.svg" alt="" /></span><span className="brand-key"><img src="/brand/k.svg" alt="" /></span></> : '⌘K cmdk'}</a>
       <div className="header-actions">
         <WalletSlot
           kind={mode}
@@ -158,6 +169,7 @@ function Shell({ mode, route, entry, replace }: { mode: Mode; route: Route; entr
       </div>
     </header>
     <main id="main-content" tabIndex={-1} className={`main${wide ? ' wide' : ''}`}>
+      {designFlow && <nav className="flow-picker" aria-label="Design variants">{(['Calm', 'Console', 'Guided'] as const).map((name, index) => <button key={name} type="button" className={flowVariant === index + 1 ? 'selected' : ''} aria-current={flowVariant === index + 1 ? 'true' : undefined} onClick={() => chooseVariant(index + 1)}>{name}</button>)}</nav>}
       {resolution.kind === 'route' && <SetupProgress route={resolution.route} />}
       {screen}
     </main>

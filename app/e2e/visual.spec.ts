@@ -15,11 +15,11 @@ const SHARES = 160_080_000n
 // Fixed artboard heights keep the lower controls in view without fullPage's platform-dependent rounding.
 // The fit assertion below fails if content grows beyond an artboard instead of silently cropping it.
 const artboardHeights: Record<string, [number, number]> = {
-  's1-choose': [1900, 2000], 's2-settings': [1600, 2600],
+  's1-choose': [2800, 3600], 's2-settings': [2200, 2600],
   's3-wallets': [1000, 1100], 's3-connected': [1300, 1500], 's3a-get-eth': [1400, 2200],
   's4-progress': [1900, 3400], 's5-position': [1900, 3200], 's5-liquidated': [1900, 3000],
   's6-close-get-usdc': [2800, 4900], 's7-closed': [1900, 3200],
-  'sandbox-s1': [1960, 2600], 'sandbox-s5-crash-ready': [2600, 4100],
+  'sandbox-s1': [2900, 3700], 'sandbox-s5-crash-ready': [2600, 4100],
   'sandbox-s5-crash-stage3': [3000, 5500], 'phone-notice': [900, 844],
   'sandbox-s5-venue-ready': [2600, 4100], 'sandbox-s5-venue-stage2': [3400, 5900], 'sandbox-s5-venue-stage3': [3800, 7200],
 }

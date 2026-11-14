@@ -8,6 +8,7 @@ import { parseBig, stringifyBig } from './flow/json.ts'
 import './styles/base.css'
 import './styles/prototype-controls.css'
 import './styles/cmdk.css'
+import './styles/flow-redesign.css'
 
 /**
  * localStorage for the persister, written only outside the sandbox: the persister writes its key even when no query

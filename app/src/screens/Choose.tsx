@@ -61,23 +61,31 @@ export function Choose({ mode, href, banner }: ScreenProps) {
   let amountHint: string | null = null
   if (check.kind === 'invalid') amountHint = check.message
   else if (check.kind === 'below-min' && guided) amountHint = `The minimum deposit is ${guided.minDepositText} ETH.`
+  const target = guided?.corridor.target
+  const act = guided?.corridor.act
+  const liquidation = q ? Number(q.lltv / 10n ** 14n) / 100 : null
 
-  return <section className="page" aria-labelledby="screen-title">
+  return <section className="page flow-page flow-start" aria-labelledby="screen-title">
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
+      <span className="flow-overline"><img src="/brand/near.svg" alt="Built on NEAR" /> <span>/</span> TESTNET EXPERIENCE</span>
       <h1 id="screen-title">Borrow against what you hold.</h1>
-      <p className="muted">Start with ETH. Borrow USDC. Review the agent’s limits before you sign.</p>
+      <p className="muted">Start with ETH. Borrow USDC. Set the limits your agent must respect, then keep control in your wallet.</p>
     </div>
-    <ProtectionStage />
-    <Catalogue />
     {app.isError && <p className="notice notice--warning" role="alert">The app configuration could not be loaded, so no estimate can be shown.</p>}
-    <section className="split-11 amount-summary" aria-label="Amount">
-      <div className="surface stack-20">
-        <label htmlFor="deposit-amount" className="muted">Amount to deposit</label>
+    <section className="split-11 amount-summary flow-cards" aria-label="Choose loan and position preview">
+      <div className="surface flow-main-card">
+        <div className="flow-card-heading"><div><span className="flow-eyebrow">01 / CHOOSE LOAN</span><h2>Your first position</h2></div><span className="flow-route">ETH → USDC</span></div>
+        <p className="muted flow-card-lead">One live testnet route. Review the amount and market before continuing.</p>
+        <div className="flow-asset-pair">
+          <div className="flow-asset"><span>COLLATERAL</span><strong><img src="/brand/eth.svg" alt="" /> ETH</strong><small>Wrapped to WETH on Base</small></div>
+          <div className="flow-asset"><span>YOU BORROW</span><strong><img src="/brand/usdc.svg" alt="" /> USDC</strong><small>Sent to your wallet</small></div>
+        </div>
+        <label htmlFor="deposit-amount" className="flow-amount-label">Amount to deposit</label>
         <div className="input">
           <input id="deposit-amount" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="0.0" value={text}
             aria-invalid={amountHint ? true : undefined} aria-describedby="deposit-hint" onChange={event => setText(event.target.value)} />
-          <TokenIcon asset="ETH" /><span style={{ fontWeight: 500 }} aria-hidden="true">ETH</span>
+          <span style={{ fontWeight: 500 }} aria-hidden="true">ETH</span>
         </div>
         <p id="deposit-hint" className="muted small">
           {amountHint ?? <>
@@ -85,34 +93,37 @@ export function Choose({ mode, href, banner }: ScreenProps) {
             {guided && ` · minimum ${guided.minDepositText} ETH`} · wallet balance shown after connecting
           </>}
         </p>
-        <div className="notice notice--good"><strong>Your agent acts inside fixed limits.</strong><p>It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.</p><p>Review the full limits on the next screen.</p></div>
+        <div className="flow-venue"><div><strong>Morpho · Base Sepolia</strong><small>Live market + approved backup market</small></div><span>TESTNET</span></div>
+        <div className="notice flow-protection-note"><strong>Your agent acts inside fixed limits.</strong><p>It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.</p><p>Review the full limits on the next screen.</p></div>
+        <div className="flow-card-actions"><span className="muted small">Live estimates update every 30 s{q ? ` · block ${q.blockNumber.toString()}` : ''}</span><button type="button" className="btn primary" aria-label="Continue" disabled={check.kind !== 'ok'} onClick={() => go(href('settings'))}>Review limits →</button></div>
       </div>
-      <div className="surface stack-20 loan-summary">
-        <h2>Loan summary</h2>
-        <p className="big loan-estimate">{estimate?.borrow != null ? `about ${usdc(estimate.borrow)}` : check.kind === 'ok' ? <Unavailable /> : '—'}</p>
+      <div className="surface flow-preview loan-summary">
+        <span className="flow-eyebrow">POSITION PREVIEW</span>
+        <h2>A measured response.</h2>
+        <p className="muted">The agent can act when price movement raises your loan-to-value. This preview uses the current testnet market read.</p>
+        <div className="flow-figure">{target ?? '—'}<small>%</small></div>
+        <div className="flow-metric-label">STARTING LOAN-TO-VALUE</div>
+        <div className="flow-risk-meter" role="img" aria-label={`Target ${target ?? 'unavailable'} percent, agent acts above ${act ?? 'unavailable'} percent, liquidation ${liquidation ?? 'unavailable'} percent`}><span style={{ left: `${target ?? 50}%` }} /></div>
+        <div className="flow-meter-labels"><span>Target {target ?? '—'}%</span><span>Acts {act ?? '—'}%</span><span>Liquidation at {liquidation ?? '—'}%</span></div>
         <dl className="rows estimate">
+        <div className="row"><dt className="k">Estimated borrow</dt><dd className="v loan-estimate">{estimate?.borrow != null ? `about ${usdc(estimate.borrow)}` : check.kind === 'ok' ? <Unavailable /> : '—'}</dd></div>
         {estimate?.limited ? <div className="row row--alert" role="status">
           <dt className="k">The market cannot lend the full amount now</dt>
           <dd className="v">{usdc(estimate.borrow!)} available{estimate.resultingLtv !== null ? ` · the position would open at ${formatWadPercent(estimate.resultingLtv)} LTV` : ''}{estimate.maxAmountAtTarget !== null && estimate.maxAmountAtTarget > 0n && guided ? <><br />Deposit up to {formatUnits(estimate.maxAmountAtTarget, 18, 6)} ETH to open at {guided.corridor.target}%</> : null}</dd>
-        </div> : <div className="row">
-          <dt className="k">You borrow at {guided ? `${guided.corridor.target}%` : '—'} LTV</dt>
-          <dd className="v">{guided ? `${guided.corridor.target}% of collateral value` : <Unavailable />}</dd>
-        </div>}
+        </div> : null}
         <div className="row">
           <dt className="k">Borrow rate</dt>
           <dd className="v">{q && q.borrowApr !== null ? `${formatFractionPercent(q.borrowApr)} APR` : quote.isPending && app.data ? 'reading…' : <Unavailable>rate unavailable</Unavailable>}</dd>
         </div>
         <div className="row"><dt className="k">Collateral yield</dt><dd className="v">None <span className="muted small">· Morpho collateral is idle</span></dd></div>
+        <div className="row"><dt className="k">Collateral</dt><dd className="v">{check.kind === 'ok' ? `${text} ETH` : '—'}</dd></div>
         <div className="row"><dt className="k">Agent protection</dt><dd className="v">On <span className="muted small">· fixed limits</span></dd></div>
         </dl>
+        <div className="notice flow-preview-note">A fast price gap may still liquidate a position. Protection is risk management, not insurance.</div>
       </div>
     </section>
-    <div className="page-actions">
-      <p className="muted small">
-        Estimates update every 30 s from the {mode === 'sandbox' ? 'simulated market' : 'market read'}{q ? ` (block ${q.blockNumber.toString()})` : ''}. A value that cannot be read is shown as unavailable.
-        {estimate && !estimate.liquidityKnown && ' Market liquidity could not be read, so a shortfall cannot be ruled out.'}
-      </p>
-      <button type="button" className="btn primary" disabled={check.kind !== 'ok'} onClick={() => go(href('settings'))}>Continue</button>
-    </div>
+    <ProtectionStage />
+    <Catalogue />
+    {estimate && !estimate.liquidityKnown && <p className="muted small">Market liquidity could not be read, so a shortfall cannot be ruled out.</p>}
   </section>
 }
