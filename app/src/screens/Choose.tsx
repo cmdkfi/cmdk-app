@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { TokenIcon } from '../components/TokenIcon.tsx'
 import { ProtectionStage } from '../components/ProtectionStage.tsx'
 import { useAdapters } from '../adapters/AdapterProvider.tsx'
@@ -64,13 +64,16 @@ export function Choose({ mode, href, banner }: ScreenProps) {
   const target = guided?.corridor.target
   const act = guided?.corridor.act
   const liquidation = q ? Number(q.lltv / 10n ** 14n) / 100 : null
+  // The figure is the LTV the position would open at: the target, or lower when the market cannot lend the full amount.
+  const startLtv = estimate?.limited && estimate.resultingLtv !== null ? Number(estimate.resultingLtv / 10n ** 14n) / 100 : target
+  const sim = mode === 'sandbox'
 
   return <section className="page flow-page flow-start" aria-labelledby="screen-title">
     <DiscoveryBanner banner={banner} />
     <div className="page-head">
       <span className="flow-overline"><img src="/brand/near.svg" alt="Built on NEAR" /> <span>/</span> TESTNET EXPERIENCE</span>
       <h1 id="screen-title">Borrow against what you hold.</h1>
-      <p className="muted">Start with ETH. Borrow USDC. Set the limits your agent must respect, then keep control in your wallet.</p>
+      <p className="muted">Start with ETH. Borrow USDC. Review the fixed limits your agent must respect, then keep control in your wallet.</p>
     </div>
     {app.isError && <p className="notice notice--warning" role="alert">The app configuration could not be loaded, so no estimate can be shown.</p>}
     <section className="split-11 amount-summary flow-cards" aria-label="Choose loan and position preview">
@@ -95,16 +98,19 @@ export function Choose({ mode, href, banner }: ScreenProps) {
         </p>
         <div className="flow-venue"><div><strong>Morpho · Base Sepolia</strong><small>Live market + approved backup market</small></div><span>TESTNET</span></div>
         <div className="notice flow-protection-note"><strong>Your agent acts inside fixed limits.</strong><p>It can never increase your debt on this venue, apart from up to 0.000002 USDC of rounding when it moves the loan.</p><p>Review the full limits on the next screen.</p></div>
-        <div className="flow-card-actions"><span className="muted small">Live estimates update every 30 s{q ? ` · block ${q.blockNumber.toString()}` : ''}</span><button type="button" className="btn primary" aria-label="Continue" disabled={check.kind !== 'ok'} onClick={() => go(href('settings'))}>Review limits →</button></div>
+        <div className="flow-card-actions"><span className="muted small">{sim ? 'Simulated estimates update' : 'Live estimates update'} every 30 s{q ? ` · block ${q.blockNumber.toString()}` : ''}</span><button type="button" className="btn primary" disabled={check.kind !== 'ok'} onClick={() => go(href('settings'))}>Continue <span aria-hidden="true">→</span></button></div>
       </div>
       <div className="surface flow-preview loan-summary">
         <span className="flow-eyebrow">POSITION PREVIEW</span>
         <h2>A measured response.</h2>
-        <p className="muted">The agent can act when price movement raises your loan-to-value. This preview uses the current testnet market read.</p>
-        <div className="flow-figure">{target ?? '—'}<small>%</small></div>
+        <p className="muted">The agent can act when price movement raises your loan-to-value. {sim ? 'This preview uses the simulated market.' : 'This preview uses the current testnet market read.'}</p>
+        <div className="flow-figure">{startLtv ?? '—'}<small>%</small></div>
         <div className="flow-metric-label">STARTING LOAN-TO-VALUE</div>
-        <div className="flow-risk-meter" role="img" aria-label={`Target ${target ?? 'unavailable'} percent, agent acts above ${act ?? 'unavailable'} percent, liquidation ${liquidation ?? 'unavailable'} percent`}><span style={{ left: `${target ?? 50}%` }} /></div>
-        <div className="flow-meter-labels"><span>Target {target ?? '—'}%</span><span>Acts {act ?? '—'}%</span><span>Liquidation at {liquidation ?? '—'}%</span></div>
+        {/* A 0–100 % LTV scale: the colours change at the act line and the liquidation line, and each label sits at its value (the act line above the bar, so it never collides with the liquidation label on a phone) */}
+        <div className="flow-risk-meter" role="img" aria-label={`Starting LTV ${startLtv ?? 'unavailable'} percent; target ${target ?? 'unavailable'} percent, agent acts above ${act ?? 'unavailable'} percent, liquidation ${liquidation ?? 'unavailable'} percent`}
+          style={{ '--act': `${act ?? 70}%`, '--liq': `${liquidation ?? 86}%` } as CSSProperties}>
+          {act != null && <small className="flow-meter-act" style={{ left: `${act}%` }}>Acts {act}%</small>}<span style={{ left: `${startLtv ?? 50}%` }} /></div>
+        <div className="flow-meter-labels"><span style={{ left: `${target ?? 50}%` }}>Target {target ?? '—'}%</span><span style={{ left: `${liquidation ?? 86}%` }}>Liquidation at {liquidation ?? '—'}%</span></div>
         <dl className="rows estimate">
         <div className="row"><dt className="k">Estimated borrow</dt><dd className="v loan-estimate">{estimate?.borrow != null ? `about ${usdc(estimate.borrow)}` : check.kind === 'ok' ? <Unavailable /> : '—'}</dd></div>
         {estimate?.limited ? <div className="row row--alert" role="status">
